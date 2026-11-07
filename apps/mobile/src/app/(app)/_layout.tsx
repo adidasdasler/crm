@@ -18,6 +18,7 @@ export default function AppLayout() {
       <Stack.Screen name="masters" options={{ title: 'Мастера' }} />
       <Stack.Screen name="team" options={{ title: 'Команда' }} />
       <Stack.Screen name="salon" options={{ title: 'Настройки салона' }} />
+      <Stack.Screen name="billing" options={{ title: 'Подписка' }} />
     </Stack>
   );
 }

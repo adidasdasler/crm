@@ -4,7 +4,7 @@ import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
 
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
-  salon: { name: string; phone: string | null; address: string | null }; canCancel: boolean; cancelBeforeHours: number;
+  salon: { name: string; phone: string | null; address: string | null }; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
 };
 const STATUS: Record<string, string> = {
   SCHEDULED: 'Ожидает подтверждения', CONFIRMED: 'Подтверждена', ARRIVED: 'Вы в салоне',
@@ -54,6 +54,9 @@ export function ManagePage() {
               <p className="text-sm text-slate-500">Онлайн-отмена доступна не позднее чем за {info.cancelBeforeHours} ч. Позвоните в салон.</p>
             )}
             {info.salon.phone && <a className="btn-ghost" href={`tel:${info.salon.phone}`}>Позвонить в салон</a>}
+            {info.telegramUrl && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
+              <a className="btn-ghost text-sky-700" href={info.telegramUrl} target="_blank" rel="noreferrer">Напоминания в Telegram</a>
+            )}
           </div>
         </div>
       )}

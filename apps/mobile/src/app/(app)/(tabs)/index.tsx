@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { SubscriptionBanner } from '../../../components/SubscriptionBanner';
 import { C, Chip, Empty, ErrorText, Fab } from '../../../components/ui';
 import { get } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';
@@ -32,6 +33,7 @@ export default function Calendar() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SubscriptionBanner />
       <View style={{ backgroundColor: C.card, borderBottomWidth: 1, borderColor: C.border }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}>
           {days.map((d) => {

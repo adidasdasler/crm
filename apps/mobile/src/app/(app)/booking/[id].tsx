@@ -4,7 +4,7 @@ import { Alert, Linking, Platform, Text, View } from 'react-native';
 import { Button, C, Card, ErrorText, Loading, Muted, Row, Screen } from '../../../components/ui';
 import { ApiError, get, post } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';
-import { dateTitle, minutes, phonePretty, rub, STATUS, time } from '../../../lib/format';
+import { dateTitle, isoDay, minutes, phonePretty, rub, STATUS, time } from '../../../lib/format';
 import type { Booking, BookingStatus } from '../../../lib/types';
 
 const ACTIONS: Partial<Record<BookingStatus, { to: BookingStatus; title: string; variant?: 'primary' | 'ghost' | 'danger' }[]>> = {
@@ -76,6 +76,17 @@ export default function BookingScreen() {
         </Card>
       )}
       {b.source === 'WIDGET' && <Muted>Клиент записался онлайн</Muted>}
+      {(b.reminders?.length ?? 0) > 0 && (
+        <Card>
+          <Text style={{ fontWeight: '600' }}>Напоминания клиенту</Text>
+          {b.reminders!.map((r) => (
+            <Muted key={r.id}>
+              {r.type === 'BEFORE_24H' ? 'За сутки' : r.type === 'BEFORE_2H' ? 'За 2 часа' : 'После визита'}:{' '}
+              {r.status === 'SENT' ? `отправлено (${r.channel === 'TELEGRAM' ? 'Telegram' : 'SMS'})` : r.status === 'PENDING' ? `в ${time(r.scheduledAt, tz)}${isoDay(new Date(r.scheduledAt), tz) !== isoDay(new Date(b.startsAt), tz) ? ' накануне' : ''}` : r.status === 'CANCELLED' ? 'не нужно' : 'не доставлено'}
+            </Muted>
+          ))}
+        </Card>
+      )}
 
       <ErrorText error={status.error} />
       {(ACTIONS[b.status] ?? []).map((a) => (

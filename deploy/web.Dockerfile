@@ -13,7 +13,7 @@ COPY apps/web apps/web
 COPY apps/mobile apps/mobile
 # API на том же домене (/v1) — без CORS, cookie SameSite работают «из коробки».
 RUN cd apps/web && VITE_API_URL=/v1 VITE_APP_URL=$APP_URL pnpm build
-RUN cd apps/mobile && CI=1 EXPO_OFFLINE=1 EXPO_PUBLIC_API_URL=/v1 EXPO_PUBLIC_WEB_URL=$PUBLIC_WEB_URL \
+RUN cd apps/mobile && CI=1 EXPO_OFFLINE=1 EXPO_PUBLIC_API_URL=/v1 EXPO_PUBLIC_WEB_URL=$PUBLIC_WEB_URL EXPO_PUBLIC_APP_URL=$APP_URL \
     npx expo export --platform web --output-dir dist
 
 FROM nginx:1.27-alpine

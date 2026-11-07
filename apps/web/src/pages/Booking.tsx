@@ -7,7 +7,7 @@ type Service = { id: string; name: string; description: string | null; price: nu
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null };
 
 type Step = 'services' | 'master' | 'time' | 'contacts' | 'done';
 
@@ -181,7 +181,14 @@ export function BookingPage() {
           <p className="text-lg first-letter:uppercase">{fmtDate(booked.startsAt, tz)}, {fmtTime(booked.startsAt, tz)}</p>
           <p className="text-slate-600">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
           {salon.address && <p className="text-slate-500">{salon.address}</p>}
-          <p className="text-sm text-slate-500">Сохраните ссылку — по ней можно отменить запись:</p>
+          {booked.telegramUrl && (
+            <div className="space-y-2 rounded-2xl bg-sky-50 p-4">
+              <p className="font-semibold text-sky-900">Получайте напоминания в Telegram</p>
+              <p className="text-sm text-sky-800">Напомним за сутки и за 2 часа. Подтвердить или отменить — одной кнопкой.</p>
+              <a className="btn w-full bg-sky-500 text-white hover:bg-sky-600" href={booked.telegramUrl} target="_blank" rel="noreferrer">Подключить Telegram</a>
+            </div>
+          )}
+          <p className="text-sm text-slate-500">По этой ссылке можно подтвердить или отменить запись:</p>
           <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
         </section>
       )}
@@ -238,11 +245,11 @@ function Contacts(props: {
       <h2 className="text-xl font-bold">Ваши контакты</h2>
       <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
-      <textarea className="input" rows={2} placeholder="Комментарий (необязательно)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      <textarea className="input" rows={2} maxLength={500} placeholder="Пожелания к визиту (необязательно)" value={comment} onChange={(e) => setComment(e.target.value)} />
       <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden />
       <label className="flex items-start gap-3 text-sm text-slate-600">
         <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        <span>Я согласен(на) на <Link className="text-brand-600 underline" to="/privacy" target="_blank">обработку персональных данных</Link></span>
+        <span>Даю <Link className="text-brand-600 underline" to={`/b/${props.slug}/consent`} target="_blank">согласие на обработку персональных данных</Link></span>
       </label>
       {err && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</p>}
       <button className="btn-primary w-full" disabled={busy || !consent || name.trim().length < 1}>{busy ? 'Записываем…' : 'Записаться'}</button>

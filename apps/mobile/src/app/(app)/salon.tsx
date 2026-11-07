@@ -27,6 +27,11 @@ export default function SalonSettings() {
       <Field label="Адрес" value={f.address ?? ''} onChangeText={(address) => setF({ ...f, address })} />
       <Muted>Часовой пояс: {f.timezone}</Muted>
 
+      <H>Реквизиты для согласия клиентов</H>
+      <Muted>Салон — оператор персональных данных своих клиентов. Эти данные показываются в согласии на странице онлайн-записи.</Muted>
+      <Field label="ИП / организация" value={f.settings.legalName ?? ''} onChangeText={(legalName) => setF({ ...f, settings: { ...f.settings, legalName } })} placeholder="ИП Иванова Анна Сергеевна" />
+      <Field label="ИНН" value={f.settings.inn ?? ''} onChangeText={(inn) => setF({ ...f, settings: { ...f.settings, inn: inn.replace(/\D/g, '').slice(0, 12) } })} keyboardType="number-pad" />
+
       <H>Онлайн-запись</H>
       <Toggle label="Онлайн-запись включена" value={f.settings.onlineBookingEnabled} onChange={set('onlineBookingEnabled')} />
       <Field label="Шаг сетки времени, мин" value={String(f.settings.slotStepMin)} onChangeText={set('slotStepMin')} keyboardType="number-pad" />

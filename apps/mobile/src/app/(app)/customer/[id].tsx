@@ -51,9 +51,10 @@ export default function CustomerScreen() {
           </View>
         </>
       )}
+      {c && <Muted>{c.telegramChatId ? '🔔 Напоминания приходят в Telegram' : '🔔 Напоминания — по SMS (Telegram клиент не подключил)'}</Muted>}
       <Field label="Имя" value={f.name} onChangeText={(name) => setF({ ...f, name })} />
       <Field label="Телефон" value={f.phone} onChangeText={(phone) => setF({ ...f, phone })} keyboardType="phone-pad" />
-      <Field label="Заметки" value={f.notes} onChangeText={(notes) => setF({ ...f, notes })} multiline placeholder="Предпочтения, аллергии…" />
+      <Field label="Заметки" value={f.notes} onChangeText={(notes) => setF({ ...f, notes })} multiline placeholder="Предпочтения клиента (без сведений о здоровье)" />
       <Field label="Метки через запятую" value={f.tags} onChangeText={(tags) => setF({ ...f, tags })} placeholder="VIP, постоянный" />
       <Toggle label="Согласие на рассылки" hint="Без согласия рекламные сообщения отправлять нельзя" value={f.marketingConsent} onChange={(marketingConsent) => setF({ ...f, marketingConsent })} />
       <ErrorText error={save.error} />

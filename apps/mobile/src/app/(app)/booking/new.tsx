@@ -163,7 +163,7 @@ export default function NewBooking() {
         </>
       )}
 
-      <Field label="Комментарий" value={notes} onChangeText={setNotes} multiline placeholder="Пожелания, аллергии…" />
+      <Field label="Комментарий" value={notes} onChangeText={setNotes} multiline placeholder="Пожелания к визиту" />
       <ErrorText error={save.error} />
       <Button title={startsAt ? `Записать на ${time(startsAt, tz)}` : 'Записать'} onPress={() => save.mutate()} loading={save.isPending} disabled={!canSave} />
     </Screen>

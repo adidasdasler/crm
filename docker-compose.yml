@@ -19,19 +19,13 @@ services:
       retries: 10
     networks: [salon-net]
 
-  redis:
-    image: redis:7.4-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?задайте REDIS_PASSWORD}", "--appendonly", "yes"]
-    volumes: [redisdata:/data]
-    networks: [salon-net]
-
   api:
     build: { context: ., dockerfile: deploy/api.Dockerfile }
+    image: salon-api:latest
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
-    environment:
+    environment: &api-env
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://salon_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-salon}
@@ -40,12 +34,33 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      APP_URL: ${APP_URL}
+      API_PUBLIC_URL: ${PUBLIC_WEB_URL}/v1
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      SMS_RU_API_KEY: ${SMS_RU_API_KEY:-}
+      SMS_SENDER: ${SMS_SENDER:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-yookassa}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4000/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       retries: 5
       start_period: 30s
+    networks: [salon-net]
+
+  # Фоновый воркер: напоминания клиентам (Telegram/SMS) и проверка подписок.
+  # Тот же образ, что и api; очередь — таблица Reminder в PostgreSQL (Redis не нужен).
+  worker:
+    image: salon-api:latest
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    command: ["node", "dist/worker.js"]
+    environment: *api-env
     networks: [salon-net]
 
   # Внутренний Nginx: статика (сайт + веб-версия CRM) и проксирование /v1 → api.
@@ -64,7 +79,6 @@ services:
 
 volumes:
   pgdata:
-  redisdata:
 
 networks:
   salon-net:

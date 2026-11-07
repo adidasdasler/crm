@@ -1,10 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Alert, Platform, Share, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Share, Text, View } from 'react-native';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
-import { get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
+import { del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
 import { canManage, useAuth, useMe } from '../../../lib/auth';
-import { rub } from '../../../lib/format';
 import type { Subscription } from '../../../lib/types';
 
 const SUB_STATUS: Record<string, string> = { TRIAL: 'Пробный период', ACTIVE: 'Активна', PAST_DUE: 'Ожидает оплаты', CANCELLED: 'Отменена', EXPIRED: 'Истекла' };
@@ -14,7 +13,22 @@ export default function More() {
   const { logout, reload } = useAuth();
   const qc = useQueryClient();
   const isOwner = me.role === 'OWNER';
-  const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription'), enabled: isOwner });
+  const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription') });
+  const toggleTelegram = async () => {
+    try {
+      if (me.telegramLinked) {
+        await del('/me/telegram');
+        await reload();
+        return;
+      }
+      const { url } = await post<{ url: string }>('/me/telegram');
+      await Linking.openURL(url);
+      // Пользователь вернётся из Telegram — обновим статус привязки
+      setTimeout(reload, 8000);
+    } catch (e) {
+      Platform.OS === 'web' ? alert((e as Error).message) : Alert.alert('Telegram', (e as Error).message);
+    }
+  };
   const link = `${PUBLIC_WEB_URL}/b/${me.tenant.slug}`;
 
   const share = async () => {
@@ -40,18 +54,23 @@ export default function More() {
         <Button title="Поделиться ссылкой" icon="share-outline" onPress={share} style={{ marginTop: 6 }} />
       </Card>
 
-      {sub.data && (
-        <Card>
-          <Text style={{ fontWeight: '700' }}>Подписка: {sub.data.plan.name} · {SUB_STATUS[sub.data.status] ?? sub.data.status}</Text>
-          <Muted>{sub.data.daysLeft !== null ? `Осталось дней: ${sub.data.daysLeft}` : ''} · {rub(sub.data.plan.priceMonthly)}/мес</Muted>
-          <Muted>Онлайн-оплата подписки появится в ближайшем обновлении</Muted>
-        </Card>
-      )}
-
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
         {canManage(me.role) && <Row icon="cut-outline" title="Мастера и графики" onPress={() => router.push('/masters')} />}
         {(isOwner || me.role === 'MANAGER') && <Row icon="people-circle-outline" title="Команда и доступы" onPress={() => router.push('/team')} />}
         {(isOwner || me.role === 'MANAGER') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}
+        <Row
+          icon="card-outline"
+          title="Подписка"
+          subtitle={sub.data ? `${sub.data.plan.name} · ${SUB_STATUS[sub.data.status] ?? sub.data.status}${sub.data.daysLeft !== null && sub.data.status !== 'EXPIRED' ? ` · ${sub.data.daysLeft} дн.` : ''}` : undefined}
+          onPress={() => router.push('/billing')}
+        />
+        <Row
+          icon="paper-plane-outline"
+          title="Уведомления в Telegram"
+          subtitle={me.telegramLinked ? 'Подключены: новые записи и напоминания об оплате' : 'Узнавайте о новых онлайн-записях сразу'}
+          onPress={toggleTelegram}
+          right={<Text style={{ color: me.telegramLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.telegramLinked ? 'Отключить' : 'Подключить'}</Text>}
+        />
         {me.role === 'MASTER' && me.resourceId && <Row icon="time-outline" title="Мой график" onPress={() => router.push(`/master/${me.resourceId}`)} />}
       </View>
 

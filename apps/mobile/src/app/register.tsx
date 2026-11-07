@@ -1,5 +1,6 @@
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { ReactNode } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { Button, C, ErrorText, Field, Muted, Screen } from '../components/ui';
 import { ApiError, get, PUBLIC_WEB_URL } from '../lib/api';
@@ -16,6 +17,7 @@ export default function Register() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugFree, setSlugFree] = useState<boolean | null>(null);
   const [accept, setAccept] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -36,7 +38,7 @@ export default function Register() {
     setError(null);
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-      await register({ ...f, email: f.email.trim(), phone: f.phone || undefined, timezone, acceptTerms: accept });
+      await register({ ...f, email: f.email.trim(), phone: f.phone || undefined, timezone, acceptTerms: accept, acceptPrivacy });
     } catch (e) {
       const ae = e as ApiError;
       const details = (ae.details as { fieldErrors?: Record<string, string[]> })?.fieldErrors;
@@ -61,17 +63,28 @@ export default function Register() {
       <Field label="Телефон" value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" placeholder="+7 999 123-45-67" />
       <Field label="Email" value={f.email} onChangeText={set('email')} autoCapitalize="none" keyboardType="email-address" />
       <Field label="Пароль (минимум 8 символов)" value={f.password} onChangeText={set('password')} secureTextEntry />
-      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 4 }}>
-        <Pressable onPress={() => setAccept(!accept)} hitSlop={8} style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: accept ? C.brand : C.border, backgroundColor: accept ? C.brand : '#fff', alignItems: 'center', justifyContent: 'center' }}>
-          {accept && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
-        </Pressable>
-        <Text style={{ flex: 1, color: C.muted }} onPress={() => setAccept(!accept)}>
-          Принимаю <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/terms`)}>оферту</Text> и даю согласие на{' '}
-          <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)}>обработку персональных данных</Text>
-        </Text>
-      </View>
+      <Check value={accept} onChange={setAccept}>
+        Принимаю условия <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/terms`)}>оферты</Text>
+      </Check>
+      <Check value={acceptPrivacy} onChange={setAcceptPrivacy}>
+        Даю <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/consent`)}>согласие на обработку персональных данных</Text> в соответствии с{' '}
+        <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)}>политикой</Text>
+      </Check>
       <ErrorText error={error} />
-      <Button title="Создать салон" onPress={submit} loading={busy} disabled={!accept || !f.salonName || !f.email || f.password.length < 8 || slugFree === false} />
+      <Button title="Создать салон" onPress={submit} loading={busy} disabled={!accept || !acceptPrivacy || !f.salonName || !f.email || f.password.length < 8 || slugFree === false} />
     </Screen>
+  );
+}
+
+/** Чекбокс: нажатие на квадрат или на текст (кроме ссылок) переключает его */
+function Check({ value, onChange, children }: { value: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 4 }}>
+      <Pressable onPress={() => onChange(!value)} hitSlop={8} accessibilityRole="checkbox" accessibilityState={{ checked: value }}
+        style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: value ? C.brand : C.border, backgroundColor: value ? C.brand : '#fff', alignItems: 'center', justifyContent: 'center' }}>
+        {value && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+      </Pressable>
+      <Text style={{ flex: 1, color: C.muted }} onPress={() => onChange(!value)}>{children}</Text>
+    </View>
   );
 }
