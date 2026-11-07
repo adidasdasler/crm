@@ -8,6 +8,8 @@ import { BillingController } from './billing/billing.controller';
 import { BillingService } from './billing/billing.service';
 import { SubscriptionGuard } from './billing/subscription.guard';
 import { BotController } from './notify/bot.controller';
+import { ClientBotService } from './notify/client-bot.service';
+import { MessengersController } from './notify/messengers.controller';
 import { BookingsController } from './bookings/bookings.controller';
 import { BookingsService } from './bookings/bookings.service';
 import { CatalogController } from './catalog/catalog.controller';
@@ -38,13 +40,14 @@ class HealthController {
   ],
   controllers: [
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
-    CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController,
+    CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController, MessengersController,
   ],
   providers: [
     PrismaService,
     AuthService,
     BookingsService,
     BillingService,
+    ClientBotService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: SubscriptionGuard },

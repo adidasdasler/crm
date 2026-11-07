@@ -42,9 +42,13 @@ enum ReminderType {
   AFTER_VISIT
 }
 
+/// SMS больше не используется (дорого для салонов) — значение оставлено для старых записей.
 enum ReminderChannel {
   TELEGRAM
   SMS
+  VK
+  MAX
+  EMAIL
 }
 
 enum ReminderStatus {
@@ -331,6 +335,10 @@ model Customer {
   /// Согласие на рекламные рассылки (38-ФЗ «О рекламе»)
   marketingConsent Boolean   @default(false)
   telegramChatId   String?
+  /// id пользователя ВКонтакте (написал сообществу MioFlow)
+  vkUserId         String?
+  /// id пользователя мессенджера MAX (запустил бота MioFlow)
+  maxUserId        String?
   totalVisits      Int       @default(0)
   totalSpent       Int       @default(0)
   lastVisitAt      DateTime? @db.Timestamptz(3)
@@ -343,6 +351,8 @@ model Customer {
 
   @@index([tenantId, name])
   @@index([telegramChatId])
+  @@index([vkUserId])
+  @@index([maxUserId])
 }
 
 /// Визит. Пересечения у одного мастера запрещены EXCLUDE-ограничением (миграция 0002).
@@ -363,6 +373,8 @@ model Booking {
   notes        String?
   /// SHA-256 токена ссылки «управлять записью» для клиента
   manageTokenHash String?    @unique
+  /// Откуда пришла онлайн-запись: yandex_maps, 2gis, vk, instagram, site, qr…
+  referrer     String?
   version      Int           @default(0)
   createdById  String?       @db.Uuid
   cancelledAt  DateTime?     @db.Timestamptz(3)

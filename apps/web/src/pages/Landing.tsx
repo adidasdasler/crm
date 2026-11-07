@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Logo, Mark } from '../Logo';
 import { api, APP_URL, rub } from '../lib/api';
 
-type Plan = { code: string; name: string; priceMonthly: number; priceYearly: number; limits: { masters?: number; smsPerMonth?: number } };
+type Plan = { code: string; name: string; priceMonthly: number; priceYearly: number; limits: { masters?: number } };
 
 /** Простые линейные иконки (stroke) — вместо эмодзи */
 const I = {
@@ -20,7 +20,7 @@ const Icon = ({ d }: { d: ReactNode }) => (
 );
 
 const FEATURES = [
-  { icon: I.bell, title: 'Напоминания, которые работают', text: 'За сутки и за 2 часа — в Telegram с кнопками «Подтвердить» и «Отменить» или по SMS. Неявок меньше.' },
+  { icon: I.bell, title: 'Напоминания, которые работают', text: 'За сутки и за 2 часа — в Telegram с кнопками «Подтвердить» и «Отменить» MAX, ВКонтакте или на email. Бесплатно, без SMS. Неявок меньше.' },
   { icon: I.calendar, title: 'Онлайн-запись 24/7', text: 'Своя страница записи для салона. Клиент выбирает услугу, мастера и время за минуту — без звонков.' },
   { icon: I.phone, title: 'Приложение для iOS и Android', text: 'Календарь, клиенты и записи — в телефоне у владельца и каждого мастера. Мастер видит только свои записи.' },
   { icon: I.users, title: 'База клиентов', text: 'История визитов, заметки, сумма покупок. Импорт из другой CRM и выгрузка в Excel.' },
@@ -46,7 +46,7 @@ export function Landing() {
         <div className="space-y-7">
           <p className="text-sm font-semibold uppercase tracking-[0.08em] text-brand-600">Для салонов красоты и частных мастеров</p>
           <h1 className="display max-w-xl text-5xl leading-[1.05] md:text-6xl">Клиенты записываются сами и приходят вовремя</h1>
-          <p className="max-w-xl text-lg text-ink-muted">Онлайн-запись, календарь мастеров и напоминания клиентам в Telegram и по SMS. Вы занимаетесь клиентами — MioFlow следит за расписанием.</p>
+          <p className="max-w-xl text-lg text-ink-muted">Онлайн-запись, календарь мастеров и напоминания клиентам в Telegram, MAX, ВКонтакте и на email — без платных SMS. Вы занимаетесь клиентами — MioFlow следит за расписанием.</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <a href={`${APP_URL}/register`} className="btn-primary px-7 py-4 text-lg">Попробовать 14 дней бесплатно</a>
             <a href="/b/demo" className="btn-ghost px-7 py-4 text-lg">Записаться как клиент</a>
@@ -111,8 +111,7 @@ export function Landing() {
                     <ul className={`space-y-2 ${featured ? 'text-brand-50' : 'text-ink-muted'}`}>
                       <li>До {p.limits.masters} мастеров</li>
                       <li>Онлайн-запись и приложение</li>
-                      <li>Напоминания в Telegram без ограничений</li>
-                      <li>{p.limits.smsPerMonth} SMS в месяц</li>
+                      <li>Напоминания в Telegram, MAX, VK и email — без лимитов</li>
                     </ul>
                     <a href={`${APP_URL}/register`} className={`btn mt-auto ${featured ? 'bg-white text-brand-700 hover:bg-brand-50' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>Начать бесплатно</a>
                   </div>

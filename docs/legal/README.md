@@ -23,7 +23,7 @@
 
 ## Что заполнить перед запуском
 
-1. `apps/web/src/legal/requisites.ts` — ФИО, ИНН, почтовый адрес, email, сайт, город, хостинг-провайдер, SMS-провайдер.
+1. `apps/web/src/legal/requisites.ts` — ФИО, ИНН, почтовый адрес, email, сайт, город, хостинг-провайдер, почтовый сервис и российские мессенджеры.
 2. Даты редакции (`EDITION` там же) и `CONSENT_VERSION` в API.
 3. Уведомление в Роскомнадзор — см. [RKN-notification.md](RKN-notification.md).
 

@@ -177,7 +177,9 @@ cd /opt/mioflow && sudo docker compose down -v && sudo rm -f /etc/cron.d/mioflow
 Ключи вписываются в `/opt/mioflow/.env`, затем выполняется `sudo docker compose up -d`.
 
 - **Telegram-бот MioFlow:** @BotFather → `/newbot` → `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`. Это отдельный бот, ваши боты не затрагиваются. Перед включением прочитайте legal/RKN-notification.md.
-- **SMS:** sms.ru → `SMS_RU_API_KEY`.
+- **MAX (бот для клиентов):** зарегистрируйте бота на [business.max.ru](https://business.max.ru) (нужна верифицированная организация/самозанятый) → токен в `MAX_BOT_TOKEN`, имя бота в `MAX_BOT_USERNAME`. Вебхук воркер подписывает сам при старте; секрет `MAX_WEBHOOK_SECRET` уже создан установщиком.
+- **ВКонтакте (сообщения сообщества):** создайте сообщество MioFlow → Управление → Сообщения: включить, «Возможности ботов»: включить → Работа с API → ключ доступа с правом «сообщения» → `VK_GROUP_TOKEN`; короткое имя сообщества → `VK_GROUP_SCREEN_NAME`. В разделе Callback API: версия 5.199, адрес `https://mioflow.ru/v1/webhooks/vk`, строку подтверждения → `VK_CONFIRMATION_CODE`, секретный ключ — значение `VK_SECRET` из `.env`; типы событий: «Входящее сообщение» и «Действие с сообщением».
+- **SMS не используются:** напоминания уходят в первый подключённый канал — Telegram → MAX → ВКонтакте → email. Всё бесплатно для салона и клиента.
 - **Почта:** ящик `no-reply@mioflow.ru` в Яндекс 360 → `SMTP_URL="smtps://no-reply%40mioflow.ru:ПАРОЛЬ_ПРИЛОЖЕНИЯ@smtp.yandex.ru:465"`.
 - **ЮKassa (самозанятый):** `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`. Адрес уведомлений — `https://mioflow.ru/v1/webhooks/yookassa`, события `payment.succeeded` и `payment.canceled`.
 

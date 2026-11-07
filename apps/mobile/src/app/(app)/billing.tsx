@@ -96,7 +96,7 @@ export default function Billing() {
                   <Text style={{ fontSize: 17, fontWeight: '700' }}>{p.name}</Text>
                   <Text style={{ fontSize: 17, fontWeight: '700' }}>{rub(p.priceMonthly)}<Text style={{ fontWeight: '400', color: C.muted }}> / мес</Text></Text>
                 </View>
-                <Muted>До {p.limits.masters} мастеров · {p.limits.smsPerMonth} SMS в месяц · Telegram-напоминания без ограничений</Muted>
+                <Muted>{p.limits.masters === 1 ? '1 мастер' : `До ${p.limits.masters} мастеров`} · напоминания в Telegram, MAX, VK и email без ограничений</Muted>
               </Card>
             </Pressable>
           ))}

@@ -9,6 +9,7 @@ import { audit } from '../common/audit';
 import { sha256 } from '../common/crypto';
 import { manageToken, manageUrl } from '../common/manage-token';
 import { notifyStaff } from '../notify/staff';
+import { max, vk } from '../notify/channels';
 import { esc, telegram } from '../notify/telegram';
 import { CONSENT_VERSION } from '../common/legal';
 import { AppError, notFound } from '../common/errors';
@@ -37,6 +38,10 @@ const bookSchema = z.object({
   marketingConsent: z.boolean().optional(),
   /** honeypot */
   website: z.string().max(0).optional(),
+  /** Email для напоминаний (необязательно) — если клиент не пользуется мессенджерами */
+  email: z.string().trim().toLowerCase().email('Некорректный email').max(200).optional().or(z.literal('').transform(() => undefined)),
+  /** Откуда пришёл клиент: yandex_maps, 2gis, vk, instagram, site, qr… (из ссылки ?src=) */
+  ref: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,32}$/).optional().or(z.literal('').transform(() => undefined)),
 });
 
 /**
@@ -127,7 +132,7 @@ export class PublicController {
       if (!resource) throw new AppError('SLOT_TAKEN', 'Это время уже занято, выберите другое', 409);
 
       let customer = await tx.customer.findFirst({ where: { phone: dto.phone, deletedAt: null } });
-      // Защита от спама и «SMS-накрутки»: не больше N будущих онлайн-записей на один номер.
+      // Защита от спама и накрутки: не больше N будущих онлайн-записей на один номер.
       if (customer) {
         const upcoming = await tx.booking.count({
           where: { customerId: customer.id, source: 'WIDGET', status: { in: ['SCHEDULED', 'CONFIRMED'] }, startsAt: { gt: new Date() } },
@@ -138,10 +143,13 @@ export class PublicController {
       }
       if (!customer) {
         customer = await tx.customer.create({
-          data: { tenantId: t.id, name: dto.name, phone: dto.phone, source: 'WIDGET', marketingConsent: !!dto.marketingConsent },
+          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent },
         });
-      } else if (dto.marketingConsent && !customer.marketingConsent) {
-        await tx.customer.update({ where: { id: customer.id }, data: { marketingConsent: true } });
+      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email)) {
+        await tx.customer.update({
+          where: { id: customer.id },
+          data: { ...(dto.marketingConsent ? { marketingConsent: true } : {}), ...(dto.email && !customer.email ? { email: dto.email } : {}) },
+        });
       }
       const created = await this.bookings.create(tx, t, { tenantId: t.id }, {
         customerId: customer.id,
@@ -150,6 +158,7 @@ export class PublicController {
         startsAt: dto.startsAt,
         notes: dto.comment,
         source: 'WIDGET',
+        referrer: dto.ref,
       });
       // Факт согласия на обработку ПДн (152-ФЗ): версия текста, IP, время.
       await tx.auditLog.create({
@@ -181,6 +190,8 @@ export class PublicController {
       manageToken: token,
       /** Кнопка «Получать напоминания в Telegram» */
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
+      /** Кнопки «Получать напоминания в …» — только для подключённых у нас мессенджеров */
+      messengers: messengerLinks(token),
     };
   }
 
@@ -198,6 +209,7 @@ export class PublicController {
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
       cancelBeforeHours: t.s.cancelBeforeHours,
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
+      messengers: messengerLinks(token),
     };
   }
 
@@ -237,4 +249,13 @@ export class PublicController {
   private canCancel(status: string, startsAt: Date, hours: number) {
     return ['SCHEDULED', 'CONFIRMED'].includes(status) && +startsAt - Date.now() > hours * 3600_000;
   }
+}
+
+/** Ссылки привязки мессенджеров к записи (токен записи передаётся боту и связывает клиента). */
+function messengerLinks(token: string) {
+  return {
+    telegram: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
+    max: max.enabled ? max.deepLink(`b_${token}`) : null,
+    vk: vk.enabled ? vk.deepLink(`b_${token}`) : null,
+  };
 }

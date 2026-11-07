@@ -73,20 +73,41 @@ export const tomorrowAt = (hhmm: string, plusDays = 1) => {
 };
 export const tomorrowDate = (plusDays = 1) => DateTime.now().setZone('Europe/Moscow').plus({ days: plusDays }).toISODate()!;
 
-/** Перехват исходящих сообщений Telegram и SMS */
-export const outbox = { telegram: [] as { method: string; body: any }[], sms: [] as { phone: string; text: string }[] };
-export async function fakeMessengers(opts: { telegramBlocked?: () => boolean } = {}) {
+/** Перехват исходящих сообщений Telegram, MAX, ВКонтакте и почты */
+export const outbox = {
+  telegram: [] as { method: string; body: any }[],
+  max: [] as { method: string; path: string; body: any }[],
+  vk: [] as { method: string; params: Record<string, string | number> }[],
+  email: [] as { to: string; subject: string; text: string }[],
+};
+export const clearOutbox = () => Object.values(outbox).forEach((a) => (a.length = 0));
+type Blocked = () => boolean;
+export async function fakeMessengers(opts: { telegramBlocked?: Blocked; maxBlocked?: Blocked; vkBlocked?: Blocked } = {}) {
   const { telegram } = await import('../src/notify/telegram');
-  const { sms } = await import('../src/notify/sms');
+  const { max, vk } = await import('../src/notify/channels');
+  const { mailer } = await import('../src/notify/mailer');
   telegram.transport = async (method, body) => {
     outbox.telegram.push({ method, body });
     if (method === 'sendMessage' && opts.telegramBlocked?.()) return { ok: false, blocked: true, error: 'Forbidden: bot was blocked by the user' };
     return { ok: true };
   };
-  sms.transport = async (phone, text) => {
-    outbox.sms.push({ phone, text });
-    return { ok: true, id: 'sms-1' };
+  max.transport = async (method, path, body) => {
+    outbox.max.push({ method, path, body });
+    if (path.startsWith('/messages') && opts.maxBlocked?.()) return { ok: false, status: 403, json: { message: 'chat.denied' } };
+    return { ok: true, status: 200, json: {} };
+  };
+  vk.transport = async (method, params) => {
+    outbox.vk.push({ method, params });
+    if (method === 'messages.send' && opts.vkBlocked?.()) return { ok: false, json: { error: { error_code: 901, error_msg: "Can't send messages for users without permission" } } };
+    return { ok: true, json: { response: 1 } };
+  };
+  mailer.transport = async (m) => {
+    outbox.email.push(m);
+    return true;
   };
 }
+export const maxUpdate = (update: object, secret = 'max-webhook-secret') =>
+  api().post('/webhooks/max', update).set('X-Max-Bot-Api-Secret', secret);
+export const vkEvent = (event: object, secret = 'vk-secret') => api().post('/webhooks/vk', { secret, group_id: 1, ...event });
 export const tgUpdate = (update: object, secret = 'tg-webhook-secret') =>
   api().post('/webhooks/telegram', { update_id: Math.floor(Math.random() * 1e9), ...update }).set('X-Telegram-Bot-Api-Secret-Token', secret);

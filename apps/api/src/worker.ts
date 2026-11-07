@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { purgeDeletedTenants } from './auth/account.controller';
 import { billingTick } from './billing/billing.service';
 import { env } from './config';
+import { max } from './notify/channels';
 import { telegram } from './notify/telegram';
 import { processDueReminders } from './reminders/process';
 
@@ -28,7 +29,13 @@ async function loop(name: string, everyMs: number, fn: () => Promise<unknown>) {
 }
 
 async function main() {
-  log('worker started', { telegram: telegram.enabled, sms: !!env.SMS_RU_API_KEY });
+  log('worker started', { telegram: telegram.enabled, max: max.enabled, vk: !!env.VK_GROUP_TOKEN, email: !!env.SMTP_URL });
+  if (max.enabled && env.API_PUBLIC_URL && env.MAX_WEBHOOK_SECRET) {
+    const r = await max.transport('POST', '/subscriptions', {
+      url: `${env.API_PUBLIC_URL}/webhooks/max`, update_types: ['bot_started', 'message_callback'], secret: env.MAX_WEBHOOK_SECRET,
+    });
+    log('max subscription', r.ok ? 'ok' : r.json);
+  }
   if (telegram.enabled && env.API_PUBLIC_URL && env.TELEGRAM_WEBHOOK_SECRET) {
     const r = await telegram.setWebhook(`${env.API_PUBLIC_URL}/webhooks/telegram`, env.TELEGRAM_WEBHOOK_SECRET);
     log('telegram setWebhook', r.ok ? 'ok' : r.error);

@@ -1,10 +1,8 @@
 import { Prisma, PrismaClient, ReminderChannel } from '@prisma/client';
-import { DateTime } from 'luxon';
 import { manageToken, manageTokenHash, manageUrl } from '../common/manage-token';
 import { readSettings } from '../common/tenant-settings';
-import { sms } from '../notify/sms';
-import { InlineButton, telegram } from '../notify/telegram';
-import { smsText, telegramText } from './messages';
+import { Button, CHANNELS, ChannelName } from '../notify/channels';
+import { telegramText } from './messages';
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MIN = [1, 5, 15];
@@ -14,12 +12,18 @@ type Outcome =
   | { status: 'CANCELLED' | 'FAILED'; error: string }
   | { status: 'RETRY'; error: string };
 
-export function bookingButtons(bookingId: string, status: string, url: string): InlineButton[][] {
-  const row: InlineButton[] = [];
-  if (status === 'SCHEDULED') row.push({ text: '✅ Подтвердить', callback_data: `c:${bookingId}` });
-  row.push({ text: '❌ Отменить', callback_data: `x:${bookingId}` });
+/** Кнопки под напоминанием — одинаковые для Telegram, MAX и VK (в письме — ссылка). */
+export function bookingButtons(bookingId: string, status: string, url: string): Button[][] {
+  const row: Button[] = [];
+  if (status === 'SCHEDULED') row.push({ text: '✅ Подтвердить', data: `c:${bookingId}` });
+  row.push({ text: '❌ Отменить', data: `x:${bookingId}` });
   return [row, [{ text: 'Открыть запись', url }]];
 }
+
+/** Где у клиента хранится адрес в каждом канале */
+export const CUSTOMER_FIELD: Record<ChannelName, 'telegramChatId' | 'maxUserId' | 'vkUserId' | 'email'> = {
+  TELEGRAM: 'telegramChatId', MAX: 'maxUserId', VK: 'vkUserId', EMAIL: 'email',
+};
 
 /**
  * Отправить все созревшие напоминания. Безопасно запускать в нескольких воркерах:
@@ -79,35 +83,29 @@ async function processOne(db: PrismaClient, id: string, now: Date): Promise<Outc
   if (!b.manageTokenHash) await db.booking.update({ where: { id: b.id }, data: { manageTokenHash: manageTokenHash(b.id) } });
 
   const url = manageUrl(tenant.slug, b.id);
-  const ctx = {
+  const html = telegramText({
     type: r.type, startsAt: b.startsAt, tz: tenant.timezone, url,
     salon: { name: tenant.name, address: tenant.address, phone: tenant.phone },
     services: b.items.map((i) => i.name), master: b.resource.name, customerName: b.customer.name,
-  };
+  }, now);
+  const buttons = bookingButtons(b.id, b.status, url);
 
-  // 1) Telegram — бесплатно и с кнопками
-  if (b.customer.telegramChatId && telegram.enabled) {
-    const res = await telegram.send(b.customer.telegramChatId, telegramText(ctx, now), bookingButtons(b.id, b.status, url));
-    if (res.ok) return { status: 'SENT', channel: 'TELEGRAM' };
-    if (res.blocked) {
-      await db.customer.update({ where: { id: b.customerId }, data: { telegramChatId: null } });
-    } else {
-      return { status: 'RETRY', error: `telegram: ${res.error}` };
-    }
+  // Telegram → MAX → ВКонтакте → Email: первый канал, который подключил клиент и который настроен у нас.
+  const errors: string[] = [];
+  let tried = false;
+  for (const ch of CHANNELS) {
+    const field = CUSTOMER_FIELD[ch.name];
+    const to = b.customer[field];
+    if (!to || !ch.enabled()) continue;
+    tried = true;
+    const res = await ch.send(to, html, buttons, `Напоминание: ${tenant.name}`);
+    if (res.ok) return { status: 'SENT', channel: ch.name as ReminderChannel };
+    errors.push(`${ch.name}: ${res.error}`);
+    // Клиент заблокировал бота/запретил сообщения — отвязываем канал и пробуем следующий
+    if (res.blocked) await db.customer.update({ where: { id: b.customerId }, data: { [field]: null } });
   }
-
-  // 2) SMS — платно, поэтому: только если клиент ещё не подтвердил визит (для 2-часового) и в пределах лимита тарифа
-  if (!sms.enabled) return { status: 'FAILED', error: 'no channel: telegram not linked, sms not configured' };
-  if (r.type === 'BEFORE_2H' && b.status === 'CONFIRMED') return { status: 'CANCELLED', error: 'already confirmed, sms skipped' };
-
-  const sub = await db.subscription.findUnique({ where: { tenantId: b.tenantId }, include: { plan: true } });
-  const limit = Number((sub?.plan.limits as { smsPerMonth?: number } | null)?.smsPerMonth ?? 0);
-  const monthStart = DateTime.fromJSDate(now, { zone: tenant.timezone }).startOf('month').toJSDate();
-  const used = await db.reminder.count({ where: { tenantId: b.tenantId, channel: 'SMS', status: 'SENT', sentAt: { gte: monthStart } } });
-  if (used >= limit) return { status: 'FAILED', error: `sms limit reached (${used}/${limit})` };
-
-  const res = await sms.send(b.customer.phone, smsText(ctx, now));
-  return res.ok ? { status: 'SENT', channel: 'SMS' } : { status: 'RETRY', error: `sms: ${res.error}` };
+  if (!tried) return { status: 'FAILED', error: 'no channel: клиент не подключил мессенджер и не указал email' };
+  return { status: 'RETRY', error: errors.join('; ') };
 }
 
 export { manageToken };

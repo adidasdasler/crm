@@ -83,7 +83,7 @@ export default function BookingScreen() {
           {b.reminders!.map((r) => (
             <Muted key={r.id}>
               {r.type === 'BEFORE_24H' ? 'За сутки' : r.type === 'BEFORE_2H' ? 'За 2 часа' : 'После визита'}:{' '}
-              {r.status === 'SENT' ? `отправлено (${r.channel === 'TELEGRAM' ? 'Telegram' : 'SMS'})` : r.status === 'PENDING' ? `в ${time(r.scheduledAt, tz)}${isoDay(new Date(r.scheduledAt), tz) !== isoDay(new Date(b.startsAt), tz) ? ' накануне' : ''}` : r.status === 'CANCELLED' ? 'не нужно' : 'не доставлено'}
+              {r.status === 'SENT' ? `отправлено (${CHANNEL_LABEL[r.channel] ?? r.channel})` : r.status === 'PENDING' ? `в ${time(r.scheduledAt, tz)}${isoDay(new Date(r.scheduledAt), tz) !== isoDay(new Date(b.startsAt), tz) ? ' накануне' : ''}` : r.status === 'CANCELLED' ? 'не нужно' : 'не доставлено'}
             </Muted>
           ))}
         </Card>
@@ -102,3 +102,5 @@ export default function BookingScreen() {
     </Screen>
   );
 }
+
+const CHANNEL_LABEL: Record<string, string> = { TELEGRAM: 'Telegram', MAX: 'MAX', VK: 'ВКонтакте', EMAIL: 'email' };

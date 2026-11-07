@@ -131,6 +131,8 @@ OWNER_DB_PASSWORD=$(secret)
 APP_DB_PASSWORD=$(secret)
 JWT_SECRET=$(secret)$(secret)
 TELEGRAM_WEBHOOK_SECRET=$(secret)
+MAX_WEBHOOK_SECRET=$(secret)
+VK_SECRET=$(secret)
 # Пароль шифрования бэкапов. СОХРАНИТЕ ЕГО ВНЕ СЕРВЕРА — без него бэкап не расшифровать.
 BACKUP_PASSPHRASE=$BACKUP_PASSPHRASE
 # Копия бэкапов во внешнее хранилище (rclone), например: yandex:mioflow-backups
@@ -155,8 +157,11 @@ SEED_DEMO=$DEMO
 # Подключить позже (docs/DEPLOY.md). Telegram и ЮKassa требуют домен с HTTPS.
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
-SMS_RU_API_KEY=
-SMS_SENDER=
+MAX_BOT_TOKEN=
+MAX_BOT_USERNAME=
+VK_GROUP_TOKEN=
+VK_GROUP_SCREEN_NAME=
+VK_CONFIRMATION_CODE=
 PAYMENT_PROVIDER=yookassa
 YOOKASSA_SHOP_ID=
 YOOKASSA_SECRET_KEY=

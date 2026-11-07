@@ -52,7 +52,7 @@ export default function CustomerScreen() {
           </View>
         </>
       )}
-      {c && <Muted>{c.telegramChatId ? '🔔 Напоминания приходят в Telegram' : '🔔 Напоминания — по SMS (Telegram клиент не подключил)'}</Muted>}
+      {c && <Muted>{reminderChannel(c)}</Muted>}
       <Field label="Имя" value={f.name} onChangeText={(name) => setF({ ...f, name })} />
       <Field label="Телефон" value={f.phone} onChangeText={(phone) => setF({ ...f, phone })} keyboardType="phone-pad" />
       <Field label="Заметки" value={f.notes} onChangeText={(notes) => setF({ ...f, notes })} multiline placeholder="Предпочтения клиента (без сведений о здоровье)" />
@@ -85,3 +85,8 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
     <Muted>{label}</Muted>
   </Card>
 );
+
+function reminderChannel(c: { telegramChatId: string | null; maxUserId?: string | null; vkUserId?: string | null; email: string | null }) {
+  const list = [c.telegramChatId && 'Telegram', c.maxUserId && 'MAX', c.vkUserId && 'ВКонтакте', c.email && 'email'].filter(Boolean);
+  return list.length ? `🔔 Напоминания: ${list.join(', ')}` : '🔔 Клиент не подключил напоминания — отправьте ему ссылку на запись или укажите email';
+}

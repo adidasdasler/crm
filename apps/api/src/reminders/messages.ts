@@ -36,9 +36,3 @@ export function telegramText(c: ReminderCtx, now = new Date()) {
     c.salon.phone ? esc(c.salon.phone) : null,
   ].filter((x) => x !== null).join('\n');
 }
-
-export function smsText(c: ReminderCtx, now = new Date()) {
-  const w = whenText(c.startsAt, c.tz, now);
-  const when = w.day === 'сегодня' || w.day === 'завтра' ? `${w.day} в ${w.time}` : `${w.short} в ${w.time}`;
-  return `${c.salon.name}: ждём вас ${when}. Подтвердить или отменить: ${c.url}`;
-}

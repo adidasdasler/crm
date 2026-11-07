@@ -25,7 +25,7 @@ export const telegram = {
       return {
         ok: !!json.ok,
         error: json.ok ? undefined : json.description ?? `HTTP ${res.status}`,
-        // 403: пользователь заблокировал бота — дальше слать нельзя, переходим на SMS
+        // 403: пользователь заблокировал бота — дальше слать нельзя, переходим к следующему каналу
         blocked: res.status === 403,
         result: json.result,
       };

@@ -60,8 +60,13 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
-      SMS_RU_API_KEY: ${SMS_RU_API_KEY:-}
-      SMS_SENDER: ${SMS_SENDER:-}
+      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
+      MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-}
+      MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-}
+      VK_GROUP_TOKEN: ${VK_GROUP_TOKEN:-}
+      VK_GROUP_SCREEN_NAME: ${VK_GROUP_SCREEN_NAME:-}
+      VK_CONFIRMATION_CODE: ${VK_CONFIRMATION_CODE:-}
+      VK_SECRET: ${VK_SECRET:-}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-yookassa}
       YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
@@ -75,7 +80,7 @@ services:
       start_period: 40s
     networks: [db, web]
 
-  # Фоновый воркер: напоминания (Telegram/SMS), проверка подписок, очистка удалённых салонов.
+  # Фоновый воркер: напоминания (Telegram/MAX/VK/email), проверка подписок, очистка удалённых салонов.
   worker:
     <<: *common
     image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-api:${IMAGE_TAG:-latest}
@@ -111,5 +116,5 @@ networks:
   # База данных — во внутренней сети без доступа в интернет
   db:
     internal: true
-  # Сеть для API (нужен выход в интернет: Telegram, SMS, ЮKassa) и Nginx
+  # Сеть для API (нужен выход в интернет: Telegram, MAX, VK, почта, ЮKassa) и Nginx
   web:

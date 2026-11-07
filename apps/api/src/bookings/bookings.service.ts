@@ -43,6 +43,8 @@ export type CreateBookingInput = {
   price?: number;
   /** Сотрудник может поставить запись вне графика мастера */
   allowOutsideSchedule?: boolean;
+  /** Источник онлайн-записи (yandex_maps, 2gis, vk…) */
+  referrer?: string;
 };
 
 @Injectable()
@@ -159,6 +161,7 @@ export class BookingsService {
           source: input.source,
           price: input.price ?? svc.price,
           notes: input.notes ?? null,
+          referrer: input.referrer ?? null,
           // Ссылка «управлять записью» есть у каждой записи — её шлём в напоминаниях.
           manageTokenHash: manageTokenHash(id),
           createdById: actor.userId ?? null,
@@ -300,7 +303,7 @@ export class BookingsService {
     await tx.reminder.createMany({
       data: plan.map((r) => ({
         tenantId: tenant.id, bookingId: b.id, type: r.type,
-        channel: hasTelegram ? 'TELEGRAM' : 'SMS', scheduledAt: new Date(r.at),
+        channel: hasTelegram ? 'TELEGRAM' : 'EMAIL', scheduledAt: new Date(r.at),
       })),
       skipDuplicates: true,
     });

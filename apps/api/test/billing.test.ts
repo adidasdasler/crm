@@ -19,7 +19,7 @@ describe('подписка: оплата по ссылке', () => {
 
     const pay = await s.api.post('/billing/pay', { planCode: 'BUSINESS', period: 'MONTHLY' });
     expect(pay.status).toBe(201);
-    expect(pay.body.data.amount).toBe(199000);
+    expect(pay.body.data.amount).toBe(149000);
     expect(pay.body.data.confirmationUrl).toContain(`/pay/mock/${pay.body.data.paymentId}`);
     // Повторное нажатие «Оплатить» — та же ссылка, без дублей
     expect((await s.api.post('/billing/pay', { planCode: 'BUSINESS', period: 'MONTHLY' })).body.data.paymentId).toBe(pay.body.data.paymentId);
@@ -55,7 +55,7 @@ describe('подписка: оплата по ссылке', () => {
     expect((await api().get(`/public/${s.slug}`)).body.data.available).toBe(false);
 
     const pay = await s.api.post('/billing/pay', { planCode: 'START', period: 'YEARLY' });
-    expect(pay.body.data.amount).toBe(990000);
+    expect(pay.body.data.amount).toBe(662400);
     await api().post(`/billing/mock/${pay.body.data.paymentId}/succeed`);
     const sub = (await s.api.get('/billing/subscription')).body.data;
     expect(sub.status).toBe('ACTIVE');
@@ -78,9 +78,10 @@ describe('подписка: оплата по ссылке', () => {
 
   it('лимит мастеров по тарифу и права на оплату', async () => {
     const s = await createSalon('Limit');
-    // Тариф START: до 2 мастеров (владелец уже мастер)
+    // Тариф START: до 3 мастеров (владелец уже мастер)
     expect((await s.api.post('/resources', { name: 'Второй' })).status).toBe(201);
-    const third = await s.api.post('/resources', { name: 'Третий' });
+    expect((await s.api.post('/resources', { name: 'Третий' })).status).toBe(201);
+    const third = await s.api.post('/resources', { name: 'Четвёртый' });
     expect(third.status).toBe(403);
     expect(third.body.error.code).toBe('PLAN_LIMIT');
     expect((await s.api.post('/resources', { name: 'Неактивный', isActive: false })).status).toBe(201);

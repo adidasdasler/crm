@@ -8,7 +8,18 @@ type Service = { id: string; name: string; description: string | null; price: nu
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null } };
+
+/** Источник перехода: ?src=yandex, ?src=2gis, ?src=vk… — салон видит в отчёте, откуда приходят клиенты */
+function readRef(): string | undefined {
+  try {
+    const q = new URLSearchParams(location.search).get('src')?.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+    if (q) sessionStorage.setItem('mioflow_ref', q);
+    return q || sessionStorage.getItem('mioflow_ref') || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 type Step = 'services' | 'master' | 'time' | 'contacts' | 'done';
 
@@ -182,13 +193,7 @@ export function BookingPage() {
           <p className="text-lg first-letter:uppercase">{fmtDate(booked.startsAt, tz)}, {fmtTime(booked.startsAt, tz)}</p>
           <p className="text-ink-muted">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
           {salon.address && <p className="text-ink-muted">{salon.address}</p>}
-          {booked.telegramUrl && (
-            <div className="space-y-2 rounded-3xl bg-brand-50 p-5">
-              <p className="font-semibold">Получайте напоминания в Telegram</p>
-              <p className="text-sm text-ink-muted">Напомним за сутки и за 2 часа. Подтвердить или отменить — одной кнопкой.</p>
-              <a className="btn-primary w-full" href={booked.telegramUrl} target="_blank" rel="noreferrer">Подключить Telegram</a>
-            </div>
-          )}
+          <Messengers booked={booked} />
           <p className="text-sm text-ink-muted">По этой ссылке можно подтвердить или отменить запись:</p>
           <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
         </section>
@@ -208,6 +213,7 @@ function Contacts(props: {
 }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('+7 ');
+  const [email, setEmail] = useState('');
   const [comment, setComment] = useState('');
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState(''); // honeypot
@@ -221,7 +227,7 @@ function Contacts(props: {
     try {
       const b = await api<Booked>(`/public/${props.slug}/book`, {
         method: 'POST',
-        body: JSON.stringify({ ...props.payload, name, phone, comment: comment || undefined, consent, website: website || undefined }),
+        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef(), comment: comment || undefined, consent, website: website || undefined }),
       });
       props.onDone(b);
     } catch (e) {
@@ -246,6 +252,7 @@ function Contacts(props: {
       <h2 className="display text-2xl">Как с вами связаться</h2>
       <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+      <input className="input" type="email" placeholder="Email для напоминаний (необязательно)" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
       <textarea className="input" rows={2} maxLength={500} placeholder="Пожелания к визиту (необязательно)" value={comment} onChange={(e) => setComment(e.target.value)} />
       <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden />
       <label className="flex items-start gap-3 text-sm text-ink-muted">
@@ -295,3 +302,27 @@ const Avatar = ({ name }: { name: string }) => (
   <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 font-display text-xl text-brand-700">{name.slice(0, 1)}</div>
 );
 const Skeleton = () => <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-3xl bg-brand-50" />)}</div>;
+
+/** Напоминания бесплатно в мессенджере на выбор: клиент нажимает кнопку, бот привязывается к записи */
+function Messengers({ booked }: { booked: Booked }) {
+  const m = booked.messengers ?? { telegram: booked.telegramUrl, max: null, vk: null };
+  const links = [
+    { href: m.telegram, label: 'Telegram', cls: 'bg-[#229ED9] text-white' },
+    { href: m.max, label: 'MAX', cls: 'bg-gradient-to-r from-[#2E6BFF] to-[#9B3BFF] text-white' },
+    { href: m.vk, label: 'ВКонтакте', cls: 'bg-[#0077FF] text-white' },
+  ].filter((l) => l.href);
+  if (!links.length) return null;
+  return (
+    <div className="space-y-3 rounded-3xl bg-brand-50 p-5">
+      <p className="font-semibold">Получайте напоминания в мессенджере</p>
+      <p className="text-sm text-ink-muted">Напомним за сутки и за 2 часа. Подтвердить или отменить — одной кнопкой.</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {links.map((l) => (
+          <a key={l.label} className={`rounded-2xl px-4 py-3 text-center font-semibold transition hover:opacity-90 ${l.cls}`} href={l.href!} target="_blank" rel="noreferrer">
+            {l.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}

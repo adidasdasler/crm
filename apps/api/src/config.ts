@@ -30,9 +30,20 @@ const schema = z.object({
   /** Публичный адрес API для регистрации вебхука, например https://mioflow.ru/v1 */
   API_PUBLIC_URL: z.string().url().optional(),
 
-  // ── SMS (sms.ru) — запасной канал напоминаний ──
-  SMS_RU_API_KEY: z.string().optional(),
-  SMS_SENDER: z.string().optional(),
+  // ── ВКонтакте: сообщество MioFlow (Callback API + сообщения сообщества) ──
+  VK_GROUP_TOKEN: z.string().optional(),
+  /** Короткое имя сообщества для ссылки vk.me/<имя> */
+  VK_GROUP_SCREEN_NAME: z.string().optional(),
+  /** Строка, которую VK просит вернуть при подтверждении адреса сервера */
+  VK_CONFIRMATION_CODE: z.string().optional(),
+  /** Секретный ключ Callback API (настраивается в сообществе) */
+  VK_SECRET: z.string().optional(),
+
+  // ── Мессенджер MAX: бот MioFlow (https://dev.max.ru) ──
+  MAX_BOT_TOKEN: z.string().optional(),
+  MAX_BOT_USERNAME: z.string().optional(),
+  MAX_WEBHOOK_SECRET: z.string().optional(),
+  MAX_API_BASE: z.string().url().default('https://platform-api2.max.ru'),
 
   // ── Почта (восстановление пароля): smtps://user:pass@smtp.yandex.ru:465 ──
   SMTP_URL: z.string().optional(),
