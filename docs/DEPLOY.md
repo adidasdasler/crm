@@ -1,69 +1,106 @@
-# Деплой на VPS
+# Публикация MioFlow на VPS
 
-Схема: Docker (Nginx → API → PostgreSQL + воркер напоминаний и подписок). Другие сайты и боты на сервере не затрагиваются: MioFlow занимает только свои порты.
+MioFlow работает **целиком в Docker** и изолирован от остального сервера. Ваши боты-службы (systemd), их файлы, порты и настройки не затрагиваются:
 
-- **Без домена (сейчас):** сайт открывается на `http://IP:8080`, приложение — на `http://IP:8081`. Для проверки и показа.
-- **С доменом mioflow.ru (для реальных клиентов):** хостовый Nginx с HTTPS на портах 80/443 → `127.0.0.1:8080`.
+| Чего MioFlow НЕ делает | Почему это важно для ботов |
+|---|---|
+| Не обновляет системные пакеты (`apt upgrade`) | Версии Python/Node и библиотек у ботов не меняются |
+| Не перезапускает уже установленный Docker | Если у вас есть контейнеры, они не перезапустятся |
+| Не трогает systemd-службы, cron других программ, хостовый Nginx | Боты продолжают работать как раньше |
+| Не включает файрвол | Нельзя случайно потерять SSH или закрыть порты ботов |
+| Не занимает занятые порты — останавливается с понятной ошибкой | Нет конфликтов с вебхуками ботов |
+| Не собирает образы на сервере (скачивает готовые из GitHub) | Сборке нужно ~2 ГБ памяти — на сервере она могла бы «выдавить» ботов |
+| Ограничен по памяти: база 768 МБ, API 512 МБ, воркер 256 МБ, Nginx 128 МБ | Даже под нагрузкой MioFlow не займёт всю память |
+| Логи ограничены (10 МБ × 5 на контейнер) | Диск не переполнится |
 
-## 0. Что нужно
+В конце установки скрипт сравнивает список работающих служб до и после и показывает, что ничего не остановилось.
 
-- VPS в России (152-ФЗ), Ubuntu 22.04 или 24.04, от 2 vCPU и 4 ГБ памяти, 30+ ГБ диска.
-- Доступ по SSH с правами `sudo`.
+> ⚠️ Одно изменение на уровне системы, если Docker ещё не установлен: Docker добавляет свои правила iptables и включает пересылку пакетов только для своих контейнеров. На обычных ботов это не влияет. Если на сервере есть VPN (WireGuard/OpenVPN) с маршрутизацией — скажите, проверим заранее.
 
-## А. Быстрый запуск по IP — без домена
+## Что понадобится
 
-### 1. Доступ к коду
+- VPS в России: Ubuntu 22.04 или 24.04, свободно ≥1,5 ГБ памяти и ≥5 ГБ диска, доступ по SSH с `sudo`.
+- Аккаунт GitHub `adidasdasler` — для двух токенов (ниже).
 
-Репозиторий приватный, поэтому серверу нужен токен только на чтение:
+---
 
-1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token.
-2. Repository access: **Only select repositories** → `crm`. Permissions → Repository → **Contents: Read-only**. Срок — например, 90 дней.
-3. Скопируйте токен (показывается один раз).
+## Шаг 1. Проверить, что сборка в GitHub прошла
 
-### 2. Установка
+Откройте https://github.com/adidasdasler/crm/actions. У последнего запуска **Docker images** должна стоять зелёная галочка. Этот запуск собрал образы и поднял весь сервис в тестовом окружении: проверил сайт, приложение, вход, роли базы, бэкап и восстановление.
 
-Подключитесь к серверу по SSH и выполните. На запрос логина введите имя пользователя GitHub, вместо пароля — токен:
+## Шаг 2. Создать два токена GitHub
+
+Оба токена — **только на чтение**. Срок — 90 дней, потом их можно перевыпустить.
+
+1. **Для скачивания кода.** GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token. Repository access → Only select repositories → `crm`. Permissions → Contents: **Read-only**.
+2. **Для скачивания образов.** Там же → **Tokens (classic)** → Generate new token (classic). Отметьте только **read:packages**.
+
+Сохраните оба токена в менеджер паролей. В чат их не присылайте.
+
+## Шаг 3. Посмотреть, что уже работает на сервере
+
+Подключитесь по SSH. Эти команды ничего не меняют, только показывают состояние:
 
 ```bash
-sudo git clone -b claude/zen-hawking-ibm979 https://github.com/adidasdasler/crm.git /opt/pora
+systemctl list-units --type=service --state=running --no-pager | grep -v systemd
 ```
 
 ```bash
-cd /opt/pora && sudo bash deploy/install.sh --demo
+sudo ss -ltnp | grep -E ':(8080|8081|80|443)\b' || echo "порты 8080/8081 свободны"
 ```
-
-Флаг `--demo` создаёт демо-салон для показа (вход `demo@salon.local` / `demo12345`); уберите его, если не нужен.
-
-Скрипт:
-
-- ставит Docker, если его нет (из репозитория Ubuntu, с зеркалом Docker Hub);
-- добавляет swap на небольших серверах — сборке нужно около 2 ГБ памяти;
-- создаёт `.env` со случайными паролями;
-- собирает и запускает сервис (первый раз 5–15 минут);
-- открывает порты 8080 и 8081 в ufw и включает ежедневный бэкап базы.
-
-В конце он печатает адреса сайта и приложения.
-
-> Если у провайдера VPS есть свой файрвол в панели управления, откройте там порты 8080 и 8081.
-
-### Что не работает без домена
-
-- **HTTPS.** Пароли и данные передаются незашифрованными, поэтому реальных клиентов так не подключайте.
-- **Telegram-бот.** Telegram отправляет вебхуки только на HTTPS-адрес, поэтому напоминания пока могут уходить только по SMS.
-- **Оплата ЮKassa** требует HTTPS-адрес для уведомлений.
-
-### Обновление
 
 ```bash
-cd /opt/pora && sudo bash deploy/scripts/deploy.sh
+free -h && df -h /
 ```
 
-Скрипт делает бэкап, скачивает новую версию, пересобирает и перезапускает сервис.
+Если порты 8080 или 8081 заняты ботом, на шаге 5 укажите другие: `--site-port 8090 --app-port 8091`.
 
-## Б. Переход на домен mioflow.ru
+## Шаг 4. Скачать код
 
-1. У регистратора домена создайте DNS-записи типа A: `mioflow.ru`, `www.mioflow.ru`, `app.mioflow.ru` → IP сервера.
-2. В `/opt/pora/.env` поменяйте:
+Код кладётся в отдельную папку `/opt/mioflow`, файлы ботов не затрагиваются. На запрос «Username» введите `adidasdasler`, на «Password» вставьте **первый** токен (код):
+
+```bash
+sudo git clone -b claude/zen-hawking-ibm979 https://github.com/adidasdasler/crm.git /opt/mioflow
+```
+
+## Шаг 5. Установить
+
+```bash
+cd /opt/mioflow && sudo bash deploy/install.sh --ghcr-user adidasdasler --demo
+```
+
+Скрипт попросит **второй** токен (образы). При вводе символы не отображаются, так и должно быть. Установка занимает 3–5 минут.
+
+- `--demo` создаёт демо-салон для показа. Уберите флаг, если показывать не нужно.
+- Если на шаге 3 порты оказались заняты, добавьте `--site-port 8090 --app-port 8091`.
+
+В конце скрипт покажет:
+
+- адреса: сайт `http://IP:8080`, приложение `http://IP:8081`;
+- строку «Все службы, которые работали до установки, работают и сейчас»;
+- **пароль шифрования бэкапов** — сразу сохраните его в менеджер паролей.
+
+Если у провайдера VPS есть свой файрвол в панели управления, откройте в нём порты 8080 и 8081.
+
+## Шаг 6. Убедиться, что боты в порядке
+
+Подставьте название службы своего бота:
+
+```bash
+systemctl status ИМЯ_СЛУЖБЫ_БОТА --no-pager
+```
+
+---
+
+## Без домена: что важно знать
+
+- **Нет HTTPS** — пароли и данные идут незашифрованными. Это режим для проверки и показа, не для реальных клиентов.
+- **Telegram-бот MioFlow и оплата через ЮKassa** требуют HTTPS, то есть заработают после подключения домена. Не путайте с вашими ботами: их это никак не касается.
+
+## Подключение домена mioflow.ru (для реальных клиентов)
+
+1. Купите `mioflow.ru`. У регистратора создайте A-записи: `mioflow.ru`, `www`, `app` → IP сервера.
+2. В `/opt/mioflow/.env` замените строки:
 
    ```
    PUBLIC_WEB_URL=https://mioflow.ru
@@ -72,94 +109,83 @@ cd /opt/pora && sudo bash deploy/scripts/deploy.sh
    COOKIE_SECURE=true
    ```
 
-3. Установите Nginx и certbot на сервер (если их нет):
+3. **Если хостовый Nginx уже стоит** (например, для вебхуков ботов) — добавляется ещё один сайт, существующие конфиги не меняются:
 
    ```bash
-   sudo apt-get install -y nginx certbot
-   ```
-
-4. Подключите конфиг сайта:
-
-   ```bash
-   sudo cp /opt/pora/deploy/nginx/host-mioflow.conf /etc/nginx/sites-available/mioflow.conf
+   sudo cp /opt/mioflow/deploy/nginx/host-mioflow.conf /etc/nginx/sites-available/mioflow.conf
    ```
 
    ```bash
-   sudo mkdir -p /var/www/certbot && sudo ln -s /etc/nginx/sites-available/mioflow.conf /etc/nginx/sites-enabled/
+   sudo ln -s /etc/nginx/sites-available/mioflow.conf /etc/nginx/sites-enabled/ && sudo mkdir -p /var/www/certbot
    ```
 
-5. Получите сертификат. Блок `listen 443` в конфиге ссылается на сертификат, поэтому до его выпуска временно закомментируйте этот блок:
+   Если Nginx нет, установите его: `sudo apt-get install -y --no-upgrade nginx certbot`.
 
-   ```bash
-   sudo certbot certonly --webroot -w /var/www/certbot -d mioflow.ru -d www.mioflow.ru -d app.mioflow.ru
-   ```
-
-6. Раскомментируйте блок 443 и перезагрузите Nginx:
+4. Временно закомментируйте в `mioflow.conf` блок `server { listen 443 ... }`. Проверьте конфиг и перезагрузите Nginx. `reload` не обрывает соединения других сайтов:
 
    ```bash
    sudo nginx -t && sudo systemctl reload nginx
    ```
 
-7. Пересоберите сервис с новыми адресами:
+5. Получите сертификат:
 
    ```bash
-   cd /opt/pora && sudo bash deploy/scripts/deploy.sh
+   sudo certbot certonly --webroot -w /var/www/certbot -d mioflow.ru -d www.mioflow.ru -d app.mioflow.ru
    ```
 
-8. Закройте временные порты:
+6. Раскомментируйте блок 443 и снова выполните `sudo nginx -t && sudo systemctl reload nginx`.
+7. Примените новые адреса:
 
    ```bash
-   sudo ufw delete allow 8080/tcp && sudo ufw delete allow 8081/tcp
+   cd /opt/mioflow && sudo docker compose up -d
    ```
 
-Certbot сам продлевает сертификат (systemd timer).
+8. Если открывали порты 8080/8081 в ufw, закройте их:
 
-## 4. Telegram-бот, SMS, почта и оплата
+   ```bash
+   sudo ufw delete allow 8080/tcp; sudo ufw delete allow 8081/tcp
+   ```
 
-Все ключи вписываются в `/opt/pora/.env`. После правок выполните `sudo bash deploy/scripts/deploy.sh`.
+---
 
-**Telegram-бот** (нужен домен с HTTPS):
+## Обновление, логи, остановка
 
-1. В Telegram откройте @BotFather → `/newbot` → получите токен.
-2. Заполните `TELEGRAM_BOT_TOKEN` и `TELEGRAM_BOT_USERNAME` (без @). `TELEGRAM_WEBHOOK_SECRET` скрипт установки уже сгенерировал.
-3. После перезапуска в `docker compose logs worker` должна появиться строка `telegram setWebhook ok`.
-4. В приложении: «Ещё → Уведомления в Telegram → Подключить».
-
-> Перед включением Telegram прочитайте про трансграничную передачу в [legal/RKN-notification.md](legal/RKN-notification.md). Без Telegram сервис тоже работает: напоминания уходят по SMS.
-
-**SMS:** зарегистрируйтесь на sms.ru, пополните баланс и укажите `SMS_RU_API_KEY`. SMS уходят только клиентам без Telegram, в пределах лимита тарифа салона.
-
-**Почта** (восстановление пароля): создайте ящик `no-reply@mioflow.ru`, например в Яндекс 360. Получите пароль приложения и укажите `SMTP_URL="smtps://no-reply%40mioflow.ru:ПАРОЛЬ@smtp.yandex.ru:465"`.
-
-**Оплата (ЮKassa для самозанятых):**
-
-1. Подключите магазин в ЮKassa как самозанятый и проверьте, что чеки в «Мой налог» формируются автоматически.
-2. Укажите `YOOKASSA_SHOP_ID` и `YOOKASSA_SECRET_KEY`.
-3. В личном кабинете ЮKassa → «Интеграция» → «HTTP-уведомления» укажите `https://mioflow.ru/v1/webhooks/yookassa` и отметьте события `payment.succeeded` и `payment.canceled`.
-4. Сделайте тестовую оплату на минимальную сумму.
-
-## 5. Бэкапы
-
-Скрипт установки уже включил ежедневный бэкап в 03:15 (`/etc/cron.d/pora-backup`).
-
-- Бэкапы хранятся в `/opt/pora/backups` 30 дней. Чтобы шифровать их, укажите `BACKUP_GPG_RECIPIENT`.
-- Копию за пределы сервера отправляйте в хранилище в РФ (Yandex Object Storage) через `rclone`.
-- Раз в месяц проверяйте восстановление: `sudo bash deploy/scripts/test-restore.sh`.
-
-## 6. Обслуживание
-
-Команды выполняются в `/opt/pora`.
+Команды выполняются в `/opt/mioflow`.
 
 | Задача | Команда |
 |---|---|
-| Логи API | `sudo docker compose logs -f --tail=100 api` |
-| Логи напоминаний и подписок | `sudo docker compose logs -f --tail=100 worker` |
-| Обновить версию | `sudo bash deploy/scripts/deploy.sh` |
-| Консоль БД | `sudo docker compose exec postgres psql -U salon` |
-| Перезапуск | `sudo docker compose restart api` |
-| Остановить всё | `sudo docker compose down` (данные сохраняются) |
+| Обновить до новой версии (бэкап → код → образы → перезапуск) | `sudo bash deploy/scripts/deploy.sh` |
+| Логи | `sudo docker compose logs -f --tail=100 api worker` |
+| Состояние контейнеров и память | `sudo docker compose ps` и `sudo docker stats --no-stream` |
+| Остановить MioFlow (данные сохраняются) | `sudo docker compose down` |
+| Запустить снова | `sudo docker compose up -d` |
 
-## 7. Мониторинг (минимум)
+**Полностью удалить MioFlow с сервера** (с базой) — только если точно нужно:
 
-- UptimeRobot или аналог раз в минуту проверяет `https://mioflow.ru/v1/health` (до домена — `http://IP:8080/v1/health`) и шлёт алерт в Telegram.
-- Мониторинг ошибок (self-hosted GlitchTip) — в планах.
+```bash
+cd /opt/mioflow && sudo docker compose down -v && sudo rm -f /etc/cron.d/mioflow-backup
+```
+
+## Бэкапы
+
+- Каждый день в 03:15, зашифрованы AES-256, хранятся 30 дней в `/opt/mioflow/backups`. Журнал — `/var/log/mioflow-backup.log`.
+- **Обязательно настройте копию вне сервера:** docs/SECURITY.md, раздел 3 (Yandex Object Storage, около 10 ₽/мес).
+- Раз в месяц проверяйте восстановление: `sudo bash deploy/scripts/test-restore.sh`.
+
+## Интеграции (после подключения домена)
+
+Ключи вписываются в `/opt/mioflow/.env`, затем выполняется `sudo docker compose up -d`.
+
+- **Telegram-бот MioFlow:** @BotFather → `/newbot` → `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`. Это отдельный бот, ваши боты не затрагиваются. Перед включением прочитайте legal/RKN-notification.md.
+- **SMS:** sms.ru → `SMS_RU_API_KEY`.
+- **Почта:** ящик `no-reply@mioflow.ru` в Яндекс 360 → `SMTP_URL="smtps://no-reply%40mioflow.ru:ПАРОЛЬ_ПРИЛОЖЕНИЯ@smtp.yandex.ru:465"`.
+- **ЮKassa (самозанятый):** `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`. Адрес уведомлений — `https://mioflow.ru/v1/webhooks/yookassa`, события `payment.succeeded` и `payment.canceled`.
+
+## Если что-то пошло не так
+
+| Симптом | Что сделать |
+|---|---|
+| «Порт 8080 уже занят» | Повторите установку с `--site-port` и `--app-port` |
+| `denied` при скачивании образов | Проверьте второй токен: classic, право read:packages |
+| Сайт не открывается снаружи, а на сервере `curl localhost:8080` работает | Откройте порты в файрволе провайдера |
+| Сервис не стартует | `sudo docker compose logs --tail=100 api` — пришлите вывод |

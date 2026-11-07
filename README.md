@@ -94,6 +94,7 @@ pnpm --filter @salon/api test
 
 ## Документация
 
+- [docs/SECURITY.md](docs/SECURITY.md) — безопасность, 152-ФЗ, шифрование, остаточные риски.
 - [docs/DEPLOY.md](docs/DEPLOY.md) — деплой на VPS: запуск одной командой `sudo bash deploy/install.sh` (по IP, без домена), переход на домен mioflow.ru с HTTPS, бэкапы.
 - [docs/MOBILE.md](docs/MOBILE.md) — публикация в App Store, Google Play и RuStore.
 - [docs/BRAND.md](docs/BRAND.md) — бренд: логотип, цвета, шрифты, голос.
