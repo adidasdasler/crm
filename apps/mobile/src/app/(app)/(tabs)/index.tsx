@@ -7,7 +7,7 @@ import { F, Text } from '../../../components/Text';
 import { SubscriptionBanner } from '../../../components/SubscriptionBanner';
 import { C, Chip, Empty, ErrorText, Fab, webMax } from '../../../components/ui';
 import { get } from '../../../lib/api';
-import { useMe } from '../../../lib/auth';
+import { can, useMe } from '../../../lib/auth';
 import { addDays, dayLabel, dayTitle, rub, STATUS, time, today } from '../../../lib/format';
 import type { Booking, Resource } from '../../../lib/types';
 
@@ -17,7 +17,7 @@ export default function Calendar() {
   const [day, setDay] = useState(today(tz));
   const [resourceId, setResourceId] = useState<string | null>(null);
 
-  const resources = useQuery({ queryKey: ['resources'], queryFn: () => get<Resource[]>('/resources'), enabled: me.role !== 'MASTER' });
+  const resources = useQuery({ queryKey: ['resources'], queryFn: () => get<Resource[]>('/resources'), enabled: can(me, 'bookings.all') });
   const bookings = useQuery({
     queryKey: ['bookings', day],
     queryFn: () => get<Booking[]>(`/bookings?date=${day}`),
@@ -49,7 +49,7 @@ export default function Calendar() {
             );
           })}
         </ScrollView>
-        {me.role !== 'MASTER' && (resources.data?.length ?? 0) > 1 && (
+        {can(me, 'bookings.all') && (resources.data?.length ?? 0) > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 10, gap: 6 }}>
             <Chip label="Все" active={!resourceId} onPress={() => setResourceId(null)} />
             {resources.data!.map((r) => <Chip key={r.id} label={r.name} active={resourceId === r.id} color={r.color} onPress={() => setResourceId(r.id)} />)}

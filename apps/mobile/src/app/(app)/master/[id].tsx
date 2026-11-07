@@ -5,7 +5,7 @@ import { Pressable, Switch, TextInput, View } from 'react-native';
 import { Text } from '../../../components/Text';
 import { Button, C, Chip, ErrorText, Field, H, Loading, Muted, Screen, s, Toggle } from '../../../components/ui';
 import { del, get, patch, post } from '../../../lib/api';
-import { canManage, useMe } from '../../../lib/auth';
+import { can, useMe } from '../../../lib/auth';
 import type { Resource, Service, Week } from '../../../lib/types';
 
 const DAYS: [keyof Week, string][] = [['1', 'Понедельник'], ['2', 'Вторник'], ['3', 'Среда'], ['4', 'Четверг'], ['5', 'Пятница'], ['6', 'Суббота'], ['7', 'Воскресенье']];
@@ -18,7 +18,7 @@ export default function MasterScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const me = useMe();
-  const editable = canManage(me.role);
+  const editable = can(me, 'staff.manage');
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['resource', id], queryFn: () => get<Resource>(`/resources/${id}`), enabled: !isNew });
   const services = useQuery({ queryKey: ['services'], queryFn: () => get<Service[]>('/services'), enabled: editable });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { permissionsSchema } from './permissions';
 
 export const tenantSettingsSchema = z.object({
   /** Шаг сетки слотов, мин */
@@ -13,6 +14,8 @@ export const tenantSettingsSchema = z.object({
   remindersEnabled: z.boolean().default(true),
   /** Юридическое лицо/ИП салона — оператор ПДн своих клиентов (страница согласия) */
   legalName: z.string().trim().max(200).optional(),
+  /** Права ролей, настраивает только владелец (PUT /tenant/permissions) */
+  permissions: permissionsSchema.optional(),
   inn: z.string().trim().regex(/^(\d{10}|\d{12})$/, 'ИНН — 10 или 12 цифр').optional().or(z.literal('').transform(() => undefined)),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;

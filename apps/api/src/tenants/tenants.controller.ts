@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
-import { Auth, AuthCtx, Roles } from '../common/auth';
+import { Auth, AuthCtx, Can, invalidatePermissions, Roles } from '../common/auth';
+import { permissionMatrix, permissionsSchema } from '../common/permissions';
 import { audit } from '../common/audit';
 import { randomToken } from '../common/crypto';
 import { AppError, conflict, notFound } from '../common/errors';
@@ -15,7 +16,12 @@ const updateSchema = z.object({
   phone: z.string().trim().max(20).nullish(),
   address: z.string().trim().max(300).nullish(),
   timezone: z.string().optional(),
-  settings: tenantSettingsSchema.partial().optional(),
+  // Права ролей меняются только отдельным эндпоинтом владельца
+  settings: tenantSettingsSchema.omit({ permissions: true }).partial().optional(),
+});
+const memberSchema = z.object({
+  role: z.enum(['MANAGER', 'ADMIN', 'MASTER']).optional(),
+  resourceId: uuid.nullish(),
 });
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -34,7 +40,7 @@ export class TenantsController {
     return { ...t, settings: readSettings(t.settings) };
   }
 
-  @Roles('OWNER', 'MANAGER')
+  @Can('settings.manage')
   @Patch('tenant')
   update(@Auth() a: AuthCtx, @Body(new Zod(updateSchema)) dto: z.infer<typeof updateSchema>) {
     if (dto.timezone) {
@@ -44,7 +50,7 @@ export class TenantsController {
     }
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       const before = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId } });
-      const settings = dto.settings ? { ...readSettings(before.settings), ...dto.settings } : undefined;
+      const settings = dto.settings ? { ...readSettings(before.settings), ...dto.settings, permissions: readSettings(before.settings).permissions } : undefined;
       const t = await tx.tenant.update({ where: { id: a.tenantId }, data: { ...dto, settings } });
       await audit(tx, a, 'tenant.update', 'Tenant', t.id, before, t);
       return { ...t, settings: readSettings(t.settings) };
@@ -52,7 +58,7 @@ export class TenantsController {
   }
 
   // ─── Команда ───
-  @Roles('OWNER', 'MANAGER')
+  @Can('team.manage')
   @Get('team')
   team(@Auth() a: AuthCtx) {
     return this.prisma.withTenant(a.tenantId, (tx) =>
@@ -69,9 +75,10 @@ export class TenantsController {
    * передаёт сотруднику (в этапе 2 — письмо со ссылкой). Если email уже зарегистрирован —
    * просто добавляем человека в салон.
    */
-  @Roles('OWNER', 'MANAGER')
+  @Can('team.manage')
   @Post('team')
   async invite(@Auth() a: AuthCtx, @Body(new Zod(inviteSchema)) dto: z.infer<typeof inviteSchema>) {
+    if (dto.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Назначить управляющего может только владелец', 403);
     if (dto.resourceId) {
       const r = await this.prisma.withTenant(a.tenantId, (tx) => tx.resource.findFirst({ where: { id: dto.resourceId!, deletedAt: null } }));
       if (!r) throw notFound('Мастер');
@@ -94,13 +101,59 @@ export class TenantsController {
     return { id: m.id, role: m.role, user: { id: user.id, email: user.email, name: user.name }, tempPassword };
   }
 
+  /** Сменить роль сотрудника или привязку к мастеру */
+  @Can('team.manage')
+  @Patch('team/:id')
+  async updateMember(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(memberSchema)) dto: z.infer<typeof memberSchema>) {
+    if (dto.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Назначить управляющего может только владелец', 403);
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const m = await tx.membership.findFirst({ where: { id, deletedAt: null } });
+      if (!m) throw notFound('Сотрудник');
+      if (m.role === 'OWNER') throw new AppError('FORBIDDEN', 'Права владельца изменить нельзя', 403);
+      if (m.userId === a.userId) throw new AppError('FORBIDDEN', 'Нельзя менять собственную роль', 403);
+      if (m.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Управляющего может изменить только владелец', 403);
+      if (dto.resourceId && !(await tx.resource.findFirst({ where: { id: dto.resourceId, deletedAt: null } }))) throw notFound('Мастер');
+      const upd = await tx.membership.update({
+        where: { id },
+        data: { ...(dto.role ? { role: dto.role } : {}), ...(dto.resourceId !== undefined ? { resourceId: dto.resourceId } : {}) },
+        select: { id: true, role: true, resourceId: true, user: { select: { id: true, name: true, email: true } } },
+      });
+      await audit(tx, a, 'team.update', 'Membership', id, { role: m.role, resourceId: m.resourceId }, { role: upd.role, resourceId: upd.resourceId });
+      // Роль в уже выданном access-токене обновится при следующем refresh (до 15 минут)
+      return upd;
+    });
+  }
+
+  // ─── Роли и доступы ───
+  @Get('tenant/permissions')
+  async permissions(@Auth() a: AuthCtx) {
+    const t = await this.prisma.withTenant(a.tenantId, (tx) => tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId } }));
+    return permissionMatrix(readSettings(t.settings).permissions);
+  }
+
   @Roles('OWNER')
+  @Put('tenant/permissions')
+  setPermissions(@Auth() a: AuthCtx, @Body(new Zod(z.object({ permissions: permissionsSchema }))) dto: { permissions: z.infer<typeof permissionsSchema> }) {
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const before = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+      const prev = readSettings(before.settings);
+      const permissions = { ...(prev.permissions ?? {}) };
+      for (const [role, perms] of Object.entries(dto.permissions)) permissions[role as keyof typeof permissions] = { ...(permissions[role as keyof typeof permissions] ?? {}), ...perms };
+      await tx.tenant.update({ where: { id: a.tenantId }, data: { settings: { ...prev, permissions } } });
+      await audit(tx, a, 'tenant.permissions', 'Tenant', a.tenantId, prev.permissions ?? null, permissions);
+      invalidatePermissions(a.tenantId);
+      return permissionMatrix(permissions);
+    });
+  }
+
+  @Can('team.manage')
   @Delete('team/:id')
   async removeMember(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       const m = await tx.membership.findFirst({ where: { id, deletedAt: null } });
       if (!m) throw notFound('Сотрудник');
       if (m.role === 'OWNER') throw new AppError('FORBIDDEN', 'Нельзя удалить владельца', 403);
+      if (m.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Управляющего может удалить только владелец', 403);
       await tx.membership.update({ where: { id }, data: { deletedAt: new Date() } });
       await audit(tx, a, 'team.remove', 'Membership', id);
       // Сессии сотрудника в этом салоне перестанут обновляться (refresh проверяет membership).

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { z } from 'zod';
-import { Auth, AuthCtx, Roles, STAFF_ADMIN } from '../common/auth';
+import { Auth, AuthCtx, Can } from '../common/auth';
 import { audit } from '../common/audit';
 import { notFound } from '../common/errors';
 import { Zod } from '../common/http';
@@ -71,7 +71,7 @@ export class CatalogController {
     return SERVICE_TEMPLATES;
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Post('services/from-template')
   fromTemplate(@Auth() a: AuthCtx, @Body(new Zod(z.object({ template: z.enum(Object.keys(SERVICE_TEMPLATES) as [string]) }))) dto: { template: string }) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -86,7 +86,7 @@ export class CatalogController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Post('services')
   create(@Auth() a: AuthCtx, @Body(new Zod(serviceSchema)) dto: ServiceDto) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -100,7 +100,7 @@ export class CatalogController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Patch('services/:id')
   update(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(serviceSchema.partial())) dto: Partial<ServiceDto>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -114,7 +114,7 @@ export class CatalogController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Delete('services/:id')
   remove(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -130,13 +130,13 @@ export class CatalogController {
     return this.prisma.withTenant(a.tenantId, (tx) => tx.serviceCategory.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }));
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Post('service-categories')
   createCategory(@Auth() a: AuthCtx, @Body(new Zod(categorySchema)) dto: z.infer<typeof categorySchema>) {
     return this.prisma.withTenant(a.tenantId, (tx) => tx.serviceCategory.create({ data: { ...dto, tenantId: a.tenantId } }));
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('catalog.manage')
   @Delete('service-categories/:id')
   removeCategory(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {

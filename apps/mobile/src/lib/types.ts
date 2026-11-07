@@ -2,11 +2,16 @@ export type Role = 'OWNER' | 'MANAGER' | 'ADMIN' | 'MASTER';
 export type BookingStatus = 'SCHEDULED' | 'CONFIRMED' | 'ARRIVED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 export type Week = Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', [string, string][]>>;
 
+export type Perm =
+  | 'bookings.all' | 'customers.view' | 'customers.contacts' | 'customers.export' | 'catalog.manage'
+  | 'staff.manage' | 'team.manage' | 'settings.manage' | 'analytics.view';
+
 export type Me = {
   user: { id: string; email: string; name: string };
   telegramLinked: boolean;
   role: Role;
   resourceId: string | null;
+  permissions: Perm[];
   tenant: { id: string; name: string; slug: string; timezone: string };
   tenants: { id: string; name: string; slug: string; role: Role }[];
 };
@@ -35,3 +40,16 @@ export type Subscription = {
 };
 export type Payment = { id: string; amount: number; status: 'PENDING' | 'SUCCEEDED' | 'CANCELED' | 'REFUNDED'; billingPeriod: 'MONTHLY' | 'YEARLY'; paidAt: string | null; createdAt: string };
 export type Paged<T> = T[];
+
+export type Analytics = {
+  period: { from: string; to: string; days: number };
+  totals: {
+    revenue: number; booked: number; bookings: number; completed: number; cancelled: number; noShow: number; noShowRate: number;
+    avgCheck: number; onlineShare: number; newCustomers: number; load: number;
+  };
+  previous: { booked: number; bookings: number };
+  byDay: { date: string; revenue: number; bookings: number }[];
+  sources: { key: string; label: string; count: number; amount: number }[];
+  masters: { id: string; name: string; color: string; bookings: number; amount: number; bookedMin: number; capacityMin: number; load: number }[];
+  services: { name: string; count: number; amount: number }[];
+};

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { Auth, AuthCtx, Roles, STAFF_ADMIN } from '../common/auth';
+import { Auth, AuthCtx, Can } from '../common/auth';
 import { audit } from '../common/audit';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
@@ -51,7 +51,7 @@ export class ResourcesController {
     return { ...rest, serviceIds: services.map((s) => s.serviceId) };
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Post()
   create(@Auth() a: AuthCtx, @Body(new Zod(base)) dto: Dto) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -67,7 +67,7 @@ export class ResourcesController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Patch(':id')
   update(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(base.partial())) dto: Partial<Dto>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -82,7 +82,7 @@ export class ResourcesController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Delete(':id')
   remove(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -93,7 +93,7 @@ export class ResourcesController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Put(':id/services')
   services(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(z.object({ serviceIds: z.array(uuid) }))) dto: { serviceIds: string[] }) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -111,7 +111,7 @@ export class ResourcesController {
     );
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Post(':id/time-off')
   addTimeOff(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(timeOffSchema)) dto: z.infer<typeof timeOffSchema>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -120,7 +120,7 @@ export class ResourcesController {
     });
   }
 
-  @Roles(...STAFF_ADMIN)
+  @Can('staff.manage')
   @Delete(':id/time-off/:timeOffId')
   removeTimeOff(@Auth() a: AuthCtx, @Param('timeOffId', ParseUUIDPipe) timeOffId: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {

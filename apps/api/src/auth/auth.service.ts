@@ -1,3 +1,4 @@
+import { PERM_KEYS } from '../common/permissions';
 import { Injectable } from '@nestjs/common';
 import type { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -199,6 +200,8 @@ export class AuthService {
       telegramLinked: !!telegramChatId,
       role: auth.role,
       resourceId: auth.resourceId,
+      // Права текущей роли — приложение показывает только доступные разделы
+      permissions: auth.role === 'OWNER' ? PERM_KEYS : [...(auth.perms ?? [])],
       tenant: current?.tenant,
       tenants: memberships.map((m) => ({ ...m.tenant, role: m.role })),
     };

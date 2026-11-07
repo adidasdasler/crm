@@ -7,6 +7,8 @@ import type { Request } from 'express';
 import { jwtVerify, SignJWT } from 'jose';
 import { env } from '../config';
 import { AppError, forbidden } from './errors';
+import { Perm, PermissionOverrides, resolvePermissions } from './permissions';
+import { PrismaService } from './prisma.service';
 
 export type AuthCtx = {
   userId: string;
@@ -14,7 +16,12 @@ export type AuthCtx = {
   role: Role;
   /** Для MASTER — его Resource.id */
   resourceId: string | null;
+  /** Права с учётом настроек салона (заполняет AuthGuard) */
+  perms?: ReadonlySet<Perm>;
 };
+
+/** Есть ли у пользователя право. Владелец может всё. */
+export const can = (a: AuthCtx, p: Perm) => a.role === 'OWNER' || !!a.perms?.has(p);
 
 const key = new TextEncoder().encode(env.JWT_SECRET);
 
@@ -42,6 +49,13 @@ export const PUBLIC = 'isPublic';
 export const Public = () => SetMetadata(PUBLIC, true);
 export const ROLES = 'roles';
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
+export const PERMS = 'perms';
+/** Эндпоинт доступен, если у роли есть хотя бы одно из прав */
+export const Can = (...perms: Perm[]) => SetMetadata(PERMS, perms);
+
+/** Настройки прав салона кэшируются на 10 секунд, чтобы не читать БД на каждый запрос */
+const permCache = new Map<string, { at: number; v: PermissionOverrides | undefined }>();
+export const invalidatePermissions = (tenantId: string) => permCache.delete(tenantId);
 
 /** Роли, которые управляют салоном (всё, кроме мастера). */
 export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
@@ -55,7 +69,16 @@ export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector, private readonly prisma: PrismaService) {}
+
+  private async overrides(tenantId: string): Promise<PermissionOverrides | undefined> {
+    const hit = permCache.get(tenantId);
+    if (hit && Date.now() - hit.at < 10_000) return hit.v;
+    const t = await this.prisma.system.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+    const v = (t?.settings as { permissions?: PermissionOverrides } | null)?.permissions;
+    permCache.set(tenantId, { at: Date.now(), v });
+    return v;
+  }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const targets = [ctx.getHandler(), ctx.getClass()];
@@ -82,6 +105,9 @@ export class AuthGuard implements CanActivate {
 
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES, targets);
     if (roles?.length && !roles.includes(req.auth.role)) throw forbidden();
+    req.auth.perms = req.auth.role === 'OWNER' ? undefined : resolvePermissions(req.auth.role, await this.overrides(req.auth.tenantId));
+    const perms = this.reflector.getAllAndOverride<Perm[]>(PERMS, targets);
+    if (perms?.length && !perms.some((p) => can(req.auth!, p))) throw forbidden();
     return true;
   }
 }

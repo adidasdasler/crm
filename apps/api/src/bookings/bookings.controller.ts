@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { Auth, AuthCtx } from '../common/auth';
+import { Auth, AuthCtx, can } from '../common/auth';
+import { maskPhone } from '../common/permissions';
 import { forbidden, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService, Tx } from '../common/prisma.service';
@@ -65,9 +66,9 @@ export class BookingsController {
       endsAt: { gt: range.from },
       ...(q.customerId ? { customerId: q.customerId } : {}),
       // Мастер видит только свои записи.
-      resourceId: a.role === 'MASTER' ? a.resourceId ?? '00000000-0000-0000-0000-000000000000' : q.resourceId,
+      resourceId: !can(a, 'bookings.all') ? a.resourceId ?? '00000000-0000-0000-0000-000000000000' : q.resourceId,
     };
-      return tx.booking.findMany({ where, include: bookingInclude, orderBy: { startsAt: 'asc' } });
+      return maskBookings(a, await tx.booking.findMany({ where, include: bookingInclude, orderBy: { startsAt: 'asc' } }));
     });
   }
 
@@ -83,13 +84,13 @@ export class BookingsController {
     const b = await this.prisma.withTenant(a.tenantId, (tx) =>
       tx.booking.findUnique({ where: { id }, include: { ...bookingInclude, reminders: true } }),
     );
-    if (!b || (a.role === 'MASTER' && b.resourceId !== a.resourceId)) throw notFound('Запись');
-    return b;
+    if (!b || (!can(a, 'bookings.all') && b.resourceId !== a.resourceId)) throw notFound('Запись');
+    return maskBookings(a, [b])[0];
   }
 
   @Post()
   create(@Auth() a: AuthCtx, @Body(new Zod(createSchema)) dto: z.infer<typeof createSchema>) {
-    if (a.role === 'MASTER' && dto.resourceId !== a.resourceId) throw forbidden('Мастер может записывать только к себе');
+    if (!can(a, 'bookings.all') && dto.resourceId !== a.resourceId) throw forbidden('Можно записывать только к себе');
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       let customerId = dto.customerId;
       if (!customerId && dto.customer) {
@@ -127,7 +128,7 @@ export class BookingsController {
   }
 
   private async assertMasterOwns(tx: Tx, a: AuthCtx, id: string, newResourceId?: string) {
-    if (a.role !== 'MASTER') return;
+    if (can(a, 'bookings.all')) return;
     const b = await tx.booking.findUnique({ where: { id }, select: { resourceId: true } });
     if (!b || b.resourceId !== a.resourceId) throw notFound('Запись');
     if (newResourceId && newResourceId !== a.resourceId) throw forbidden('Мастер не может передать запись другому');
@@ -136,4 +137,10 @@ export class BookingsController {
   private tenant(tx: Tx, a: AuthCtx) {
     return tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { id: true, timezone: true, settings: true } });
   }
+}
+
+/** Скрыть телефон клиента, если у роли нет права на контакты */
+function maskBookings<T extends { customer: { phone: string } }>(a: AuthCtx, list: T[]): T[] {
+  if (can(a, 'customers.contacts')) return list;
+  return list.map((b) => ({ ...b, customer: { ...b.customer, phone: maskPhone(b.customer.phone)! } }));
 }

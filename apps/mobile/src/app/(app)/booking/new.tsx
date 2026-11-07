@@ -5,7 +5,7 @@ import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '../../../components/Text';
 import { Button, C, Card, Chip, ErrorText, Field, H, Muted, Screen } from '../../../components/ui';
 import { ApiError, get, post } from '../../../lib/api';
-import { useMe } from '../../../lib/auth';
+import { can, useMe } from '../../../lib/auth';
 import { addDays, dayLabel, minutes, phonePretty, rub, time, today, zonedToIso } from '../../../lib/format';
 import type { Customer, Resource, Service } from '../../../lib/types';
 
@@ -21,7 +21,7 @@ export default function NewBooking() {
   const [customer, setCustomer] = useState<Pick<Customer, 'id' | 'name' | 'phone'> | null>(null);
   const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string } | null>(null);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
-  const [resourceId, setResourceId] = useState<string | null>(me.role === 'MASTER' ? me.resourceId : params.resourceId || null);
+  const [resourceId, setResourceId] = useState<string | null>(!can(me, 'bookings.all') ? me.resourceId : params.resourceId || null);
   const [day, setDay] = useState(params.day || today(tz));
   const [slot, setSlot] = useState<string | null>(null);
   const [manualTime, setManualTime] = useState('');
@@ -48,8 +48,8 @@ export default function NewBooking() {
     [resources.data, serviceIds],
   );
   useEffect(() => {
-    if (resourceId && serviceIds.length && !masters.some((m) => m.id === resourceId) && me.role !== 'MASTER') setResourceId(null);
-  }, [masters, resourceId, serviceIds.length, me.role]);
+    if (resourceId && serviceIds.length && !masters.some((m) => m.id === resourceId) && can(me, 'bookings.all')) setResourceId(null);
+  }, [masters, resourceId, serviceIds.length, me]);
 
   const slots = useQuery({
     queryKey: ['slots', day, serviceIds, resourceId],
@@ -127,7 +127,7 @@ export default function NewBooking() {
       </View>
       {selected.length > 0 && <Muted>Итого: {rub(total.price)} · {minutes(total.duration)}</Muted>}
 
-      {me.role !== 'MASTER' && serviceIds.length > 0 && (
+      {can(me, 'bookings.all') && serviceIds.length > 0 && (
         <>
           <H>Мастер</H>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

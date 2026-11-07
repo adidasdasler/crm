@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { Auth, AuthCtx, Roles, STAFF_ADMIN } from '../common/auth';
+import { Auth, AuthCtx, Can, can } from '../common/auth';
+import { maskEmail, maskPhone } from '../common/permissions';
 import { audit } from '../common/audit';
 import { conflict, isUniqueError, notFound } from '../common/errors';
 import { Paged, Zod } from '../common/http';
@@ -33,6 +34,8 @@ export class CustomersController {
     const digits = q.q?.replace(/\D/g, '');
     const where: Prisma.CustomerWhereInput = {
       deletedAt: null,
+      // Без права на всю базу — только клиенты, которые записывались к этому сотруднику
+      ...(can(a, 'customers.view') ? {} : { bookings: { some: { resourceId: a.resourceId ?? NO_ID } } }),
       ...(q.tag ? { tags: { has: q.tag } } : {}),
       ...(q.q
         ? { OR: [{ name: { contains: q.q, mode: 'insensitive' } }, ...(digits && digits.length >= 3 ? [{ phone: { contains: digits } }] : [])] }
@@ -43,7 +46,7 @@ export class CustomersController {
         tx.customer.findMany({ where, orderBy: [{ lastVisitAt: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }], skip: (q.page - 1) * q.limit, take: q.limit }),
         tx.customer.count({ where }),
       ]);
-      return { items, meta: { page: q.page, limit: q.limit, total } };
+      return { items: items.map((c) => maskCustomer(a, c)), meta: { page: q.page, limit: q.limit, total } };
     });
   }
 
@@ -51,9 +54,10 @@ export class CustomersController {
   async get(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     const c = await this.prisma.withTenant(a.tenantId, (tx) =>
       tx.customer.findFirst({
-        where: { id, deletedAt: null },
+        where: { id, deletedAt: null, ...ownOnly(a) },
         include: {
           bookings: {
+            where: can(a, 'bookings.all') ? {} : { resourceId: a.resourceId ?? NO_ID },
             orderBy: { startsAt: 'desc' },
             take: 50,
             include: { items: true, resource: { select: { id: true, name: true } } },
@@ -62,7 +66,7 @@ export class CustomersController {
       }),
     );
     if (!c) throw notFound('Клиент');
-    return c;
+    return maskCustomer(a, c);
   }
 
   @Post()
@@ -83,11 +87,13 @@ export class CustomersController {
   update(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(customerSchema.partial())) dto: Partial<Dto>) {
     return this.prisma
       .withTenant(a.tenantId, async (tx) => {
-        const before = await tx.customer.findFirst({ where: { id, deletedAt: null } });
+        const before = await tx.customer.findFirst({ where: { id, deletedAt: null, ...ownOnly(a) } });
         if (!before) throw notFound('Клиент');
-        const c = await tx.customer.update({ where: { id }, data: dto });
+        // Без права на контакты менять телефон и email нельзя (их не видно)
+        const data = can(a, 'customers.contacts') ? dto : { ...dto, phone: undefined, email: undefined };
+        const c = await tx.customer.update({ where: { id }, data });
         await audit(tx, a, 'customer.update', 'Customer', id, before, c);
-        return c;
+        return maskCustomer(a, c);
       })
       .catch((e) => {
         if (isUniqueError(e)) throw conflict('CUSTOMER_EXISTS', 'Клиент с таким телефоном уже есть');
@@ -96,7 +102,7 @@ export class CustomersController {
   }
 
   /** Удаление по запросу субъекта ПДн: обезличиваем, историю визитов сохраняем для отчётов. */
-  @Roles(...STAFF_ADMIN)
+  @Can('customers.view')
   @Delete(':id')
   remove(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -108,7 +114,7 @@ export class CustomersController {
           deletedAt: new Date(),
           name: 'Удалённый клиент',
           phone: `deleted:${id}`,
-          email: null, notes: null, birthDate: null, telegramChatId: null, tags: [], marketingConsent: false,
+          email: null, notes: null, birthDate: null, telegramChatId: null, vkUserId: null, maxUserId: null, tags: [], marketingConsent: false,
         },
       });
       await audit(tx, a, 'customer.delete', 'Customer', id);
@@ -117,7 +123,7 @@ export class CustomersController {
   }
 
   /** Импорт (например, выгрузка из другой CRM). Существующие по телефону — пропускаются. */
-  @Roles(...STAFF_ADMIN)
+  @Can('customers.view')
   @Post('import')
   import(@Auth() a: AuthCtx, @Body(new Zod(importSchema)) dto: z.infer<typeof importSchema>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -139,4 +145,12 @@ export class CustomersController {
       return { created: r.count, skipped: rows.size - r.count, invalid: invalid.length };
     });
   }
+}
+
+const NO_ID = '00000000-0000-0000-0000-000000000000';
+const ownOnly = (a: AuthCtx): Prisma.CustomerWhereInput =>
+  can(a, 'customers.view') ? {} : { bookings: { some: { resourceId: a.resourceId ?? NO_ID } } };
+
+function maskCustomer<T extends { phone: string; email: string | null }>(a: AuthCtx, c: T): T {
+  return can(a, 'customers.contacts') ? c : { ...c, phone: maskPhone(c.phone)!, email: maskEmail(c.email) ?? null };
 }

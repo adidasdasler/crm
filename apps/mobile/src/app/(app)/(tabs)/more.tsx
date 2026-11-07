@@ -4,7 +4,7 @@ import { Alert, Linking, Platform, Share, View } from 'react-native';
 import { F, Text } from '../../../components/Text';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
 import { API_URL, del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
-import { canManage, useAuth, useMe } from '../../../lib/auth';
+import { can, useAuth, useMe } from '../../../lib/auth';
 import type { Subscription } from '../../../lib/types';
 
 const SUB_STATUS: Record<string, string> = { TRIAL: 'Пробный период', ACTIVE: 'Активна', PAST_DUE: 'Ожидает оплаты', CANCELLED: 'Отменена', EXPIRED: 'Истекла' };
@@ -75,9 +75,10 @@ export default function More() {
       </Card>
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
-        {canManage(me.role) && <Row icon="cut-outline" title="Мастера и графики" onPress={() => router.push('/masters')} />}
-        {(isOwner || me.role === 'MANAGER') && <Row icon="people-circle-outline" title="Команда и доступы" onPress={() => router.push('/team')} />}
-        {(isOwner || me.role === 'MANAGER') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}
+        {can(me, 'staff.manage') && <Row icon="cut-outline" title="Мастера и графики" onPress={() => router.push('/masters')} />}
+        {can(me, 'team.manage') && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
+        {isOwner && <Row icon="shield-checkmark-outline" title="Роли и доступы" subtitle="Кто что видит: записи, клиенты, отчёты" onPress={() => router.push('/roles')} />}
+        {can(me, 'settings.manage') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}
         <Row
           icon="card-outline"
           title="Подписка"
@@ -91,7 +92,7 @@ export default function More() {
           onPress={toggleTelegram}
           right={<Text style={{ color: me.telegramLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.telegramLinked ? 'Отключить' : 'Подключить'}</Text>}
         />
-        {me.role === 'MASTER' && me.resourceId && <Row icon="time-outline" title="Мой график" onPress={() => router.push(`/master/${me.resourceId}`)} />}
+        {!can(me, 'staff.manage') && me.resourceId && <Row icon="time-outline" title="Мой график" onPress={() => router.push(`/master/${me.resourceId}`)} />}
       </View>
 
       {me.tenants.length > 1 && (
@@ -103,7 +104,7 @@ export default function More() {
       )}
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
-        {(isOwner || me.role === 'MANAGER') && <Row icon="download-outline" title="Выгрузить клиентов (Excel)" onPress={exportCustomers} />}
+        {can(me, 'customers.export') && <Row icon="download-outline" title="Выгрузить клиентов (Excel)" onPress={exportCustomers} />}
         <Row icon="trash-outline" title="Удалить аккаунт" onPress={() => router.push('/delete-account')} />
       </View>
 

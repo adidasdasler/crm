@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { get, post, setOnUnauthorized, tokens } from './api';
 import { unregisterPush } from './push';
-import type { Me } from './types';
+import type { Me, Perm } from './types';
 
 type AuthState = {
   status: 'loading' | 'guest' | 'authed';
@@ -70,3 +70,8 @@ export function useMe() {
   return useAuth().me!;
 }
 export const canManage = (role?: string) => role === 'OWNER' || role === 'MANAGER' || role === 'ADMIN';
+/** Есть ли у текущего пользователя право (настраивается владельцем в «Ролях и доступах») */
+export const can = (me: Pick<Me, 'role' | 'permissions'> | null | undefined, p: Perm) => !!me && (me.role === 'OWNER' || (me.permissions ?? []).includes(p));
+export function useCan(p: Perm) {
+  return can(useAuth().me, p);
+}

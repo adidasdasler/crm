@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { Auth, AuthCtx, Public, Roles } from '../common/auth';
+import { Auth, AuthCtx, Can, Public, Roles } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
@@ -118,7 +118,7 @@ export class AccountController {
   }
 
   /** Выгрузка клиентов в CSV (Excel): при переезде, по требованию салона, перед удалением. */
-  @Roles('OWNER', 'MANAGER')
+  @Can('customers.export')
   @Get('tenant/export/customers.csv')
   async exportCustomers(@Auth() a: AuthCtx, @Res() res: Response) {
     const rows = await this.prisma.withTenant(a.tenantId, (tx) =>
