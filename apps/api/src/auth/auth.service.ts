@@ -1,3 +1,5 @@
+import { industry } from '../common/industries';
+import { readSettings } from '../common/tenant-settings';
 import { PERM_KEYS } from '../common/permissions';
 import { Injectable } from '@nestjs/common';
 import type { Role } from '@prisma/client';
@@ -32,7 +34,7 @@ export class AuthService {
 
   /** Регистрация владельца: пользователь + салон + подписка TRIAL + первый мастер. */
   async register(
-    dto: { email: string; password: string; name: string; phone?: string; salonName: string; slug: string; timezone: string },
+    dto: { email: string; password: string; name: string; phone?: string; salonName: string; slug: string; timezone: string; industry?: string },
     meta: Meta,
   ) {
     if (!(await this.isSlugAvailable(dto.slug))) {
@@ -48,11 +50,16 @@ export class AuthService {
           data: { email: dto.email, passwordHash, name: dto.name, phone: dto.phone },
         });
         const tenant = await tx.tenant.create({
-          data: { name: dto.salonName, slug: dto.slug, timezone: dto.timezone, phone: dto.phone },
+          data: { name: dto.salonName, slug: dto.slug, timezone: dto.timezone, phone: dto.phone, settings: dto.industry ? { industry: dto.industry } : {} },
         });
         const resource = await tx.resource.create({
           data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE, color: '#2F3BFF' },
         });
+        // Стартовый набор услуг по отрасли — салон сразу может принимать записи и правит цены под себя
+        for (const [i, t] of (dto.industry ? industry(dto.industry).templates : []).entries()) {
+          const s = await tx.service.create({ data: { ...t, tenantId: tenant.id, sortOrder: i } });
+          await tx.serviceResource.create({ data: { tenantId: tenant.id, serviceId: s.id, resourceId: resource.id } });
+        }
         const membership = await tx.membership.create({
           data: { tenantId: tenant.id, userId: user.id, role: 'OWNER', resourceId: resource.id },
         });
@@ -190,7 +197,7 @@ export class AuthService {
       db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true } }),
       db.membership.findMany({
         where: { userId: auth.userId, deletedAt: null },
-        include: { tenant: { select: { id: true, name: true, slug: true, timezone: true } } },
+        include: { tenant: { select: { id: true, name: true, slug: true, timezone: true, settings: true } } },
       }),
     ]);
     const current = memberships.find((m) => m.tenantId === auth.tenantId);
@@ -202,8 +209,10 @@ export class AuthService {
       resourceId: auth.resourceId,
       // Права текущей роли — приложение показывает только доступные разделы
       permissions: auth.role === 'OWNER' ? PERM_KEYS : [...(auth.perms ?? [])],
-      tenant: current?.tenant,
-      tenants: memberships.map((m) => ({ ...m.tenant, role: m.role })),
+      tenant: current && { id: current.tenant.id, name: current.tenant.name, slug: current.tenant.slug, timezone: current.tenant.timezone },
+      // Слова интерфейса по сфере бизнеса: «мастер» / «тренер» / «преподаватель»
+      industry: current && (({ code, label, terms }) => ({ code, label, terms }))(industry(readSettings(current.tenant.settings).industry)),
+      tenants: memberships.map(({ tenant: { settings: _s, ...t }, role }) => ({ ...t, role })),
     };
   }
 

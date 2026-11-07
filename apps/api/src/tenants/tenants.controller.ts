@@ -1,3 +1,4 @@
+import { industry } from '../common/industries';
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
@@ -9,7 +10,7 @@ import { AppError, conflict, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
 import { uuid } from '../common/schemas';
-import { readSettings, tenantSettingsSchema } from '../common/tenant-settings';
+import { readSettings, tenantSettingsPatchSchema } from '../common/tenant-settings';
 
 const updateSchema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
@@ -17,7 +18,7 @@ const updateSchema = z.object({
   address: z.string().trim().max(300).nullish(),
   timezone: z.string().optional(),
   // Права ролей меняются только отдельным эндпоинтом владельца
-  settings: tenantSettingsSchema.omit({ permissions: true }).partial().optional(),
+  settings: tenantSettingsPatchSchema.omit({ permissions: true }).optional(),
 });
 const memberSchema = z.object({
   role: z.enum(['MANAGER', 'ADMIN', 'MASTER']).optional(),
@@ -37,7 +38,9 @@ export class TenantsController {
   @Get('tenant')
   async current(@Auth() a: AuthCtx) {
     const t = await this.prisma.app.tenant.findUniqueOrThrow({ where: { id: a.tenantId } });
-    return { ...t, settings: readSettings(t.settings) };
+    const settings = readSettings(t.settings);
+    const ind = industry(settings.industry);
+    return { ...t, settings, industry: { code: ind.code, label: ind.label, terms: ind.terms } };
   }
 
   @Can('settings.manage')

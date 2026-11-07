@@ -72,6 +72,9 @@ export function useMe() {
 export const canManage = (role?: string) => role === 'OWNER' || role === 'MANAGER' || role === 'ADMIN';
 /** Есть ли у текущего пользователя право (настраивается владельцем в «Ролях и доступах») */
 export const can = (me: Pick<Me, 'role' | 'permissions'> | null | undefined, p: Perm) => !!me && (me.role === 'OWNER' || (me.permissions ?? []).includes(p));
+const DEFAULT_TERMS = { staff: 'Мастер', staffPlural: 'Мастера', client: 'Клиент', clientPlural: 'Клиенты', place: 'Салон' };
+/** Слова интерфейса для сферы бизнеса салона */
+export const useTerms = () => useAuth().me?.industry?.terms ?? DEFAULT_TERMS;
 export function useCan(p: Perm) {
   return can(useAuth().me, p);
 }

@@ -65,6 +65,9 @@ describe('роли и доступы', () => {
     const t = (await s.api.get('/tenant')).body.data;
     expect(t.settings.cancelBeforeHours).toBe(5);
     expect(t.settings.permissions.MASTER['analytics.view']).toBeUndefined();
+    // Частичное обновление не сбрасывает остальные настройки
+    await s.api.patch('/tenant', { settings: { about: 'О салоне' } });
+    expect((await s.api.get('/tenant')).body.data.settings).toMatchObject({ cancelBeforeHours: 5, about: 'О салоне' });
   });
 
   it('только владелец назначает управляющего; нельзя менять владельца и себя', async () => {

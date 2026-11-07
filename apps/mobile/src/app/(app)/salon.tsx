@@ -1,14 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Button, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../components/ui';
+import { View } from 'react-native';
+import { Button, Chip, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../components/ui';
 import { get, patch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import type { Tenant } from '../../lib/types';
+import type { IndustryInfo, LinkKey, Tenant } from '../../lib/types';
+
+const LINKS: { key: LinkKey; label: string; placeholder: string }[] = [
+  { key: 'yandexMaps', label: 'Карточка в Яндекс Картах', placeholder: 'https://yandex.ru/maps/org/…' },
+  { key: 'twoGis', label: 'Карточка в 2ГИС', placeholder: 'https://2gis.ru/…/firm/…' },
+  { key: 'vk', label: 'ВКонтакте', placeholder: 'https://vk.com/…' },
+  { key: 'telegram', label: 'Telegram-канал', placeholder: 'https://t.me/…' },
+  { key: 'max', label: 'MAX', placeholder: 'https://max.ru/…' },
+  { key: 'site', label: 'Сайт', placeholder: 'https://…' },
+];
 
 export default function SalonSettings() {
   const qc = useQueryClient();
   const { reload } = useAuth();
   const q = useQuery({ queryKey: ['tenant'], queryFn: () => get<Tenant>('/tenant') });
+  const industries = useQuery({ queryKey: ['industries'], queryFn: () => get<IndustryInfo[]>('/public-meta/industries'), staleTime: Infinity });
   const [f, setF] = useState<Tenant | null>(null);
   useEffect(() => { if (q.data) setF(q.data); }, [q.data]);
 
@@ -26,6 +37,29 @@ export default function SalonSettings() {
       <Field label="Телефон салона" value={f.phone ?? ''} onChangeText={(phone) => setF({ ...f, phone })} keyboardType="phone-pad" />
       <Field label="Адрес" value={f.address ?? ''} onChangeText={(address) => setF({ ...f, address })} />
       <Muted>Часовой пояс: {f.timezone}</Muted>
+
+      <H>Сфера</H>
+      <Muted>Меняет слова в приложении («мастер», «тренер», «преподаватель») и разметку для поисковиков.</Muted>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {(industries.data ?? []).map((i) => (
+          <Chip key={i.code} label={i.label} active={f.settings.industry === i.code} onPress={() => setF({ ...f, settings: { ...f.settings, industry: i.code } })} />
+        ))}
+      </View>
+
+      <H>Мини-сайт</H>
+      <Muted>Показывается на странице онлайн-записи и в Яндекс Картах / 2ГИС, если вы добавите туда ссылку.</Muted>
+      <Field label="О вас" value={f.settings.about ?? ''} onChangeText={(about) => setF({ ...f, settings: { ...f.settings, about } })} multiline maxLength={1500} placeholder="Чем вы отличаетесь, какие материалы используете, есть ли парковка" />
+      {LINKS.map((l) => (
+        <Field
+          key={l.key}
+          label={l.label}
+          value={f.settings.links?.[l.key] ?? ''}
+          onChangeText={(v) => setF({ ...f, settings: { ...f.settings, links: { ...(f.settings.links ?? {}), [l.key]: v.trim() } } })}
+          autoCapitalize="none"
+          keyboardType="url"
+          placeholder={l.placeholder}
+        />
+      ))}
 
       <H>Реквизиты для согласия клиентов</H>
       <Muted>Салон — оператор персональных данных своих клиентов. Эти данные показываются в согласии на странице онлайн-записи.</Muted>

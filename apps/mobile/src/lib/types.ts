@@ -14,6 +14,7 @@ export type Me = {
   permissions: Perm[];
   tenant: { id: string; name: string; slug: string; timezone: string };
   tenants: { id: string; name: string; slug: string; role: Role }[];
+  industry?: { code: string; label: string; terms: Terms };
 };
 export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; schedule: Week; isActive: boolean; serviceIds: string[] };
 export type Service = { id: string; name: string; description: string | null; price: number; duration: number; bufferTime: number; isActive: boolean; isPublic: boolean; categoryId: string | null; resourceIds: string[] };
@@ -31,8 +32,14 @@ export type Booking = {
 };
 export type Tenant = {
   id: string; name: string; slug: string; phone: string | null; address: string | null; timezone: string;
-  settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string };
+  settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string;
+    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>;
+  };
+  industry?: { code: string; label: string; terms: Terms };
 };
+export type LinkKey = 'site' | 'vk' | 'telegram' | 'max' | 'instagram' | 'whatsapp' | 'yandexMaps' | 'twoGis';
+export type Terms = { staff: string; staffPlural: string; client: string; clientPlural: string; place: string };
+export type IndustryInfo = { code: string; label: string; group: string; terms: Terms };
 export type Plan = { id: string; code: string; name: string; priceMonthly: number; priceYearly: number; limits: { masters?: number } };
 export type Subscription = {
   status: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED'; daysLeft: number | null; until: string | null;

@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { ReactNode } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import { Text } from '../components/Text';
-import { Button, C, ErrorText, Field, Muted, Screen } from '../components/ui';
+import { Button, C, Chip, ErrorText, Field, Muted, Screen } from '../components/ui';
 import { ApiError, get, PUBLIC_WEB_URL } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import type { IndustryInfo } from '../lib/types';
 
 const translit = (s: string) => {
   const map: Record<string, string> = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
@@ -15,6 +16,9 @@ const translit = (s: string) => {
 export default function Register() {
   const { status, register } = useAuth();
   const [f, setF] = useState({ salonName: '', name: '', phone: '', email: '', password: '', slug: '' });
+  const [industry, setIndustry] = useState('beauty');
+  const [industries, setIndustries] = useState<IndustryInfo[]>([]);
+  useEffect(() => { get<IndustryInfo[]>('/public-meta/industries').then(setIndustries).catch(() => null); }, []);
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugFree, setSlugFree] = useState<boolean | null>(null);
   const [accept, setAccept] = useState(false);
@@ -39,7 +43,7 @@ export default function Register() {
     setError(null);
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-      await register({ ...f, email: f.email.trim(), phone: f.phone || undefined, timezone, acceptTerms: accept, acceptPrivacy });
+      await register({ ...f, email: f.email.trim(), phone: f.phone || undefined, timezone, industry, acceptTerms: accept, acceptPrivacy });
     } catch (e) {
       const ae = e as ApiError;
       const details = (ae.details as { fieldErrors?: Record<string, string[]> })?.fieldErrors;
@@ -51,7 +55,16 @@ export default function Register() {
 
   return (
     <Screen>
-      <Field label="Название салона" value={f.salonName} onChangeText={set('salonName')} placeholder="Студия «Лаванда»" />
+      {industries.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 13, color: C.muted, fontWeight: '600' }}>Чем вы занимаетесь</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {industries.map((i) => <Chip key={i.code} label={i.label} active={industry === i.code} onPress={() => setIndustry(i.code)} />)}
+          </View>
+          <Muted>Добавим типовые услуги с ценами — их можно поменять. Медицинские услуги не поддерживаются.</Muted>
+        </View>
+      )}
+      <Field label="Название" value={f.salonName} onChangeText={set('salonName')} placeholder="Студия «Лаванда»" />
       <Field
         label="Адрес страницы записи"
         value={f.slug}

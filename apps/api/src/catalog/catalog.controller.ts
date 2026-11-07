@@ -1,3 +1,4 @@
+import { INDUSTRIES } from '../common/industries';
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { Auth, AuthCtx, Can } from '../common/auth';
@@ -23,31 +24,10 @@ const serviceSchema = z.object({
 const categorySchema = z.object({ name: z.string().trim().min(1).max(100), sortOrder: z.number().int().optional() });
 type ServiceDto = z.infer<typeof serviceSchema>;
 
-/** Готовые шаблоны для онбординга (цены в копейках). */
-export const SERVICE_TEMPLATES: Record<string, { name: string; price: number; duration: number; bufferTime?: number }[]> = {
-  nails: [
-    { name: 'Маникюр без покрытия', price: 120000, duration: 60 },
-    { name: 'Маникюр с покрытием гель-лак', price: 220000, duration: 120, bufferTime: 10 },
-    { name: 'Педикюр с покрытием', price: 280000, duration: 120, bufferTime: 10 },
-    { name: 'Снятие покрытия', price: 30000, duration: 15 },
-  ],
-  hair: [
-    { name: 'Женская стрижка', price: 200000, duration: 60 },
-    { name: 'Мужская стрижка', price: 120000, duration: 45 },
-    { name: 'Окрашивание в один тон', price: 450000, duration: 150, bufferTime: 15 },
-    { name: 'Укладка', price: 150000, duration: 45 },
-  ],
-  brows: [
-    { name: 'Коррекция бровей', price: 80000, duration: 30 },
-    { name: 'Окрашивание бровей', price: 70000, duration: 30 },
-    { name: 'Ламинирование ресниц', price: 250000, duration: 75 },
-  ],
-  barber: [
-    { name: 'Мужская стрижка', price: 150000, duration: 60 },
-    { name: 'Стрижка бороды', price: 100000, duration: 30 },
-    { name: 'Стрижка + борода', price: 230000, duration: 90 },
-  ],
-};
+/** Готовые шаблоны услуг по отраслям (цены в копейках), см. src/common/industries.ts */
+export const SERVICE_TEMPLATES: Record<string, { name: string; price: number; duration: number; bufferTime?: number }[]> = Object.fromEntries(
+  INDUSTRIES.filter((i) => i.templates.length).map((i) => [i.code, i.templates]),
+);
 
 @Controller()
 export class CatalogController {

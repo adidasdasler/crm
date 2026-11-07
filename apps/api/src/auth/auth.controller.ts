@@ -1,3 +1,4 @@
+import { INDUSTRY_CODES } from '../common/industries';
 import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -27,6 +28,8 @@ const registerSchema = z.object({
   timezone: z.string().default('Europe/Moscow').refine((tz) => {
     try { new Intl.DateTimeFormat('ru', { timeZone: tz }); return true; } catch { return false; }
   }, 'Неизвестный часовой пояс'),
+  /** Сфера бизнеса: меняет слова в интерфейсе и стартовые услуги */
+  industry: z.enum(INDUSTRY_CODES).optional(),
   /** Принятие оферты */
   acceptTerms: z.literal(true, { error: 'Необходимо принять условия оферты' }),
   /** Отдельное согласие на обработку ПДн (152-ФЗ, ст. 9) */

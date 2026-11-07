@@ -1,3 +1,5 @@
+import { industry } from '../common/industries';
+import { hoursText, salonHours } from './minisite';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
@@ -68,9 +70,15 @@ export class PublicController {
   @Get()
   async salon(@Param('slug') slug: string) {
     const t = await this.tenant(slug);
+    const ind = industry(t.s.industry);
+    const schedules = await this.prisma.withTenant(t.id, (tx) => tx.resource.findMany({ where: { deletedAt: null, isActive: true }, select: { schedule: true } }));
+    const hours = salonHours(schedules.map((r) => r.schedule));
     return {
       name: t.name, slug: t.slug, phone: t.phone, address: t.address, timezone: t.timezone,
       available: t.available, maxDaysAhead: t.s.maxDaysAhead,
+      // Мини-сайт
+      about: t.s.about ?? null, links: t.s.links ?? {}, hours, hoursText: hoursText(hours),
+      industry: { code: ind.code, label: ind.label, terms: ind.terms },
       /** Реквизиты салона как оператора ПДн — для страницы согласия */
       legalName: t.s.legalName ?? null, inn: t.s.inn ?? null,
       telegramBot: telegram.enabled ? telegram.deepLink('')?.replace(/\?start=$/, '') ?? null : null,

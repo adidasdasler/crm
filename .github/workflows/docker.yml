@@ -84,6 +84,10 @@ jobs:
           curl -fsS http://127.0.0.1:8081/config.js | grep -q '127.0.0.1:8081'
           curl -fsSI http://127.0.0.1:8080/ | grep -qi 'content-security-policy'
           curl -fsS http://127.0.0.1:8080/v1/public/demo | grep -q 'success":true'
+          # Мини-сайт: робот Яндекса получает HTML с разметкой schema.org, человек — приложение записи
+          curl -fsS -A 'Mozilla/5.0 (compatible; YandexBot/3.0)' http://127.0.0.1:8080/b/demo | grep -q 'application/ld+json'
+          curl -fsS http://127.0.0.1:8080/b/demo | grep -q '/assets/'
+          curl -fsS http://127.0.0.1:8080/v1/public/demo/qr.svg | grep -q '<svg'
           curl -fsS -X POST http://127.0.0.1:8081/v1/auth/login -H 'Content-Type: application/json' -H 'X-Client: mobile' \
             -d '{"email":"demo@salon.local","password":"demo12345"}' | grep -q accessToken
           # Роли БД: приложение без обхода RLS, владелец — не суперпользователь

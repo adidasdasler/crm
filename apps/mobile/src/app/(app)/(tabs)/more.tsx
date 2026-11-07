@@ -4,7 +4,7 @@ import { Alert, Linking, Platform, Share, View } from 'react-native';
 import { F, Text } from '../../../components/Text';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
 import { API_URL, del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
-import { can, useAuth, useMe } from '../../../lib/auth';
+import { can, useAuth, useMe, useTerms } from '../../../lib/auth';
 import type { Subscription } from '../../../lib/types';
 
 const SUB_STATUS: Record<string, string> = { TRIAL: 'Пробный период', ACTIVE: 'Активна', PAST_DUE: 'Ожидает оплаты', CANCELLED: 'Отменена', EXPIRED: 'Истекла' };
@@ -14,6 +14,7 @@ export default function More() {
   const { logout, reload } = useAuth();
   const qc = useQueryClient();
   const isOwner = me.role === 'OWNER';
+  const terms = useTerms();
   const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription') });
   const toggleTelegram = async () => {
     try {
@@ -70,12 +71,15 @@ export default function More() {
       <Card style={{ backgroundColor: C.brandSoft, borderColor: C.brandSoft }}>
         <Text style={{ fontWeight: '700', color: C.brandDark }}>Ссылка для онлайн-записи</Text>
         <Text style={{ color: C.brandDark }} selectable>{link}</Text>
-        <Muted>Добавьте её в профиль Instagram, ВКонтакте, Telegram и на Яндекс Карты</Muted>
-        <Button title="Поделиться ссылкой" icon="share-outline" onPress={share} style={{ marginTop: 6 }} />
+        <Muted>Добавьте её в Яндекс Карты, 2ГИС, ВКонтакте и Telegram — клиенты будут записываться сами</Muted>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+          <Button title="Поделиться" icon="share-outline" onPress={share} style={{ flexGrow: 1 }} />
+          <Button variant="ghost" title="Яндекс Карты и 2ГИС" icon="location-outline" onPress={() => router.push('/maps')} style={{ flexGrow: 1 }} />
+        </View>
       </Card>
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
-        {can(me, 'staff.manage') && <Row icon="cut-outline" title="Мастера и графики" onPress={() => router.push('/masters')} />}
+        {can(me, 'staff.manage') && <Row icon="cut-outline" title={`${terms.staffPlural} и графики`} onPress={() => router.push('/masters')} />}
         {can(me, 'team.manage') && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
         {isOwner && <Row icon="shield-checkmark-outline" title="Роли и доступы" subtitle="Кто что видит: записи, клиенты, отчёты" onPress={() => router.push('/roles')} />}
         {can(me, 'settings.manage') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}

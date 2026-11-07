@@ -194,3 +194,40 @@ describe('защита онлайн-записи', () => {
     expect(fourth.body.error.code).toBe('TOO_MANY_BOOKINGS');
   });
 });
+
+describe('мини-сайт и отрасли', () => {
+  it('HTML для роботов с разметкой schema.org, QR-код, часы работы, отрасль при регистрации', async () => {
+    const reg = await api().post('/auth/register', {
+      email: `fit-${Date.now()}@test.ru`, password: 'password123', name: 'Тренер', salonName: 'Студия <Йога>', slug: `yoga-${Date.now() % 100000}`,
+      industry: 'fitness', acceptTerms: true, acceptPrivacy: true,
+    });
+    expect(reg.status).toBe(201);
+    const a = api(reg.body.data.accessToken);
+    const slug = reg.body.data.tenant.slug;
+    const tenant = (await a.get('/tenant')).body.data;
+    expect(tenant.industry.terms.staff).toBe('Тренер');
+    expect((await a.get('/services')).body.data.map((s: any) => s.name)).toContain('Персональная тренировка');
+    await a.patch('/tenant', { address: 'Москва, Тверская, 1', settings: { about: 'Йога для начинающих', links: { vk: 'https://vk.com/yoga' } } });
+    expect((await a.patch('/tenant', { settings: { links: { vk: 'javascript:alert(1)' } } })).status).toBe(400);
+
+    const pub = (await api().get(`/public/${slug}`)).body.data;
+    expect(pub.hoursText).toBe('Пн–Пт 10:00–20:00, Сб 10:00–18:00, Вс выходной');
+    expect(pub.industry.code).toBe('fitness');
+    expect(pub.links.vk).toBe('https://vk.com/yoga');
+
+    const page = await api().get(`/public/${slug}/page`);
+    expect(page.headers['content-type']).toContain('text/html');
+    expect(page.text).toContain('Студия &lt;Йога&gt;');
+    expect(page.text).not.toContain('<Йога>');
+    const ld = JSON.parse(page.text.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)![1]);
+    expect(ld['@type']).toBe('ExerciseGym');
+    expect(ld.address.streetAddress).toBe('Москва, Тверская, 1');
+    expect(ld.hasOfferCatalog.itemListElement.length).toBeGreaterThan(0);
+    expect(ld.openingHoursSpecification).toHaveLength(6);
+
+    const qr = await api().get(`/public/${slug}/qr.svg?src=yandex`);
+    expect((await api().get(`/public/${slug}/qr.png`)).headers['content-type']).toBe('image/png');
+    expect(qr.headers['content-type']).toContain('image/svg+xml');
+    expect((await api().get('/public-meta/industries')).body.data.some((i: any) => i.code === 'education')).toBe(true);
+  });
+});

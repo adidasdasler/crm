@@ -4,7 +4,7 @@ import { ComponentProps } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import { F, Text } from '../../../components/Text';
 import { C } from '../../../components/ui';
-import { can, useMe } from '../../../lib/auth';
+import { can, useMe, useTerms } from '../../../lib/auth';
 
 type Icon = ComponentProps<typeof Ionicons>['name'];
 const icon = (name: Icon) => ({ color }: { color: unknown }) => <Ionicons name={name} color={color as string} size={24} />;
@@ -15,6 +15,7 @@ const icon = (name: Icon) => ({ color }: { color: unknown }) => <Ionicons name={
  */
 export default function TabsLayout() {
   const me = useMe();
+  const terms = useTerms();
   const { width } = useWindowDimensions();
   const side = width >= 1024;
   return (
@@ -40,7 +41,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Календарь', headerTitle: me.tenant.name, tabBarIcon: icon('calendar') }} />
       <Tabs.Screen name="dashboard" options={{ title: 'Обзор', headerTitle: 'Обзор салона', href: can(me, 'analytics.view') ? undefined : null, tabBarIcon: icon('stats-chart') }} />
-      <Tabs.Screen name="customers" options={{ title: 'Клиенты', tabBarIcon: icon('people') }} />
+      <Tabs.Screen name="customers" options={{ title: terms.clientPlural, tabBarIcon: icon('people') }} />
       <Tabs.Screen name="services" options={{ title: 'Услуги', href: can(me, 'catalog.manage') ? undefined : null, tabBarIcon: icon('pricetags') }} />
       <Tabs.Screen name="more" options={{ title: 'Ещё', tabBarIcon: icon('menu') }} />
     </Tabs>
