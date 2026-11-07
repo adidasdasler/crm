@@ -89,7 +89,7 @@ export function ClientConsent() {
         Согласие действует 3 года с даты моего последнего визита или до его отзыва. Отозвать согласие можно, обратившись в Салон
         {salon?.address ? ` (${salon.address})` : ''} или направив письмо на {O.email} (обращение будет передано Салону).
       </p>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-ink-muted">
         Подробнее: <Link className="text-brand-600 underline" to="/privacy">Политика обработки персональных данных</Link>
       </p>
     </Doc>

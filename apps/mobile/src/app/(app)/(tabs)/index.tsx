@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { F, Text } from '../../../components/Text';
 import { SubscriptionBanner } from '../../../components/SubscriptionBanner';
 import { C, Chip, Empty, ErrorText, Fab, webMax } from '../../../components/ui';
 import { get } from '../../../lib/api';
@@ -41,7 +42,7 @@ export default function Calendar() {
             const l = dayLabel(d);
             const on = d === day;
             return (
-              <Pressable key={d} onPress={() => setDay(d)} style={{ width: 46, alignItems: 'center', paddingVertical: 6, borderRadius: 12, backgroundColor: on ? C.brand : 'transparent' }}>
+              <Pressable key={d} onPress={() => setDay(d)} style={{ width: 46, alignItems: 'center', paddingVertical: 8, borderRadius: 23, backgroundColor: on ? C.brand : 'transparent' }}>
                 <Text style={{ fontSize: 12, color: on ? '#fff' : C.muted }}>{l.wd}</Text>
                 <Text style={{ fontSize: 18, fontWeight: '700', color: on ? '#fff' : d === today(tz) ? C.brand : C.text }}>{l.n}</Text>
               </Pressable>
@@ -64,7 +65,7 @@ export default function Calendar() {
         refreshControl={<RefreshControl refreshing={bookings.isRefetching} onRefresh={() => void bookings.refetch()} />}
         ListHeaderComponent={
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-            <Text style={{ fontSize: 20, fontWeight: '700', color: C.text }}>{dayTitle(day, tz)}</Text>
+            <Text style={{ fontSize: 24, fontFamily: F.display, color: C.text }}>{dayTitle(day, tz)}</Text>
             {active.length > 0 && <Text style={{ color: C.muted }}>{active.length} зап. · {rub(revenue)}</Text>}
           </View>
         }
@@ -83,7 +84,7 @@ function BookingCard({ b, tz }: { b: Booking; tz: string }) {
   const dim = ['CANCELLED', 'NO_SHOW'].includes(b.status);
   return (
     <Pressable onPress={() => router.push(`/booking/${b.id}`)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : dim ? 0.55 : 1 })}>
-      <View style={{ flexDirection: 'row', backgroundColor: C.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
+      <View style={{ flexDirection: 'row', backgroundColor: C.card, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#EEF0F7' }}>
         <View style={{ width: 5, backgroundColor: b.resource.color }} />
         <View style={{ width: 64, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: C.text }}>{time(b.startsAt, tz)}</Text>

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { FlatList, RefreshControl, Text, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
+import { Text } from '../../../components/Text';
 import { Button, C, Card, Chip, Empty, ErrorText, Fab, Muted, webMax } from '../../../components/ui';
 import { get, post } from '../../../lib/api';
 import { minutes, rub } from '../../../lib/format';

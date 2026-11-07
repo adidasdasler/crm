@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert, Platform, Text, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Button, C, Card, Chip, ErrorText, Field, H, Muted, Screen } from '../../components/ui';
 import { del, get, post } from '../../lib/api';
 import { useMe } from '../../lib/auth';

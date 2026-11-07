@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, Linking, Platform, Text, View } from 'react-native';
+import { Alert, Linking, Platform, View } from 'react-native';
+import { F, Text } from '../../../components/Text';
 import { Button, C, Card, ErrorText, Loading, Muted, Row, Screen } from '../../../components/ui';
 import { ApiError, get, post } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';
@@ -43,7 +44,7 @@ export default function BookingScreen() {
   return (
     <Screen>
       <Card>
-        <Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>{dateTitle(b.startsAt, tz)}</Text>
+        <Text style={{ fontSize: 26, fontFamily: F.display, color: C.text }}>{dateTitle(b.startsAt, tz)}</Text>
         <Muted>до {time(b.endsAt, tz)} · мастер {b.resource.name}</Muted>
         <Text style={{ alignSelf: 'flex-start', marginTop: 6, fontWeight: '600', color: st.color, backgroundColor: st.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' }}>{st.label}</Text>
       </Card>
@@ -71,7 +72,7 @@ export default function BookingScreen() {
       </Card>
       {(b.notes || b.customer.notes) && (
         <Card>
-          {b.notes && <Text>💬 {b.notes}</Text>}
+          {b.notes && <Text><Text style={{ fontWeight: '600' }}>Комментарий: </Text>{b.notes}</Text>}
           {b.customer.notes && <Muted>О клиенте: {b.customer.notes}</Muted>}
         </Card>
       )}

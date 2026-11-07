@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
+import { Text } from './Text';
 import { get } from '../lib/api';
 import { useMe } from '../lib/auth';
 import type { Subscription } from '../lib/types';

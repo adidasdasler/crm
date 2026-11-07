@@ -42,20 +42,20 @@ export function ManagePage() {
       {err && <p className="mb-4 rounded-xl bg-red-50 p-3 text-red-700">{err}</p>}
       {info && (
         <div className="card space-y-3">
-          <p className="text-sm text-slate-500">{info.salon.name}</p>
-          <h1 className="text-2xl font-bold first-letter:uppercase">{fmtDate(info.startsAt, tz)}, {fmtTime(info.startsAt, tz)}</h1>
+          <p className="text-sm text-ink-muted">{info.salon.name}</p>
+          <h1 className="display text-3xl first-letter:uppercase">{fmtDate(info.startsAt, tz)}, {fmtTime(info.startsAt, tz)}</h1>
           <p>{info.services.join(', ')} · {info.resource} · {rub(info.price)}</p>
-          {info.salon.address && <p className="text-slate-500">{info.salon.address}</p>}
+          {info.salon.address && <p className="text-ink-muted">{info.salon.address}</p>}
           <p className="inline-block rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">{STATUS[info.status] ?? info.status}</p>
           <div className="flex flex-col gap-2 pt-2">
             {info.status === 'SCHEDULED' && <button className="btn-primary" disabled={busy} onClick={() => act('confirm')}>Подтвердить, приду</button>}
             {info.canCancel && <button className="btn-ghost text-red-600" disabled={busy} onClick={() => act('cancel')}>Отменить запись</button>}
             {!info.canCancel && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
-              <p className="text-sm text-slate-500">Онлайн-отмена доступна не позднее чем за {info.cancelBeforeHours} ч. Позвоните в салон.</p>
+              <p className="text-sm text-ink-muted">Онлайн-отмена доступна не позднее чем за {info.cancelBeforeHours} ч. Позвоните в салон.</p>
             )}
             {info.salon.phone && <a className="btn-ghost" href={`tel:${info.salon.phone}`}>Позвонить в салон</a>}
             {info.telegramUrl && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
-              <a className="btn-ghost text-sky-700" href={info.telegramUrl} target="_blank" rel="noreferrer">Напоминания в Telegram</a>
+              <a className="btn-ghost" href={info.telegramUrl} target="_blank" rel="noreferrer">Напоминания в Telegram</a>
             )}
           </div>
         </div>

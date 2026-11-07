@@ -1,4 +1,4 @@
-# Salon — онлайн-запись и CRM для салонов красоты
+# Пора — онлайн-запись и CRM для салонов красоты
 
 SaaS для салонов на 1–10 мастеров: онлайн-запись для клиентов, календарь, база клиентов, мастера и графики, команда с ролями. Есть приложение для iOS и Android и веб-версия CRM.
 
@@ -96,6 +96,7 @@ pnpm --filter @salon/api test
 
 - [docs/DEPLOY.md](docs/DEPLOY.md) — деплой на VPS: Docker, Nginx, SSL, бэкапы.
 - [docs/MOBILE.md](docs/MOBILE.md) — публикация в App Store, Google Play и RuStore.
+- [docs/BRAND.md](docs/BRAND.md) — бренд: логотип, цвета, шрифты, голос.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — ключевые решения и чем они отличаются от спецификации v3.0.
 - [docs/ROADMAP.md](docs/ROADMAP.md) — план работ и чек-лист запуска.
 - [docs/legal](docs/legal/README.md) — юридические документы и уведомление в Роскомнадзор.

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from '../../components/Text';
 import { Button, C, Card, ErrorText, Field, Muted, Screen } from '../../components/ui';
 import { post, tokens } from '../../lib/api';
 import { useAuth, useMe } from '../../lib/auth';

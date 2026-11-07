@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Alert, Linking, Platform, Share, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Share, View } from 'react-native';
+import { F, Text } from '../../../components/Text';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
 import { API_URL, del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
 import { canManage, useAuth, useMe } from '../../../lib/auth';
@@ -62,7 +63,7 @@ export default function More() {
   return (
     <Screen>
       <Card>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>{me.tenant.name}</Text>
+        <Text style={{ fontSize: 24, fontFamily: F.display }}>{me.tenant.name}</Text>
         <Muted>{me.user.name} · {me.user.email}</Muted>
       </Card>
 

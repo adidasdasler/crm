@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Text } from '../../../components/Text';
 import { Button, C, Card, Chip, ErrorText, Field, H, Muted, Screen } from '../../../components/ui';
 import { ApiError, get, post } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';
@@ -145,7 +146,7 @@ export default function NewBooking() {
               const l = dayLabel(d);
               const on = d === day;
               return (
-                <Pressable key={d} onPress={() => setDay(d)} style={{ width: 48, alignItems: 'center', paddingVertical: 8, borderRadius: 12, backgroundColor: on ? C.brand : C.card, borderWidth: 1, borderColor: on ? C.brand : C.border }}>
+                <Pressable key={d} onPress={() => setDay(d)} style={{ width: 48, alignItems: 'center', paddingVertical: 8, borderRadius: 24, backgroundColor: on ? C.brand : C.card, borderWidth: 1, borderColor: on ? C.brand : C.border }}>
                   <Text style={{ fontSize: 12, color: on ? '#fff' : C.muted }}>{l.wd}</Text>
                   <Text style={{ fontSize: 17, fontWeight: '700', color: on ? '#fff' : C.text }}>{l.n}</Text>
                 </Pressable>
@@ -154,7 +155,7 @@ export default function NewBooking() {
           </ScrollView>
           {slots.isLoading ? <Muted>Загружаем свободное время…</Muted> : times.length === 0 ? <Muted>Свободных окон нет — можно указать время вручную</Muted> : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {times.map((t) => <Chip key={t} label={time(t, tz)} active={slot === t} onPress={() => { setSlot(t); setManualTime(''); }} />)}
+              {times.map((t) => <Chip key={t} label={time(t, tz)} active={slot === t} tone="accent" onPress={() => { setSlot(t); setManualTime(''); }} />)}
             </View>
           )}
           {resourceId && (

@@ -1,7 +1,8 @@
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ReactNode } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
+import { Text } from '../components/Text';
 import { Button, C, ErrorText, Field, Muted, Screen } from '../components/ui';
 import { ApiError, get, PUBLIC_WEB_URL } from '../lib/api';
 import { useAuth } from '../lib/auth';

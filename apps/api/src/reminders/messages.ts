@@ -23,7 +23,8 @@ export function whenText(startsAt: Date, tz: string, now = new Date()) {
 
 export function telegramText(c: ReminderCtx, now = new Date()) {
   const w = whenText(c.startsAt, c.tz, now);
-  const head = c.type === 'BEFORE_2H' ? `⏰ <b>Ждём вас ${w.day} в ${w.time}</b>` : `🔔 <b>Напоминаем о записи: ${w.day} в ${w.time}</b>`;
+  // Голос бренда «Пора»: короткая фраза-действие в заголовке
+  const head = c.type === 'BEFORE_2H' ? `<b>Ждём вас ${w.day} в ${w.time}</b>` : `<b>Пора к мастеру: ${w.day} в ${w.time}</b>`;
   return [
     head,
     '',

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { Mark } from '../Logo';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
 
 type Salon = { name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number };
@@ -78,29 +79,29 @@ export function BookingPage() {
 
       {step === 'services' && (
         <section className="space-y-6">
-          <h2 className="text-xl font-bold">Выберите услуги</h2>
+          <h2 className="display text-2xl">Что делаем?</h2>
           {[...catalog.categories, { id: null as unknown as string, name: catalog.categories.length ? 'Другое' : '' }].map((cat) => {
             const items = catalog.services.filter((s) => s.categoryId === (cat.id ?? null));
             if (!items.length) return null;
             return (
               <div key={cat.id ?? 'none'} className="space-y-2">
-                {cat.name && <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{cat.name}</h3>}
+                {cat.name && <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">{cat.name}</h3>}
                 {items.map((s) => {
                   const on = serviceIds.includes(s.id);
                   return (
                     <button
                       key={s.id}
                       onClick={() => setServiceIds(on ? serviceIds.filter((x) => x !== s.id) : serviceIds.length < 5 ? [...serviceIds, s.id] : serviceIds)}
-                      className={`card flex w-full items-start justify-between gap-4 text-left transition ${on ? 'ring-2 ring-brand-500' : 'hover:ring-slate-300'}`}
+                      className={`card flex w-full items-start justify-between gap-4 text-left transition ${on ? 'bg-brand-50 ring-2 ring-brand-600' : 'hover:ring-brand-200'}`}
                     >
                       <div>
                         <p className="font-semibold">{s.name}</p>
-                        {s.description && <p className="mt-1 text-sm text-slate-500">{s.description}</p>}
-                        <p className="mt-1 text-sm text-slate-500">{minutes(s.duration)}</p>
+                        {s.description && <p className="mt-1 text-sm text-ink-muted">{s.description}</p>}
+                        <p className="mt-1 text-sm text-ink-muted">{minutes(s.duration)}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span className="font-semibold">{rub(s.price)}</span>
-                        <span className={`grid h-6 w-6 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300'}`}>{on && '✓'}</span>
+                        <span className={`grid h-6 w-6 place-items-center rounded-full border-2 text-sm ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-brand-200'}`}>{on && '✓'}</span>
                       </div>
                     </button>
                   );
@@ -115,15 +116,15 @@ export function BookingPage() {
       {step === 'master' && (
         <section className="space-y-3">
           <Back onClick={() => setStep('services')} />
-          <h2 className="text-xl font-bold">Выберите мастера</h2>
+          <h2 className="display text-2xl">К кому?</h2>
           <button onClick={() => { setMasterId(null); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
             <Avatar name="✦" />
-            <div><p className="font-semibold">Любой мастер</p><p className="text-sm text-slate-500">Покажем всё свободное время</p></div>
+            <div><p className="font-semibold">Любой мастер</p><p className="text-sm text-ink-muted">Покажем всё свободное время</p></div>
           </button>
           {masters.map((m) => (
             <button key={m.id} onClick={() => { setMasterId(m.id); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
               <Avatar name={m.name} />
-              <div><p className="font-semibold">{m.name}</p>{m.position && <p className="text-sm text-slate-500">{m.position}</p>}</div>
+              <div><p className="font-semibold">{m.name}</p>{m.position && <p className="text-sm text-ink-muted">{m.position}</p>}</div>
             </button>
           ))}
         </section>
@@ -132,13 +133,13 @@ export function BookingPage() {
       {step === 'time' && (
         <section className="space-y-4">
           <Back onClick={() => setStep('master')} />
-          <h2 className="text-xl font-bold">Дата и время</h2>
+          <h2 className="display text-2xl">Когда удобно?</h2>
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2">
             {days.map((d) => {
               const dt = new Date(`${d}T12:00:00Z`);
               const on = d === date;
               return (
-                <button key={d} onClick={() => { setDate(d); setTime(null); }} className={`flex w-14 shrink-0 flex-col items-center rounded-xl py-2 ${on ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-slate-200'}`}>
+                <button key={d} onClick={() => { setDate(d); setTime(null); }} className={`flex w-14 shrink-0 flex-col items-center rounded-full py-2.5 ${on ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-brand-100'}`}>
                   <span className="text-xs capitalize opacity-80">{dt.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' })}</span>
                   <span className="text-lg font-semibold">{dt.getUTCDate()}</span>
                 </button>
@@ -148,11 +149,11 @@ export function BookingPage() {
           {slots === null ? (
             <Skeleton />
           ) : times.length === 0 ? (
-            <div className="card py-8 text-center text-slate-500">На этот день свободного времени нет — выберите другой</div>
+            <div className="card py-8 text-center text-ink-muted">На этот день свободного времени нет — выберите другой</div>
           ) : (
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
               {times.map((t) => (
-                <button key={t} onClick={() => setTime(t)} className={`rounded-xl py-3 font-semibold ${time === t ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-slate-200 hover:ring-brand-500'}`}>
+                <button key={t} onClick={() => setTime(t)} className={`rounded-full py-3 font-semibold tabular-nums ${time === t ? 'bg-blush-300 text-ink ring-2 ring-blush-300' : 'bg-white ring-1 ring-brand-100 hover:ring-brand-600'}`}>
                   {fmtTime(t, tz)}
                 </button>
               ))}
@@ -176,19 +177,19 @@ export function BookingPage() {
 
       {step === 'done' && booked && (
         <section className="card space-y-4 py-8 text-center">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-3xl text-emerald-600">✓</div>
-          <h2 className="text-2xl font-bold">Вы записаны!</h2>
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-blush-300 text-3xl text-ink">✓</div>
+          <h2 className="display text-3xl">Вы записаны!</h2>
           <p className="text-lg first-letter:uppercase">{fmtDate(booked.startsAt, tz)}, {fmtTime(booked.startsAt, tz)}</p>
-          <p className="text-slate-600">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
-          {salon.address && <p className="text-slate-500">{salon.address}</p>}
+          <p className="text-ink-muted">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
+          {salon.address && <p className="text-ink-muted">{salon.address}</p>}
           {booked.telegramUrl && (
-            <div className="space-y-2 rounded-2xl bg-sky-50 p-4">
-              <p className="font-semibold text-sky-900">Получайте напоминания в Telegram</p>
-              <p className="text-sm text-sky-800">Напомним за сутки и за 2 часа. Подтвердить или отменить — одной кнопкой.</p>
-              <a className="btn w-full bg-sky-500 text-white hover:bg-sky-600" href={booked.telegramUrl} target="_blank" rel="noreferrer">Подключить Telegram</a>
+            <div className="space-y-2 rounded-3xl bg-brand-50 p-5">
+              <p className="font-semibold">Получайте напоминания в Telegram</p>
+              <p className="text-sm text-ink-muted">Напомним за сутки и за 2 часа. Подтвердить или отменить — одной кнопкой.</p>
+              <a className="btn-primary w-full" href={booked.telegramUrl} target="_blank" rel="noreferrer">Подключить Telegram</a>
             </div>
           )}
-          <p className="text-sm text-slate-500">По этой ссылке можно подтвердить или отменить запись:</p>
+          <p className="text-sm text-ink-muted">По этой ссылке можно подтвердить или отменить запись:</p>
           <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
         </section>
       )}
@@ -239,15 +240,15 @@ function Contacts(props: {
       <Back onClick={props.onBack} />
       <div className="card space-y-1">
         <p className="font-semibold first-letter:uppercase">{fmtDate(props.summary.time, props.tz)}, {fmtTime(props.summary.time, props.tz)}</p>
-        <p className="text-sm text-slate-600">{props.summary.services.map((s) => s.name).join(', ')}</p>
-        <p className="text-sm text-slate-600">{props.summary.master} · {minutes(props.summary.total.duration)} · <b>{rub(props.summary.total.price)}</b></p>
+        <p className="text-sm text-ink-muted">{props.summary.services.map((s) => s.name).join(', ')}</p>
+        <p className="text-sm text-ink-muted">{props.summary.master} · {minutes(props.summary.total.duration)} · <b>{rub(props.summary.total.price)}</b></p>
       </div>
-      <h2 className="text-xl font-bold">Ваши контакты</h2>
+      <h2 className="display text-2xl">Как с вами связаться</h2>
       <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
       <textarea className="input" rows={2} maxLength={500} placeholder="Пожелания к визиту (необязательно)" value={comment} onChange={(e) => setComment(e.target.value)} />
       <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden />
-      <label className="flex items-start gap-3 text-sm text-slate-600">
+      <label className="flex items-start gap-3 text-sm text-ink-muted">
         <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
         <span>Даю <Link className="text-brand-600 underline" to={`/b/${props.slug}/consent`} target="_blank">согласие на обработку персональных данных</Link></span>
       </label>
@@ -262,13 +263,13 @@ function Shell({ salon, children }: { salon?: Salon; children: React.ReactNode }
     <div className="mx-auto min-h-screen max-w-xl px-4 pb-28 pt-6">
       {salon && (
         <header className="mb-6">
-          <h1 className="text-2xl font-bold">{salon.name}</h1>
-          {salon.address && <p className="text-slate-500">{salon.address}</p>}
+          <h1 className="display text-3xl">{salon.name}</h1>
+          {salon.address && <p className="text-ink-muted">{salon.address}</p>}
           {salon.phone && <a href={`tel:${salon.phone}`} className="text-sm text-brand-600">{salon.phone}</a>}
         </header>
       )}
       {children}
-      <footer className="mt-10 text-center text-xs text-slate-400">Онлайн-запись работает на <Link to="/" className="underline">Salon</Link></footer>
+      <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">«Пора»</Link></footer>
     </div>
   );
 }
@@ -278,19 +279,19 @@ function Progress({ step }: { step: Step }) {
   const i = STEPS.indexOf(step);
   return (
     <div className="mb-6 flex gap-1.5">
-      {STEPS.map((s, j) => <div key={s} className={`h-1.5 flex-1 rounded-full ${j <= i ? 'bg-brand-600' : 'bg-slate-200'}`} />)}
+      {STEPS.map((s, j) => <div key={s} className={`h-1.5 flex-1 rounded-full ${j <= i ? 'bg-brand-600' : 'bg-brand-100'}`} />)}
     </div>
   );
 }
 function BottomBar({ disabled, onNext, label }: { disabled: boolean; onNext: () => void; label: string }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 border-t border-slate-100 bg-white/90 p-4 backdrop-blur" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+    <div className="fixed inset-x-0 bottom-0 border-t border-brand-50 bg-white/90 p-4 backdrop-blur" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="mx-auto max-w-xl"><button className="btn-primary w-full" disabled={disabled} onClick={onNext}>{label}</button></div>
     </div>
   );
 }
 const Back = ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick} className="text-sm font-medium text-brand-600">← Назад</button>;
 const Avatar = ({ name }: { name: string }) => (
-  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">{name.slice(0, 1)}</div>
+  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 font-display text-xl text-brand-700">{name.slice(0, 1)}</div>
 );
-const Skeleton = () => <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200/70" />)}</div>;
+const Skeleton = () => <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-3xl bg-brand-50" />)}</div>;

@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { listenNotificationTaps, registerPush } from '../../lib/push';
+import { F } from '../../components/Text';
 import { C, Loading } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 
@@ -15,7 +16,7 @@ export default function AppLayout() {
   if (status === 'loading') return <Loading />;
   if (status === 'guest') return <Redirect href="/login" />;
   return (
-    <Stack screenOptions={{ headerTintColor: C.brand, headerTitleStyle: { color: C.text }, headerBackTitle: 'Назад', contentStyle: { backgroundColor: C.bg } }}>
+    <Stack screenOptions={{ headerTintColor: C.brand, headerTitleStyle: { color: C.text, fontFamily: F.semibold }, headerShadowVisible: false, headerBackTitle: 'Назад', contentStyle: { backgroundColor: C.bg } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="booking/new" options={{ title: 'Новая запись', presentation: 'modal' }} />
       <Stack.Screen name="booking/[id]" options={{ title: 'Запись' }} />

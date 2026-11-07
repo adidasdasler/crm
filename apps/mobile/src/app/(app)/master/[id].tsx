@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, Switch, TextInput, View } from 'react-native';
+import { Text } from '../../../components/Text';
 import { Button, C, Chip, ErrorText, Field, H, Loading, Muted, Screen, s, Toggle } from '../../../components/ui';
 import { del, get, patch, post } from '../../../lib/api';
 import { canManage, useMe } from '../../../lib/auth';
 import type { Resource, Service, Week } from '../../../lib/types';
 
 const DAYS: [keyof Week, string][] = [['1', 'Понедельник'], ['2', 'Вторник'], ['3', 'Среда'], ['4', 'Четверг'], ['5', 'Пятница'], ['6', 'Суббота'], ['7', 'Воскресенье']];
-const COLORS = ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#14B8A6', '#6366F1'];
+/** Цвета мастеров: ультрамарин бренда первым, остальные различимы между собой и по светлоте */
+export const COLORS = ['#2F3BFF', '#FF6F91', '#00A884', '#FF9F1C', '#7B61FF', '#0EA5E9', '#B5179E', '#5A5E7E'];
 const DEFAULT: Week = { '1': [['10:00', '20:00']], '2': [['10:00', '20:00']], '3': [['10:00', '20:00']], '4': [['10:00', '20:00']], '5': [['10:00', '20:00']], '6': [['10:00', '18:00']], '7': [] };
 const validTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 

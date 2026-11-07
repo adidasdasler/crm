@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, View } from 'react-native';
+import { F, Text } from '../../components/Text';
 import { Button, C, Card, Chip, ErrorText, H, Loading, Muted, Screen } from '../../components/ui';
 import { APP_WEB_URL, get, post } from '../../lib/api';
 import { useMe } from '../../lib/auth';
@@ -68,7 +69,7 @@ export default function Billing() {
     <Screen>
       <Card>
         <Text style={{ fontSize: 13, fontWeight: '700', color: st.color }}>{st.text.toUpperCase()}</Text>
-        <Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>Тариф «{s.plan.name}»</Text>
+        <Text style={{ fontSize: 28, fontFamily: F.display, color: C.text }}>Тариф «{s.plan.name}»</Text>
         <Muted>
           {s.status === 'TRIAL' ? 'Бесплатно до ' : s.status === 'ACTIVE' ? 'Оплачено до ' : 'Срок закончился '}
           {fmt(s.until)}{s.daysLeft !== null && s.status !== 'EXPIRED' ? ` · осталось дней: ${s.daysLeft}` : ''}

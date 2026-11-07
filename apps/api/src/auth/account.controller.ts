@@ -35,7 +35,7 @@ export class AccountController {
       });
       await mailer.send({
         to: user.email,
-        subject: 'Восстановление пароля — Salon',
+        subject: 'Восстановление пароля — «Пора»',
         text: `Здравствуйте, ${user.name}!\n\nЧтобы задать новый пароль, перейдите по ссылке (действует ${RESET_TTL_MIN} минут):\n${env.APP_URL}/reset?token=${token}\n\nЕсли вы не запрашивали восстановление, просто проигнорируйте это письмо.`,
       });
     }

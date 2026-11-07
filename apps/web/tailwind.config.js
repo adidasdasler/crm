@@ -1,12 +1,19 @@
+/** Бренд «Пора»: ультрамарин, пудра, ночь (docs/BRAND.md) */
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        brand: { 50: '#f5f3ff', 100: '#ede9fe', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 900: '#2e1065' },
+        brand: { 50: '#F3F4FF', 100: '#E6E8FF', 200: '#CDD1FF', 500: '#4A55FF', 600: '#2F3BFF', 700: '#1F28D6', 900: '#0E0F2B' },
+        blush: { 100: '#FFE3EB', 300: '#FFC7D6' },
+        ink: { DEFAULT: '#0E0F2B', muted: '#5A5E7E' },
+        paper: '#F7F7FC',
       },
-      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      fontFamily: {
+        sans: ['"Golos Text"', 'system-ui', 'sans-serif'],
+        display: ['"Yeseva One"', 'Georgia', 'serif'],
+      },
     },
   },
   plugins: [],

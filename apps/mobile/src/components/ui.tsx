@@ -1,20 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ComponentProps, ReactNode } from 'react';
 import {
-  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TextInputProps, View, ViewStyle,
+  ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, TextInputProps, View, ViewStyle,
 } from 'react-native';
+import { F, Text } from './Text';
 
+/** Палитра бренда «Пора» (docs/BRAND.md) */
 export const C = {
-  brand: '#7c3aed',
-  brandDark: '#6d28d9',
-  brandSoft: '#ede9fe',
-  bg: '#f8fafc',
-  card: '#ffffff',
-  text: '#0f172a',
-  muted: '#64748b',
-  border: '#e2e8f0',
-  danger: '#dc2626',
-  success: '#059669',
+  brand: '#2F3BFF', // ультрамарин — кнопки, выбранное, знак
+  brandDark: '#1F28D6',
+  brandSoft: '#EEF0FF', // иней — подложки иконок и выделений
+  accent: '#FFC7D6', // пудра — «свободно», выбранное время, точка-уведомление
+  bg: '#F7F7FC',
+  card: '#FFFFFF',
+  text: '#0E0F2B', // ночь
+  muted: '#5A5E7E',
+  border: '#E3E5F2',
+  danger: '#C4320A',
+  success: '#0F7A52',
 };
 
 export function Screen({ children, scroll = true, padded = true }: { children: ReactNode; scroll?: boolean; padded?: boolean }) {
@@ -84,10 +87,12 @@ export function Toggle({ label, value, onChange, hint }: { label: string; value:
   );
 }
 
-export function Chip({ label, active, onPress, color }: { label: string; active?: boolean; onPress?: () => void; color?: string }) {
+/** tone="accent" — пудровая заливка с тёмным текстом (выбранное время), по умолчанию — ультрамарин */
+export function Chip({ label, active, onPress, color, tone }: { label: string; active?: boolean; onPress?: () => void; color?: string; tone?: 'accent' }) {
+  const bg = tone === 'accent' ? C.accent : color ?? C.brand;
   return (
-    <Pressable onPress={onPress} style={[s.chip, active && { backgroundColor: color ?? C.brand, borderColor: color ?? C.brand }]}>
-      <Text style={{ color: active ? '#fff' : C.text, fontWeight: '600' }}>{label}</Text>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: !!active }} style={[s.chip, active && { backgroundColor: bg, borderColor: bg }]}>
+      <Text style={{ color: active ? (tone === 'accent' ? C.text : '#fff') : C.text, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -136,21 +141,31 @@ export const H = ({ children }: { children: ReactNode }) => <Text style={s.h}>{c
 export const Muted = ({ children }: { children: ReactNode }) => <Text style={s.muted}>{children}</Text>;
 
 export const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#f1f5f9', gap: 6 },
-  btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, minHeight: 50 },
+  card: { backgroundColor: C.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#EEF0F7', gap: 6 },
+  btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 999, paddingVertical: 14, paddingHorizontal: 22, minHeight: 52 },
   btnGhost: { borderWidth: 1, borderColor: C.border },
   btnText: { fontSize: 16, fontWeight: '600' },
-  label: { fontSize: 13, fontWeight: '600', color: C.muted },
-  input: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: C.text },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  label: { fontSize: 13, fontFamily: F.semibold, color: C.muted },
+  input: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, fontSize: 16, color: C.text, fontFamily: F.regular },
+  chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: C.card },
-  rowIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center' },
   body: { fontSize: 16, color: C.text, fontWeight: '500' },
   muted: { fontSize: 14, color: C.muted },
-  h: { fontSize: 18, fontWeight: '700', color: C.text, marginTop: 8 },
-  error: { backgroundColor: '#fef2f2', color: '#b91c1c', padding: 12, borderRadius: 12, overflow: 'hidden' },
+  h: { fontSize: 22, fontFamily: F.display, color: C.text, marginTop: 10 },
+  error: { backgroundColor: '#FDECE7', color: '#9A2A08', padding: 12, borderRadius: 14, overflow: 'hidden' },
   fab: {
     position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    shadowColor: '#2F3BFF', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6,
   },
 });
+
+/** Логотип «Пора»: знак + слово. size — высота знака. */
+export function Logo({ size = 40, color = C.text }: { size?: number; color?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.3 }} accessibilityRole="image" accessibilityLabel="Пора">
+      <Image source={require('../../assets/splash-icon.png')} style={{ width: size, height: size }} />
+      <Text style={{ fontFamily: F.display, fontSize: size * 1.05, lineHeight: size * 1.15, color }}>пора</Text>
+    </View>
+  );
+}

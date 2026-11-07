@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "Salon",
-    "slug": "salon-crm",
-    "scheme": "salon",
+    "name": "Пора",
+    "slug": "pora",
+    "scheme": "pora",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ru.salon.crm",
+      "bundleIdentifier": "app.pora.crm",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "ru.salon.crm",
+      "package": "app.pora.crm",
       "adaptiveIcon": {
-        "backgroundColor": "#7C3AED",
+        "backgroundColor": "#2F3BFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -27,8 +27,10 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "output": "single",
-      "name": "Salon — CRM",
-      "themeColor": "#7C3AED"
+      "name": "Пора — для салонов",
+      "themeColor": "#2F3BFF",
+      "shortName": "Пора",
+      "backgroundColor": "#F7F7FC"
     },
     "plugins": [
       "expo-router",
@@ -36,12 +38,20 @@
       [
         "expo-notifications",
         {
-          "color": "#7C3AED"
+          "color": "#2F3BFF",
+          "icon": "./assets/android-icon-monochrome.png"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "imageWidth": 140,
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     }
   }
 }

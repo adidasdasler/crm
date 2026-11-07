@@ -50,7 +50,7 @@ export class AuthService {
           data: { name: dto.salonName, slug: dto.slug, timezone: dto.timezone, phone: dto.phone },
         });
         const resource = await tx.resource.create({
-          data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE },
+          data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE, color: '#2F3BFF' },
         });
         const membership = await tx.membership.create({
           data: { tenantId: tenant.id, userId: user.id, role: 'OWNER', resourceId: resource.id },

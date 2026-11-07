@@ -157,7 +157,7 @@ export function Offer() {
         <br />
         Сайт: {O.site}
       </p>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-ink-muted">
         См. также: <Link className="text-brand-600 underline" to="/privacy">Политика обработки персональных данных</Link>.
       </p>
     </Doc>

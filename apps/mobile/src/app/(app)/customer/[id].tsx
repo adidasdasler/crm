@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, View } from 'react-native';
+import { Text } from '../../../components/Text';
 import { Button, C, Card, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../../components/ui';
 import { get, patch, post } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';

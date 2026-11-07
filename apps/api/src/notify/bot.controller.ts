@@ -93,7 +93,7 @@ export class BotController {
       const body = telegramText({
         type: 'BEFORE_24H', startsAt: b.startsAt, tz: t.timezone, url, salon: { name: t.name, address: t.address, phone: t.phone },
         services: b.items.map((i) => i.name), master: b.resource.name, customerName: b.customer.name,
-      }).replace(/^🔔 <b>Напоминаем о записи:/, '📅 <b>Вы записаны:');
+      }).replace(/^<b>Пора к мастеру:/, '<b>Вы записаны:');
       await telegram.send(
         chatId,
         `${body}\n\nГотово! Напомним о визите за сутки и за 2 часа. Отменить или подтвердить можно кнопками ниже.`,
@@ -102,7 +102,7 @@ export class BotController {
       return;
     }
 
-    await telegram.send(chatId, 'Здравствуйте! Это бот онлайн-записи Salon. Чтобы получать напоминания, нажмите «Получать напоминания в Telegram» после записи на сайте салона.');
+    await telegram.send(chatId, 'Здравствуйте! Это «Пора» — напоминания о записи к мастеру. Чтобы подключить их, нажмите «Подключить Telegram» после записи на сайте салона.');
   }
 
   private async onCallback(q: NonNullable<TgUpdate['callback_query']>) {

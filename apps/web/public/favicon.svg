@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Пора">
+  <rect width="64" height="64" rx="15" fill="#2F3BFF"/>
+  <circle cx="32" cy="33" r="15" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+  <line x1="32" y1="33" x2="32" y2="24" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="46" cy="18" r="6.5" fill="#FFC7D6"/>
+</svg>

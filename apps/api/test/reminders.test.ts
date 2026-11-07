@@ -41,7 +41,7 @@ describe('напоминания и Telegram-бот', () => {
     expect(r.sent).toBe(1);
     const msg = outbox.telegram.find((m) => m.method === 'sendMessage')!;
     expect(msg.body.chat_id).toBe('555');
-    expect(msg.body.text).toContain('Напоминаем о записи');
+    expect(msg.body.text).toContain('Пора к мастеру');
     const buttons = msg.body.reply_markup.inline_keyboard.flat().map((x: any) => x.callback_data).filter(Boolean);
     expect(buttons).toEqual([`c:${b.id}`, `x:${b.id}`]);
 

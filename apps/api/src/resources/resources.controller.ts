@@ -23,6 +23,9 @@ const timeOffSchema = z
 
 type Dto = z.infer<typeof base>;
 
+/** Палитра мастеров по умолчанию (как в приложении, docs/BRAND.md) */
+export const MASTER_COLORS = ['#2F3BFF', '#FF6F91', '#00A884', '#FF9F1C', '#7B61FF', '#0EA5E9', '#B5179E', '#5A5E7E'];
+
 @Controller('resources')
 export class ResourcesController {
   constructor(private readonly prisma: PrismaService) {}
@@ -54,8 +57,9 @@ export class ResourcesController {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       const { serviceIds, ...data } = dto;
       await assertMastersLimit(tx, a.tenantId, dto.isActive === false ? 0 : 1);
+      const count = await tx.resource.count();
       const r = await tx.resource.create({
-        data: { ...data, tenantId: a.tenantId, schedule: dto.schedule ?? DEFAULT_SCHEDULE },
+        data: { ...data, color: dto.color ?? MASTER_COLORS[count % MASTER_COLORS.length], tenantId: a.tenantId, schedule: dto.schedule ?? DEFAULT_SCHEDULE },
       });
       if (serviceIds?.length) await this.setServices(tx, a.tenantId, r.id, serviceIds);
       await audit(tx, a, 'resource.create', 'Resource', r.id, null, r);

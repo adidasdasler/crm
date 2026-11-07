@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Button, Card, Muted, Screen } from '../../components/ui';
 import { get } from '../../lib/api';
 import type { Resource } from '../../lib/types';

@@ -32,8 +32,8 @@ async function seedDemo() {
     data: { email: 'demo@salon.local', name: 'Анна (владелец)', passwordHash: await argon2.hash('demo12345', { type: argon2.argon2id }) },
   });
   const t = await db.tenant.create({ data: { slug: 'demo', name: 'Студия «Лаванда»', phone: '+79990000000', address: 'Москва, ул. Примерная, 1' } });
-  const anna = await db.resource.create({ data: { tenantId: t.id, name: 'Анна', position: 'Мастер маникюра', schedule: week('10:00', '20:00'), color: '#8B5CF6' } });
-  const olga = await db.resource.create({ data: { tenantId: t.id, name: 'Ольга', position: 'Бровист', schedule: week('11:00', '19:00'), color: '#EC4899' } });
+  const anna = await db.resource.create({ data: { tenantId: t.id, name: 'Анна', position: 'Мастер маникюра', schedule: week('10:00', '20:00'), color: '#2F3BFF' } });
+  const olga = await db.resource.create({ data: { tenantId: t.id, name: 'Ольга', position: 'Бровист', schedule: week('11:00', '19:00'), color: '#FF6F91' } });
   await db.membership.create({ data: { tenantId: t.id, userId: user.id, role: 'OWNER', resourceId: anna.id } });
   await db.subscription.create({ data: { tenantId: t.id, planId: plan.id, status: 'TRIAL', trialEndsAt: new Date(Date.now() + 14 * 86400_000) } });
   const services = [
