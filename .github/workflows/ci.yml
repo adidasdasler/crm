@@ -31,6 +31,7 @@ jobs:
       - name: Migrate (owner) and enable app role (RLS)
         working-directory: apps/api
         run: |
+          npx prisma generate
           npx prisma migrate deploy
           PGPASSWORD=salon psql -h localhost -U salon -d salon_test -c "ALTER ROLE salon_app LOGIN PASSWORD 'salon_app';"
       - run: pnpm --filter @salon/api typecheck
