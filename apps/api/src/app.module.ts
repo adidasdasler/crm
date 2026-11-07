@@ -1,0 +1,47 @@
+import { Controller, Get, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AuthController } from './auth/auth.controller';
+import { AuthService } from './auth/auth.service';
+import { BillingController } from './billing/billing.controller';
+import { BookingsController } from './bookings/bookings.controller';
+import { BookingsService } from './bookings/bookings.service';
+import { CatalogController } from './catalog/catalog.controller';
+import { AuthGuard, Public } from './common/auth';
+import { PrismaService } from './common/prisma.service';
+import { CustomersController } from './customers/customers.controller';
+import { PublicController } from './public/public.controller';
+import { ResourcesController } from './resources/resources.controller';
+import { TenantsController } from './tenants/tenants.controller';
+
+@Controller('health')
+class HealthController {
+  constructor(private readonly prisma: PrismaService) {}
+  @Public()
+  @Get()
+  async health() {
+    await this.prisma.app.$queryRaw`SELECT 1`;
+    return { status: 'ok', time: new Date().toISOString() };
+  }
+}
+
+@Module({
+  imports: [
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: 'default', ttl: 60_000, limit: 300 }],
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
+  ],
+  controllers: [
+    HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
+    CustomersController, BookingsController, PublicController, BillingController,
+  ],
+  providers: [
+    PrismaService,
+    AuthService,
+    BookingsService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AuthGuard },
+  ],
+})
+export class AppModule {}

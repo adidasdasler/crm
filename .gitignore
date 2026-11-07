@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / Salon
+node_modules/
+.env.local
+*.pem
+.expo/
+apps/web/dist/
+apps/api/dist/
+coverage/

@@ -1,0 +1,403 @@
+// Salon — схема БД.
+// Деньги: Int в копейках. Время: timestamptz (UTC). ID: UUID.
+// Все таблицы с tenantId защищены RLS (см. миграцию 0002_rls).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Миграции выполняются от владельца схемы. Приложение подключается
+  // отдельной ролью salon_app (DATABASE_URL), на которую действует RLS.
+  url      = env("SYSTEM_DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  ADMIN
+  MASTER
+}
+
+enum BookingStatus {
+  SCHEDULED
+  CONFIRMED
+  ARRIVED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingSource {
+  MANUAL
+  WIDGET
+  TELEGRAM
+  MOBILE
+}
+
+enum ReminderType {
+  BEFORE_24H
+  BEFORE_2H
+  AFTER_VISIT
+}
+
+enum ReminderChannel {
+  TELEGRAM
+  SMS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+  REFUNDED
+}
+
+// ───────────── Платформа (без RLS) ─────────────
+
+model Tenant {
+  id        String    @id @default(uuid()) @db.Uuid
+  slug      String    @unique
+  name      String
+  timezone  String    @default("Europe/Moscow")
+  phone     String?
+  address   String?
+  /// { slotStepMin, minLeadMin, maxDaysAhead, remindersEnabled, ... }
+  settings  Json      @default("{}")
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  memberships  Membership[]
+  subscription Subscription?
+}
+
+/// Глобальный пользователь: один email — один аккаунт, может состоять в нескольких салонах.
+model User {
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique
+  passwordHash        String
+  name                String
+  phone               String?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.Timestamptz(3)
+  lastLoginAt         DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime? @db.Timestamptz(3)
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+}
+
+/// Refresh-токены: хранится только SHA-256, ротация + обнаружение повторного использования (family).
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tenantId   String    @db.Uuid
+  tokenHash  String    @unique
+  family     String    @db.Uuid
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  replacedBy String?   @db.Uuid
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([family])
+}
+
+model Plan {
+  id           String  @id @default(uuid()) @db.Uuid
+  code         String  @unique
+  name         String
+  priceMonthly Int
+  priceYearly  Int
+  /// { masters: 3, smsPerMonth: 100 }
+  limits       Json    @default("{}")
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  subscriptions Subscription[]
+}
+
+// ───────────── Данные салона (RLS по tenantId) ─────────────
+
+model Membership {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  userId     String    @db.Uuid
+  role       Role
+  /// Для роли MASTER — связанный мастер (видит только свои записи)
+  resourceId String?   @db.Uuid
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+  resource Resource? @relation(fields: [resourceId], references: [id])
+
+  @@unique([tenantId, userId])
+}
+
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  tenantId           String             @unique @db.Uuid
+  planId             String             @db.Uuid
+  status             SubscriptionStatus
+  billingPeriod      BillingPeriod      @default(MONTHLY)
+  trialEndsAt        DateTime?          @db.Timestamptz(3)
+  currentPeriodEnd   DateTime?          @db.Timestamptz(3)
+  /// id сохранённого способа оплаты ЮKassa для автопродления
+  paymentMethodId    String?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @db.Uuid
+  subscriptionId String        @db.Uuid
+  amount         Int
+  currency       String        @default("RUB")
+  status         PaymentStatus
+  provider       String        @default("yookassa")
+  externalId     String?       @unique
+  paidAt         DateTime?     @db.Timestamptz(3)
+  metadata       Json          @default("{}")
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([tenantId, createdAt])
+}
+
+/// Мастер / исполнитель (универсально: кресло, кабинет, тренер).
+model Resource {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  name      String
+  phone     String?
+  position  String?
+  color     String    @default("#8B5CF6")
+  /// Недельный график: { "1": [["10:00","19:00"]], ..., "7": [] } (ISO-день недели)
+  schedule  Json
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  services    ServiceResource[]
+  timeOffs    TimeOff[]
+  bookings    Booking[]
+  memberships Membership[]
+
+  @@index([tenantId])
+}
+
+/// Исключения из графика: отпуск, больничный, перерыв.
+model TimeOff {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  resourceId String   @db.Uuid
+  startsAt   DateTime @db.Timestamptz(3)
+  endsAt     DateTime @db.Timestamptz(3)
+  reason     String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, resourceId, startsAt])
+}
+
+model ServiceCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  services Service[]
+
+  @@index([tenantId])
+}
+
+model Service {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  categoryId  String?   @db.Uuid
+  name        String
+  description String?
+  /// Цена в копейках
+  price       Int
+  /// Длительность, мин
+  duration    Int
+  /// Технический перерыв после услуги, мин
+  bufferTime  Int       @default(0)
+  isActive    Boolean   @default(true)
+  isPublic    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  category  ServiceCategory?  @relation(fields: [categoryId], references: [id])
+  resources ServiceResource[]
+  items     BookingItem[]
+
+  @@index([tenantId])
+}
+
+model ServiceResource {
+  tenantId   String @db.Uuid
+  serviceId  String @db.Uuid
+  resourceId String @db.Uuid
+
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, resourceId])
+  @@index([tenantId])
+}
+
+model Customer {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  name             String
+  /// E.164: +79991234567. Уникальность среди неудалённых — частичный индекс в миграции.
+  phone            String
+  email            String?
+  birthDate        DateTime? @db.Date
+  notes            String?
+  tags             String[]  @default([])
+  /// Согласие на рекламные рассылки (38-ФЗ «О рекламе»)
+  marketingConsent Boolean   @default(false)
+  telegramChatId   String?
+  totalVisits      Int       @default(0)
+  totalSpent       Int       @default(0)
+  lastVisitAt      DateTime? @db.Timestamptz(3)
+  source           BookingSource @default(MANUAL)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime? @db.Timestamptz(3)
+
+  bookings Booking[]
+
+  @@index([tenantId, name])
+}
+
+/// Визит. Пересечения у одного мастера запрещены EXCLUDE-ограничением (миграция 0002).
+model Booking {
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
+  customerId   String        @db.Uuid
+  resourceId   String        @db.Uuid
+  startsAt     DateTime      @db.Timestamptz(3)
+  /// Окончание визита (видит клиент)
+  endsAt       DateTime      @db.Timestamptz(3)
+  /// Окончание с учётом технического перерыва — именно этот интервал занят у мастера
+  blockedUntil DateTime      @db.Timestamptz(3)
+  status       BookingStatus @default(SCHEDULED)
+  source       BookingSource @default(MANUAL)
+  /// Итоговая цена, копейки
+  price        Int
+  notes        String?
+  /// SHA-256 токена ссылки «управлять записью» для клиента
+  manageTokenHash String?    @unique
+  version      Int           @default(0)
+  createdById  String?       @db.Uuid
+  cancelledAt  DateTime?     @db.Timestamptz(3)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  customer  Customer      @relation(fields: [customerId], references: [id])
+  resource  Resource      @relation(fields: [resourceId], references: [id])
+  items     BookingItem[]
+  reminders Reminder[]
+
+  @@index([tenantId, startsAt])
+  @@index([tenantId, resourceId, startsAt])
+  @@index([tenantId, customerId])
+}
+
+/// Услуги внутри визита (снимок цены и длительности на момент записи).
+model BookingItem {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @db.Uuid
+  bookingId String @db.Uuid
+  serviceId String @db.Uuid
+  name      String
+  price     Int
+  duration  Int
+  sortOrder Int    @default(0)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@index([tenantId, bookingId])
+}
+
+model Reminder {
+  id          String          @id @default(uuid()) @db.Uuid
+  tenantId    String          @db.Uuid
+  bookingId   String          @db.Uuid
+  type        ReminderType
+  channel     ReminderChannel
+  scheduledAt DateTime        @db.Timestamptz(3)
+  sentAt      DateTime?       @db.Timestamptz(3)
+  status      ReminderStatus  @default(PENDING)
+  attempts    Int             @default(0)
+  lastError   String?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, type])
+  @@index([status, scheduledAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  userId     String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  requestId  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType, entityId])
+}
