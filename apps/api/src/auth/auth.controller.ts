@@ -28,9 +28,9 @@ const registerSchema = z.object({
     try { new Intl.DateTimeFormat('ru', { timeZone: tz }); return true; } catch { return false; }
   }, 'Неизвестный часовой пояс'),
   /** Принятие оферты */
-  acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Необходимо принять условия оферты' }) }),
+  acceptTerms: z.literal(true, { error: 'Необходимо принять условия оферты' }),
   /** Отдельное согласие на обработку ПДн (152-ФЗ, ст. 9) */
-  acceptPrivacy: z.literal(true, { errorMap: () => ({ message: 'Необходимо согласие на обработку персональных данных' }) }),
+  acceptPrivacy: z.literal(true, { error: 'Необходимо согласие на обработку персональных данных' }),
   /** honeypot: настоящий пользователь это поле не заполняет */
   website: z.string().max(0).optional(),
 });

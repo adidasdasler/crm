@@ -1,4 +1,4 @@
-/** Бренд «Пора»: ультрамарин, пудра, ночь (docs/BRAND.md) */
+/** Бренд MioFlow: ультрамарин, пудра, ночь (docs/BRAND.md) */
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],

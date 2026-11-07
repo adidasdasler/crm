@@ -1,21 +1,21 @@
 {
   "expo": {
-    "name": "Пора",
-    "slug": "pora",
-    "scheme": "pora",
+    "name": "MioFlow",
+    "slug": "mioflow",
+    "scheme": "mioflow",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.pora.crm",
+      "bundleIdentifier": "ru.mioflow.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "app.pora.crm",
+      "package": "ru.mioflow.app",
       "adaptiveIcon": {
         "backgroundColor": "#2F3BFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -27,9 +27,9 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "output": "single",
-      "name": "Пора — для салонов",
+      "name": "MioFlow — для салонов",
       "themeColor": "#2F3BFF",
-      "shortName": "Пора",
+      "shortName": "MioFlow",
       "backgroundColor": "#F7F7FC"
     },
     "plugins": [

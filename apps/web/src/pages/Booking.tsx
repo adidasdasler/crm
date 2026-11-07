@@ -269,7 +269,7 @@ function Shell({ salon, children }: { salon?: Salon; children: React.ReactNode }
         </header>
       )}
       {children}
-      <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">«Пора»</Link></footer>
+      <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
     </div>
   );
 }

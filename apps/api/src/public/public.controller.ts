@@ -17,6 +17,9 @@ import { PrismaService } from '../common/prisma.service';
 import { phone, uuid } from '../common/schemas';
 import { readSettings } from '../common/tenant-settings';
 
+/** Сколько будущих онлайн-записей может быть у одного номера в одном салоне */
+const MAX_ONLINE_BOOKINGS_PER_PHONE = 3;
+
 const slotsQuery = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
@@ -30,7 +33,7 @@ const bookSchema = z.object({
   phone,
   comment: z.string().trim().max(500).optional(),
   /** Согласие на обработку ПДн — обязательно */
-  consent: z.literal(true, { errorMap: () => ({ message: 'Необходимо согласие на обработку персональных данных' }) }),
+  consent: z.literal(true, { error: 'Необходимо согласие на обработку персональных данных' }),
   marketingConsent: z.boolean().optional(),
   /** honeypot */
   website: z.string().max(0).optional(),
@@ -124,6 +127,15 @@ export class PublicController {
       if (!resource) throw new AppError('SLOT_TAKEN', 'Это время уже занято, выберите другое', 409);
 
       let customer = await tx.customer.findFirst({ where: { phone: dto.phone, deletedAt: null } });
+      // Защита от спама и «SMS-накрутки»: не больше N будущих онлайн-записей на один номер.
+      if (customer) {
+        const upcoming = await tx.booking.count({
+          where: { customerId: customer.id, source: 'WIDGET', status: { in: ['SCHEDULED', 'CONFIRMED'] }, startsAt: { gt: new Date() } },
+        });
+        if (upcoming >= MAX_ONLINE_BOOKINGS_PER_PHONE) {
+          throw new AppError('TOO_MANY_BOOKINGS', 'У вас уже есть несколько предстоящих записей. Чтобы записаться ещё, позвоните в салон', 429);
+        }
+      }
       if (!customer) {
         customer = await tx.customer.create({
           data: { tenantId: t.id, name: dto.name, phone: dto.phone, source: 'WIDGET', marketingConsent: !!dto.marketingConsent },

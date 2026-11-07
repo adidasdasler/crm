@@ -181,3 +181,16 @@ describe('онлайн-запись', () => {
     expect(reminders.map((r) => r.status)).toEqual(['CANCELLED', 'CANCELLED']);
   });
 });
+
+describe('защита онлайн-записи', () => {
+  it('не больше 3 будущих онлайн-записей на один номер', async () => {
+    const s = await createSalon('Spam');
+    const pub = api();
+    const slots = (await pub.get(`/public/${s.slug}/slots?date=${tomorrowDate(3)}&serviceIds=${s.serviceId}`)).body.data[0].slots as string[];
+    const book = (startsAt: string) => pub.post(`/public/${s.slug}/book`, { serviceIds: [s.serviceId], resourceId: null, startsAt, name: 'Спам', phone: '+79990009999', consent: true });
+    for (const i of [0, 8, 16]) expect((await book(slots[i])).status).toBe(201);
+    const fourth = await book(slots[24]);
+    expect(fourth.status).toBe(429);
+    expect(fourth.body.error.code).toBe('TOO_MANY_BOOKINGS');
+  });
+});

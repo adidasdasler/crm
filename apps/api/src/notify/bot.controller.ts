@@ -102,7 +102,7 @@ export class BotController {
       return;
     }
 
-    await telegram.send(chatId, 'Здравствуйте! Это «Пора» — напоминания о записи к мастеру. Чтобы подключить их, нажмите «Подключить Telegram» после записи на сайте салона.');
+    await telegram.send(chatId, 'Здравствуйте! Это MioFlow — напоминания о записи к мастеру. Чтобы подключить их, нажмите «Подключить Telegram» после записи на сайте салона.');
   }
 
   private async onCallback(q: NonNullable<TgUpdate['callback_query']>) {

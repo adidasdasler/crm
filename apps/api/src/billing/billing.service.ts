@@ -59,7 +59,7 @@ export class BillingService {
       const r = await provider.create({
         paymentId: payment.id,
         amount,
-        description: `Подписка «Пора», тариф «${plan.name}», ${period === 'YEARLY' ? '12 мес.' : '1 мес.'} — ${tenant.name}`,
+        description: `Подписка MioFlow, тариф «${plan.name}», ${period === 'YEARLY' ? '12 мес.' : '1 мес.'} — ${tenant.name}`,
         returnUrl: `${env.APP_URL}/billing?payment=${payment.id}`,
         metadata: { paymentId: payment.id, tenantId },
       });

@@ -1,6 +1,6 @@
 import { Text as RNText, TextProps, StyleSheet, TextStyle } from 'react-native';
 
-/** Фирменные шрифты «Пора». Названия совпадают с ключами useFonts в app/_layout.tsx. */
+/** Фирменные шрифты MioFlow. Названия совпадают с ключами useFonts в app/_layout.tsx. */
 export const F = {
   regular: 'GolosText_400Regular',
   medium: 'GolosText_500Medium',

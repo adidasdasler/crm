@@ -46,7 +46,7 @@ export function Landing() {
         <div className="space-y-7">
           <p className="text-sm font-semibold uppercase tracking-[0.08em] text-brand-600">Для салонов красоты и частных мастеров</p>
           <h1 className="display max-w-xl text-5xl leading-[1.05] md:text-6xl">Клиенты записываются сами и приходят вовремя</h1>
-          <p className="max-w-xl text-lg text-ink-muted">Онлайн-запись, календарь мастеров и напоминания клиентам в Telegram и по SMS. Вы занимаетесь клиентами — «Пора» следит за расписанием.</p>
+          <p className="max-w-xl text-lg text-ink-muted">Онлайн-запись, календарь мастеров и напоминания клиентам в Telegram и по SMS. Вы занимаетесь клиентами — MioFlow следит за расписанием.</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <a href={`${APP_URL}/register`} className="btn-primary px-7 py-4 text-lg">Попробовать 14 дней бесплатно</a>
             <a href="/b/demo" className="btn-ghost px-7 py-4 text-lg">Записаться как клиент</a>
@@ -60,7 +60,7 @@ export function Landing() {
           <div className="relative rounded-[2.5rem] bg-[#DDE3F7] p-5 shadow-[0_30px_60px_-20px_rgba(47,59,255,.35)] ring-8 ring-ink">
             <div className="mb-6 flex items-center gap-3 rounded-2xl bg-white px-4 py-3">
               <Mark size={36} />
-              <div><p className="font-semibold">Пора · напоминания</p><p className="text-xs text-ink-muted">бот</p></div>
+              <div><p className="font-semibold">MioFlow · напоминания</p><p className="text-xs text-ink-muted">бот</p></div>
             </div>
             <div className="space-y-3">
               <div className="max-w-[85%] rounded-3xl rounded-bl-md bg-white p-4">
@@ -129,7 +129,7 @@ export function Landing() {
           <span className="flex flex-wrap gap-5">
             <a href="/terms" className="hover:text-ink">Оферта</a>
             <a href="/privacy" className="hover:text-ink">Политика ПДн</a>
-            <span>© {new Date().getFullYear()} «Пора»</span>
+            <span>© {new Date().getFullYear()} MioFlow</span>
           </span>
         </div>
       </footer>

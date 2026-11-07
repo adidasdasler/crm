@@ -1,6 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router';
+import '@fontsource/golos-text/400.css';
+import '@fontsource/golos-text/500.css';
+import '@fontsource/golos-text/600.css';
+import '@fontsource/golos-text/700.css';
+import '@fontsource/yeseva-one/400.css';
 import './index.css';
 import { BookingPage } from './pages/Booking';
 import { Landing } from './pages/Landing';

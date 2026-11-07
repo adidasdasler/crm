@@ -1,42 +1,61 @@
-# Production-стек Salon. Наружу открыт только 127.0.0.1:8080 — его проксирует хостовый Nginx.
-name: salon
+# Production-стек MioFlow. Всё работает в Docker и изолировано от остального сервера:
+#  - отдельная сеть; база данных во внутренней сети без выхода в интернет;
+#  - наружу открыт только Nginx: 127.0.0.1:8080/8081 (за хостовым Nginx с доменом)
+#    или 0.0.0.0:8080/8081 в режиме «по IP» (NGINX_BIND=0.0.0.0, deploy/install.sh);
+#  - у каждого контейнера лимит памяти, ротация логов и запрет повышения привилегий —
+#    чтобы MioFlow не мог помешать другим программам на сервере (например, ботам).
+name: mioflow
+
+x-common: &common
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
 
 services:
   postgres:
+    <<: *common
     image: postgres:16-alpine
-    restart: unless-stopped
+    mem_limit: 768m
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-salon}
+      # Суперпользователь — только для бэкапов и обслуживания (приложение его не использует)
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
-      POSTGRES_DB: ${POSTGRES_DB:-salon}
+      POSTGRES_DB: ${POSTGRES_DB:-mioflow}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD:?задайте OWNER_DB_PASSWORD в .env}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?задайте APP_DB_PASSWORD в .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB}"]
       interval: 5s
       retries: 10
-    networks: [salon-net]
+    networks: [db]
 
   api:
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-api:${IMAGE_TAG:-latest}
     build: { context: ., dockerfile: deploy/api.Dockerfile }
-    image: salon-api:latest
-    restart: unless-stopped
+    mem_limit: 512m
+    cap_drop: [ALL]
     depends_on:
       postgres: { condition: service_healthy }
     environment: &api-env
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://salon_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-salon}
-      SYSTEM_DATABASE_URL: postgresql://${POSTGRES_USER:-salon}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-salon}
+      # Приложение: роль без обхода RLS — видит только данные «своего» салона
+      DATABASE_URL: postgresql://salon_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-mioflow}
+      # Миграции и системные запросы: владелец схемы, НЕ суперпользователь
+      SYSTEM_DATABASE_URL: postgresql://salon_owner:${OWNER_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-mioflow}
       JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET (64+ символа)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       SEED_DEMO: ${SEED_DEMO:-false}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
-      APP_URL: ${APP_URL}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?задайте PUBLIC_WEB_URL}
+      APP_URL: ${APP_URL:?задайте APP_URL}
       API_PUBLIC_URL: ${PUBLIC_WEB_URL}/v1
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
@@ -44,49 +63,53 @@ services:
       SMS_RU_API_KEY: ${SMS_RU_API_KEY:-}
       SMS_SENDER: ${SMS_SENDER:-}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-yookassa}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
       PUSH_ENABLED: ${PUSH_ENABLED:-false}
-      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
-      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4000/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       retries: 5
-      start_period: 30s
-    networks: [salon-net]
+      start_period: 40s
+    networks: [db, web]
 
-  # Фоновый воркер: напоминания клиентам (Telegram/SMS) и проверка подписок.
-  # Тот же образ, что и api; очередь — таблица Reminder в PostgreSQL (Redis не нужен).
+  # Фоновый воркер: напоминания (Telegram/SMS), проверка подписок, очистка удалённых салонов.
   worker:
-    image: salon-api:latest
-    pull_policy: never
-    restart: unless-stopped
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-api:${IMAGE_TAG:-latest}
+    mem_limit: 256m
+    cap_drop: [ALL]
     depends_on:
       api: { condition: service_healthy }
     command: ["node", "dist/worker.js"]
     environment: *api-env
-    networks: [salon-net]
+    networks: [db, web]
 
-  # Внутренний Nginx: статика (сайт + веб-версия CRM) и проксирование /v1 → api.
+  # Nginx: сайт и онлайн-запись (порт 80 → 8080), приложение (порт 81 → 8081), /v1 → api.
+  # Адреса подставляются при запуске контейнера (deploy/nginx/40-mioflow-config.sh) —
+  # один и тот же образ работает и по IP, и на домене.
   nginx:
-    build:
-      context: .
-      dockerfile: deploy/web.Dockerfile
-      args:
-        PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?задайте PUBLIC_WEB_URL}
-        APP_URL: ${APP_URL:?задайте APP_URL}
-    restart: unless-stopped
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-web:${IMAGE_TAG:-latest}
+    build: { context: ., dockerfile: deploy/web.Dockerfile }
+    mem_limit: 128m
     depends_on: [api]
-    # По умолчанию слушаем только localhost (за хостовым Nginx с доменом).
-    # Без домена: NGINX_BIND=0.0.0.0 — сайт на :8080, приложение на :8081 (deploy/install.sh).
+    environment:
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
+      APP_URL: ${APP_URL}
     ports:
       - "${NGINX_BIND:-127.0.0.1}:${SITE_PORT:-8080}:80"
       - "${NGINX_BIND:-127.0.0.1}:${APP_PORT:-8081}:81"
-    networks: [salon-net]
+    networks: [web]
 
 volumes:
   pgdata:
 
 networks:
-  salon-net:
+  # База данных — во внутренней сети без доступа в интернет
+  db:
+    internal: true
+  # Сеть для API (нужен выход в интернет: Telegram, SMS, ЮKassa) и Nginx
+  web:

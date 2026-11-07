@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { F, Text } from './Text';
 
-/** Палитра бренда «Пора» (docs/BRAND.md) */
+/** Палитра бренда MioFlow (docs/BRAND.md) */
 export const C = {
   brand: '#2F3BFF', // ультрамарин — кнопки, выбранное, знак
   brandDark: '#1F28D6',
@@ -160,12 +160,12 @@ export const s = StyleSheet.create({
   },
 });
 
-/** Логотип «Пора»: знак + слово. size — высота знака. */
+/** Логотип MioFlow: знак + слово. size — высота знака. */
 export function Logo({ size = 40, color = C.text }: { size?: number; color?: string }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.3 }} accessibilityRole="image" accessibilityLabel="Пора">
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.3 }} accessibilityRole="image" accessibilityLabel="MioFlow">
       <Image source={require('../../assets/splash-icon.png')} style={{ width: size, height: size }} />
-      <Text style={{ fontFamily: F.display, fontSize: size * 1.05, lineHeight: size * 1.15, color }}>пора</Text>
+      <Text style={{ fontFamily: F.display, fontSize: size * 1.05, lineHeight: size * 1.15, color }}>MioFlow</Text>
     </View>
   );
 }

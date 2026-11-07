@@ -1,5 +1,5 @@
 /**
- * Генерация растровых иконок и превью из SVG-мастеров бренда «Пора».
+ * Генерация растровых иконок и превью из SVG-мастеров бренда MioFlow.
  * Запуск: node brand/render.js  (нужен Playwright с Chromium)
  */
 const { chromium } = require('playwright');
@@ -55,7 +55,7 @@ const icons = [
     .bubble{margin-top:40px;display:inline-block;background:#fff;color:${INK};border-radius:28px 28px 28px 10px;padding:22px 28px;font-size:30px}
   </style></head><body>
     <svg width="260" height="260" viewBox="0 0 64 64">${glyph('#FFFFFF', PINK, 1.6)}</svg>
-    <div><h1>пора</h1><p>Онлайн-запись и напоминания для салонов красоты</p><div class="bubble">Пора к мастеру: завтра в 14:00</div></div>
+    <div><h1>MioFlow</h1><p>Онлайн-запись и напоминания для салонов красоты</p><div class="bubble">Пора к мастеру: завтра в 14:00</div></div>
   </body></html>`);
   await og.waitForTimeout(300);
   await og.screenshot({ path: out('apps/web/public/og.png') });

@@ -36,7 +36,7 @@ const schema = z.object({
 
   // ── Почта (восстановление пароля): smtps://user:pass@smtp.yandex.ru:465 ──
   SMTP_URL: z.string().optional(),
-  MAIL_FROM: z.string().default('Пора <no-reply@pora.app>'),
+  MAIL_FROM: z.string().default('MioFlow <no-reply@mioflow.ru>'),
 
   // ── Push-уведомления через Expo. Это трансграничная передача (серверы Expo/Apple/Google) —
   //    включайте после уведомления Роскомнадзора. ──

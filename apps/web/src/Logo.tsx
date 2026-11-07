@@ -1,4 +1,4 @@
-/** Логотип «Пора»: знак (циферблат с точкой-уведомлением) + слово. */
+/** Логотип MioFlow: знак (циферблат с точкой-уведомлением) + слово. */
 export function Mark({ size = 32, className = '' }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className={className}>
@@ -12,9 +12,9 @@ export function Mark({ size = 32, className = '' }: { size?: number; className?:
 
 export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <span className="inline-flex items-center gap-2.5" aria-label="Пора">
+    <span className="inline-flex items-center gap-2.5" aria-label="MioFlow">
       <Mark size={size} />
-      <span className="font-display leading-none text-ink" style={{ fontSize: size * 1.05 }}>пора</span>
+      <span className="font-display leading-none text-ink" style={{ fontSize: size * 1.05 }}>MioFlow</span>
     </span>
   );
 }

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Деплой на VPS: обновить код, пересобрать образы, перезапустить без простоя БД.
-# Запуск из корня проекта: bash deploy/scripts/deploy.sh
+# Обновление MioFlow: бэкап → свежий код (конфиги, миграции) → свежие образы → перезапуск.
+# Другие программы на сервере не затрагиваются.
+#   sudo bash deploy/scripts/deploy.sh           # готовые образы из GitHub (по умолчанию)
+#   sudo bash deploy/scripts/deploy.sh --build   # собрать на сервере
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+[ -f .env ] || { echo "Нет .env — сначала запустите deploy/install.sh"; exit 1; }
+SITE_PORT=$(grep -E '^SITE_PORT=' .env | cut -d= -f2); SITE_PORT=${SITE_PORT:-8080}
 
-[ -f .env ] || { echo "Нет .env — скопируйте .env.example и заполните"; exit 1; }
-set -a; . ./.env; set +a
-
-echo "→ Бэкап перед деплоем"
+echo "→ Бэкап перед обновлением"
 if docker compose ps postgres --status running -q | grep -q .; then
   bash deploy/scripts/backup.sh
 fi
@@ -15,20 +16,25 @@ fi
 echo "→ Обновление кода"
 git pull --ff-only
 
-echo "→ Сборка образов"
-docker compose build
+if [ "${1:-}" = "--build" ]; then
+  echo "→ Сборка образов (пониженный приоритет)"
+  nice -n 19 ionice -c3 docker compose build
+else
+  echo "→ Загрузка образов"
+  docker compose pull
+fi
 
-echo "→ Запуск (миграции применяются при старте api)"
-docker compose up -d --remove-orphans
+echo "→ Перезапуск (миграции применяются при старте api)"
+docker compose up -d --no-build --remove-orphans
 
-echo "→ Проверка здоровья"
-for i in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:${SITE_PORT:-8080}/v1/health" >/dev/null; then
-    echo "✓ Salon работает"
+echo "→ Проверка"
+for _ in $(seq 1 40); do
+  if curl -fsS "http://127.0.0.1:$SITE_PORT/v1/health" >/dev/null; then
+    echo "✓ MioFlow работает"
     docker image prune -f >/dev/null
     exit 0
   fi
-  sleep 2
+  sleep 3
 done
 echo "✗ API не отвечает. Логи: docker compose logs --tail=100 api"
 exit 1

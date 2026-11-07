@@ -21,7 +21,7 @@ export function MockPay() {
         {err && <p className="text-red-600">{err}</p>}
         {p && (
           <>
-            <p className="text-ink-muted">Оплата подписки «Пора» · {p.billingPeriod === 'YEARLY' ? '12 месяцев' : '1 месяц'}</p>
+            <p className="text-ink-muted">Оплата подписки MioFlow · {p.billingPeriod === 'YEARLY' ? '12 месяцев' : '1 месяц'}</p>
             <p className="text-4xl font-bold">{rub(p.amount)}</p>
             {p.status === 'PENDING' ? <button className="btn-primary w-full" onClick={pay}>Оплатить</button> : <p>Статус: {p.status}</p>}
           </>

@@ -23,7 +23,7 @@ export function whenText(startsAt: Date, tz: string, now = new Date()) {
 
 export function telegramText(c: ReminderCtx, now = new Date()) {
   const w = whenText(c.startsAt, c.tz, now);
-  // Голос бренда «Пора»: короткая фраза-действие в заголовке
+  // Голос бренда MioFlow: короткая фраза-действие в заголовке
   const head = c.type === 'BEFORE_2H' ? `<b>Ждём вас ${w.day} в ${w.time}</b>` : `<b>Пора к мастеру: ${w.day} в ${w.time}</b>`;
   return [
     head,

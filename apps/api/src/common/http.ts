@@ -45,7 +45,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         error: { code, message: Array.isArray(message) ? message.join('; ') : message, details: body?.details },
       });
     }
-    this.log.error({ err: exception, path: req.url, requestId: req.headers['x-request-id'] });
+    // Токены из ссылок (управление записью, сброс пароля) в логи не пишем
+    const path = req.url.replace(/(manage|reset|token)([/=])[^/?&]+/gi, '$1$2***');
+    this.log.error({ err: exception, path, requestId: req.headers['x-request-id'] });
     return res.status(500).json({
       success: false,
       error: { code: 'INTERNAL', message: 'Внутренняя ошибка сервера' },

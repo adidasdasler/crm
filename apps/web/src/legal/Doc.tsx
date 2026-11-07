@@ -7,7 +7,7 @@ import { EDITION } from './requisites';
 export function Doc({ title, children, subtitle }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 leading-relaxed text-ink">
-      <Link to="/" aria-label="На главную «Пора»"><Logo size={28} /></Link>
+      <Link to="/" aria-label="На главную MioFlow"><Logo size={28} /></Link>
       <h1 className="display mt-4 text-3xl sm:text-4xl">{title}</h1>
       {subtitle && <div className="mt-2 text-ink-muted">{subtitle}</div>}
       <p className="mt-1 text-sm text-ink-muted">Редакция от {EDITION}</p>
