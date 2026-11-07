@@ -3,7 +3,7 @@
 # Поднимает временный PostgreSQL в Docker, рабочую базу не трогает.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-PASS=$(grep -E '^BACKUP_PASSPHRASE=' .env | tail -1 | cut -d= -f2- | sed 's/^"//; s/"$//')
+PASS=$({ grep -E '^BACKUP_PASSPHRASE=' .env || true; } | tail -1 | cut -d= -f2- | sed 's/^"//; s/"$//')
 LATEST=$(ls -t ./backups/mioflow-*.sql.gz.gpg 2>/dev/null | head -1 || true)
 [ -n "$LATEST" ] || { echo "Бэкапов нет"; exit 1; }
 NAME=mioflow-restore-test-$$

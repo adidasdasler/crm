@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | sed 's/^"//; s/"$//'; }
+env_get() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2- | sed 's/^"//; s/"$//'; }
 DB=$(env_get POSTGRES_DB); DB=${DB:-mioflow}
 PASS=$(env_get BACKUP_PASSPHRASE)
 REMOTE=$(env_get BACKUP_RCLONE_REMOTE)
@@ -27,10 +27,10 @@ docker compose exec -T postgres pg_dump -U postgres -d "$DB" --no-owner --format
   | gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 3 -o "$FILE" 3<<<"$PASS"
 chmod 600 "$FILE"
 
-# Проверка: файл не пустой и расшифровывается
+# Проверка: файл не пустой, расшифровывается и архив целый (полная проверка, без обрыва потока)
 SIZE=$(stat -c %s "$FILE")
 [ "$SIZE" -gt 1000 ] || { echo "$(date -Is) ✗ Подозрительно маленький бэкап ($SIZE байт)"; exit 1; }
-gpg --batch --quiet --decrypt --passphrase-fd 3 "$FILE" 3<<<"$PASS" | gunzip | head -c 100 >/dev/null
+gpg --batch --quiet --decrypt --passphrase-fd 3 "$FILE" 3<<<"$PASS" | gunzip -t
 
 find "$DIR" -name 'mioflow-*.sql.gz.gpg' -mtime +"$KEEP_DAYS" -delete
 

@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 [ -f .env ] || { echo "Нет .env — сначала запустите deploy/install.sh"; exit 1; }
-SITE_PORT=$(grep -E '^SITE_PORT=' .env | cut -d= -f2); SITE_PORT=${SITE_PORT:-8080}
+SITE_PORT=$({ grep -E '^SITE_PORT=' .env || true; } | cut -d= -f2); SITE_PORT=${SITE_PORT:-8080}
 
 echo "→ Бэкап перед обновлением"
 if docker compose ps postgres --status running -q | grep -q .; then
