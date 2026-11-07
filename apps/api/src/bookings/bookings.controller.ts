@@ -7,11 +7,19 @@ import { Zod } from '../common/http';
 import { PrismaService, Tx } from '../common/prisma.service';
 import { phone, uuid } from '../common/schemas';
 import { bookingInclude, BookingsService } from './bookings.service';
+import { dayBounds } from './slots';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат даты YYYY-MM-DD');
 const listQuery = z
-  .object({ from: z.coerce.date(), to: z.coerce.date(), resourceId: uuid.optional(), customerId: uuid.optional() })
-  .refine((q) => q.from < q.to && +q.to - +q.from <= 62 * 86400_000, 'Период — не более 62 дней');
+  .object({
+    /** День в часовом поясе салона — удобнее для календаря */
+    date: isoDate.optional(),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    resourceId: uuid.optional(),
+    customerId: uuid.optional(),
+  })
+  .refine((q) => q.date || (q.from && q.to && q.from < q.to && +q.to - +q.from <= 62 * 86400_000), 'Укажите date или период from–to (не более 62 дней)');
 const slotsQuery = z.object({
   date: isoDate,
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(10)),
@@ -50,16 +58,17 @@ export class BookingsController {
 
   @Get()
   list(@Auth() a: AuthCtx, @Query(new Zod(listQuery)) q: z.infer<typeof listQuery>) {
-    const where: Prisma.BookingWhereInput = {
-      startsAt: { lt: q.to },
-      endsAt: { gt: q.from },
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const range = q.date ? dayBounds(q.date, (await this.tenant(tx, a)).timezone) : { from: q.from!, to: q.to! };
+      const where: Prisma.BookingWhereInput = {
+      startsAt: { lt: range.to },
+      endsAt: { gt: range.from },
       ...(q.customerId ? { customerId: q.customerId } : {}),
       // Мастер видит только свои записи.
       resourceId: a.role === 'MASTER' ? a.resourceId ?? '00000000-0000-0000-0000-000000000000' : q.resourceId,
     };
-    return this.prisma.withTenant(a.tenantId, (tx) =>
-      tx.booking.findMany({ where, include: bookingInclude, orderBy: { startsAt: 'asc' } }),
-    );
+      return tx.booking.findMany({ where, include: bookingInclude, orderBy: { startsAt: 'asc' } });
+    });
   }
 
   @Get('slots')

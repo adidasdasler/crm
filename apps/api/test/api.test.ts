@@ -40,7 +40,7 @@ describe('auth', () => {
     const app = await getApp();
     const { default: request } = await import('supertest');
     const login = await request(app.getHttpServer()).post('/v1/auth/login').send({ email: (await s.api.get('/auth/me')).body.data.user.email, password: 'password123' });
-    const cookies = login.headers['set-cookie'];
+    const cookies = login.headers['set-cookie'] as unknown as string[];
     expect(cookies.join(';')).toContain('HttpOnly');
     const noHeader = await request(app.getHttpServer()).post('/v1/customers').set('Cookie', cookies).send({ name: 'A', phone: '89161112233' });
     expect(noHeader.status).toBe(403);
@@ -140,7 +140,7 @@ describe('записи', () => {
 
     await s.api.post('/bookings', { customer: { name: 'К1', phone: '+79990000001' }, resourceId: s.resourceId, serviceIds: [s.serviceId], startsAt: tomorrowAt('12:00') });
     await s.api.post('/bookings', { customer: { name: 'К2', phone: '+79990000002' }, resourceId: m2.body.data.id, serviceIds: [s.serviceId], startsAt: tomorrowAt('12:00') });
-    const list = await master.get(`/bookings?from=${tomorrowAt('00:00')}&to=${tomorrowAt('23:59')}`);
+    const list = await master.get(`/bookings?date=${tomorrowDate()}`);
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0].resourceId).toBe(m2.body.data.id);
     expect((await master.post('/services', { name: 'x', price: 1, duration: 10 })).status).toBe(403);
