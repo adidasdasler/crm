@@ -154,7 +154,7 @@ export class PublicController {
     void notifyStaff(
       this.prisma.system, t.id,
       `🆕 <b>Онлайн-запись</b>\n${esc(when)} · ${esc(booking.resource.name)}\n${esc(booking.items.map((i) => i.name).join(', '))}\n${esc(dto.name)}, ${esc(dto.phone)}`,
-      { resourceId: booking.resourceId },
+      { resourceId: booking.resourceId, push: { title: 'Новая онлайн-запись', body: `${when} · ${dto.name} · ${booking.items.map((i) => i.name).join(', ')}`, data: { bookingId: booking.id } } },
     );
 
     return {
@@ -214,6 +214,10 @@ export class PublicController {
       if (to === 'CONFIRMED' && b.status !== 'SCHEDULED') return { status: b.status };
       const r = await this.bookings.transition(tx, { tenantId: t.id }, b.id, to);
       await audit(tx, { tenantId: t.id }, `booking.client_${to.toLowerCase()}`, 'Booking', b.id);
+      if (to === 'CANCELLED') {
+        const when = new Date(b.startsAt).toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+        void notifyStaff(this.prisma.system, t.id, `❌ Клиент отменил запись: ${esc(when)}`, { resourceId: b.resourceId, push: { title: 'Клиент отменил запись', body: when, data: { bookingId: b.id } } });
+      }
       return { status: r.status };
     });
   }

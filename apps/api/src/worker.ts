@@ -5,6 +5,7 @@
  */
 import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
+import { purgeDeletedTenants } from './auth/account.controller';
 import { billingTick } from './billing/billing.service';
 import { env } from './config';
 import { telegram } from './notify/telegram';
@@ -35,6 +36,7 @@ async function main() {
   await Promise.all([
     loop('reminders', 30_000, () => processDueReminders(db)),
     loop('billing', 60 * 60_000, () => billingTick(db)),
+    loop('purge', 6 * 60 * 60_000, () => purgeDeletedTenants(db)),
   ]);
 }
 

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Alert, Linking, Platform, Share, Text, View } from 'react-native';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
-import { del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
+import { API_URL, del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
 import { canManage, useAuth, useMe } from '../../../lib/auth';
 import type { Subscription } from '../../../lib/types';
 
@@ -36,6 +36,25 @@ export default function More() {
       await navigator.clipboard?.writeText(link);
       alert('Ссылка скопирована');
     } else await Share.share({ message: `Записаться онлайн: ${link}` });
+  };
+  /** CSV для Excel: в вебе — скачивание файла, в приложении — «Поделиться» */
+  const exportCustomers = async () => {
+    try {
+      const headers: Record<string, string> = Platform.OS === 'web' ? {} : { Authorization: `Bearer ${await tokens.access()}`, 'X-Client': 'mobile' };
+      const res = await fetch(`${API_URL}/tenant/export/customers.csv`, { headers, credentials: 'include' });
+      if (!res.ok) throw new Error('Не удалось выгрузить, попробуйте ещё раз');
+      const csv = await res.text();
+      if (Platform.OS === 'web') {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        a.download = `klienty-${me.tenant.slug}.csv`;
+        a.click();
+      } else {
+        await Share.share({ title: 'Клиенты', message: csv });
+      }
+    } catch (e) {
+      Platform.OS === 'web' ? alert((e as Error).message) : Alert.alert('Выгрузка', (e as Error).message);
+    }
   };
   const switchTenant = (tenantId: string) =>
     post('/auth/switch-tenant', { tenantId }).then(async (t) => { await tokens.save(t as object); qc.clear(); await reload(); router.replace('/'); });
@@ -81,6 +100,11 @@ export default function More() {
           ))}
         </View>
       )}
+
+      <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
+        {(isOwner || me.role === 'MANAGER') && <Row icon="download-outline" title="Выгрузить клиентов (Excel)" onPress={exportCustomers} />}
+        <Row icon="trash-outline" title="Удалить аккаунт" onPress={() => router.push('/delete-account')} />
+      </View>
 
       <Button
         title="Выйти"

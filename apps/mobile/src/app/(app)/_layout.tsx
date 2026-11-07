@@ -1,10 +1,17 @@
 import { Redirect, Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { listenNotificationTaps, registerPush } from '../../lib/push';
 import { C, Loading } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 
 /** Всё внутри (app) — только для вошедших. */
 export default function AppLayout() {
   const { status } = useAuth();
+  useEffect(() => {
+    if (status !== 'authed') return;
+    registerPush();
+    return listenNotificationTaps();
+  }, [status]);
   if (status === 'loading') return <Loading />;
   if (status === 'guest') return <Redirect href="/login" />;
   return (
@@ -19,6 +26,7 @@ export default function AppLayout() {
       <Stack.Screen name="team" options={{ title: 'Команда' }} />
       <Stack.Screen name="salon" options={{ title: 'Настройки салона' }} />
       <Stack.Screen name="billing" options={{ title: 'Подписка' }} />
+      <Stack.Screen name="delete-account" options={{ title: 'Удаление аккаунта' }} />
     </Stack>
   );
 }

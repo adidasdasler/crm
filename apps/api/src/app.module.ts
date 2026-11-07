@@ -1,6 +1,7 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AccountController } from './auth/account.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { BillingController } from './billing/billing.controller';
@@ -37,7 +38,7 @@ class HealthController {
   ],
   controllers: [
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
-    CustomersController, BookingsController, PublicController, BillingController, BotController,
+    CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController,
   ],
   providers: [
     PrismaService,

@@ -127,7 +127,10 @@ export class BotController {
       await this.prisma.withTenant(t.id, (tx) => this.bookings.transition(tx, { tenantId: t.id }, b.id, 'CANCELLED'));
       note = 'Запись отменена';
       const { notifyStaff } = await import('./staff');
-      void notifyStaff(this.prisma.system, t.id, `❌ Клиент отменил запись через Telegram: ${esc(new Date(b.startsAt).toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}`, { resourceId: b.resourceId });
+      const when = new Date(b.startsAt).toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      void notifyStaff(this.prisma.system, t.id, `❌ Клиент отменил запись через Telegram: ${esc(when)}`, {
+        resourceId: b.resourceId, push: { title: 'Клиент отменил запись', body: when, data: { bookingId: b.id } },
+      });
     }
     await telegram.answerCallback(q.id, note);
     if (q.message) {

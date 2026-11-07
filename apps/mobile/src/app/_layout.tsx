@@ -17,6 +17,8 @@ export default function RootLayout() {
             <Stack.Screen name="(app)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="register" options={{ title: 'Регистрация' }} />
+            <Stack.Screen name="forgot" options={{ title: 'Восстановление пароля' }} />
+            <Stack.Screen name="reset" options={{ title: 'Новый пароль' }} />
           </Stack>
         </AuthProvider>
       </QueryClientProvider>

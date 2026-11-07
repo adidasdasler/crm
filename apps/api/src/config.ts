@@ -32,6 +32,14 @@ const schema = z.object({
   SMS_RU_API_KEY: z.string().optional(),
   SMS_SENDER: z.string().optional(),
 
+  // ── Почта (восстановление пароля): smtps://user:pass@smtp.yandex.ru:465 ──
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().default('Salon <no-reply@salon.ru>'),
+
+  // ── Push-уведомления через Expo. Это трансграничная передача (серверы Expo/Apple/Google) —
+  //    включайте после уведомления Роскомнадзора. ──
+  PUSH_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+
   // ── Оплата подписки ──
   /** mock — тестовые платежи без денег (только не в production) */
   PAYMENT_PROVIDER: z.enum(['yookassa', 'mock']).optional(),
@@ -39,6 +47,7 @@ const schema = z.object({
   YOOKASSA_SECRET_KEY: z.string().optional(),
 });
 
-export const env = schema.parse(process.env);
+// Пустые переменные (например, `FOO=` в .env или docker-compose) считаем незаданными — тогда работают значения по умолчанию.
+export const env = schema.parse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')));
 export const isProd = env.NODE_ENV === 'production';
 export const paymentProvider = env.PAYMENT_PROVIDER ?? (env.YOOKASSA_SHOP_ID ? 'yookassa' : isProd ? null : 'mock');

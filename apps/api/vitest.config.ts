@@ -18,6 +18,7 @@ export default defineConfig({
       TELEGRAM_WEBHOOK_SECRET: 'tg-webhook-secret',
       SMS_RU_API_KEY: 'test-sms-key',
       PAYMENT_PROVIDER: 'mock',
+      PUSH_ENABLED: 'true',
     },
   },
 });

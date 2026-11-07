@@ -36,6 +36,7 @@ export default function Login() {
         <Field label="Пароль" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" placeholder="••••••••" onSubmitEditing={submit} />
         <ErrorText error={error} />
         <Button title="Войти" onPress={submit} loading={busy} disabled={!email || !password} />
+        <Link href="/forgot" style={{ textAlign: 'center', color: C.muted, padding: 6 }}>Забыли пароль?</Link>
         <Link href="/register" style={{ textAlign: 'center', color: C.brand, fontWeight: '600', padding: 12 }}>
           Создать салон — 14 дней бесплатно
         </Link>
