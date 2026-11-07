@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { env, isProd } from '../config';
+import { cookieSecure, env } from '../config';
 import { Auth, AuthCtx, Public } from '../common/auth';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
@@ -47,7 +47,7 @@ function sendTokens(req: Request, res: Response, tokens: Tokens) {
   if (req.headers['x-client'] === 'mobile') {
     return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
-  const base = { httpOnly: true, secure: isProd, sameSite: 'lax' as const, domain: env.COOKIE_DOMAIN };
+  const base = { httpOnly: true, secure: cookieSecure, sameSite: 'lax' as const, domain: env.COOKIE_DOMAIN };
   res.cookie('access_token', tokens.accessToken, { ...base, path: '/', maxAge: env.JWT_ACCESS_TTL_MIN * 60_000 });
   res.cookie('refresh_token', tokens.refreshToken, { ...base, path: REFRESH_COOKIE_PATH, expires: tokens.refreshExpiresAt });
   return {};

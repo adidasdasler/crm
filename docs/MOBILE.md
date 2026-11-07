@@ -24,7 +24,7 @@ cd apps/mobile && eas login
 eas init   # привяжет проект, пропишет projectId в app.json
 ```
 
-1. В `eas.json` замените `https://salon.ru` на свой домен.
+1. В `eas.json` замените `https://mioflow.ru` на свой домен.
 2. В `app.json` замените `bundleIdentifier` и `package` (`ru.salon.crm`) на свои. После публикации их уже не поменять.
 3. Замените иконки в `assets/` на свои (1024×1024).
 

@@ -59,7 +59,8 @@ if (require.main === module) {
   (async () => {
     await seedPlans();
     console.log('plans: ok');
-    if (process.env.NODE_ENV !== 'production') await seedDemo();
+    // Демо-салон: всегда в разработке, на сервере — только если явно включён SEED_DEMO=true
+    if (process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO === 'true') await seedDemo();
   })()
     .catch((e) => { console.error(e); process.exit(1); })
     .finally(() => db.$disconnect());

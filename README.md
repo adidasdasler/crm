@@ -6,9 +6,9 @@ SaaS для салонов на 1–10 мастеров: онлайн-запис
 
 | Часть | Папка | Технологии | Где работает |
 |---|---|---|---|
-| **API** | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 (RLS) | `salon.ru/v1` |
-| **Сайт + онлайн-запись** | `apps/web` | React 19, Vite, Tailwind | `salon.ru`, `salon.ru/b/<салон>` |
-| **Приложение CRM** | `apps/mobile` | Expo SDK 58 (React Native) | iOS, Android, веб `app.salon.ru` |
+| **API** | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 (RLS) | `mioflow.ru/v1` |
+| **Сайт + онлайн-запись** | `apps/web` | React 19, Vite, Tailwind | `mioflow.ru`, `mioflow.ru/b/<салон>` |
+| **Приложение CRM** | `apps/mobile` | Expo SDK 58 (React Native) | iOS, Android, веб `app.mioflow.ru` |
 | **Деплой** | `deploy/`, `docker-compose.yml` | Docker, Nginx | VPS |
 
 Одна кодовая база `apps/mobile` собирается в три платформы: iOS, Android и веб.
@@ -94,7 +94,7 @@ pnpm --filter @salon/api test
 
 ## Документация
 
-- [docs/DEPLOY.md](docs/DEPLOY.md) — деплой на VPS: Docker, Nginx, SSL, бэкапы.
+- [docs/DEPLOY.md](docs/DEPLOY.md) — деплой на VPS: запуск одной командой `sudo bash deploy/install.sh` (по IP, без домена), переход на домен mioflow.ru с HTTPS, бэкапы.
 - [docs/MOBILE.md](docs/MOBILE.md) — публикация в App Store, Google Play и RuStore.
 - [docs/BRAND.md](docs/BRAND.md) — бренд: логотип, цвета, шрифты, голос.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — ключевые решения и чем они отличаются от спецификации v3.0.

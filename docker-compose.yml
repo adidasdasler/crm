@@ -33,6 +33,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET (64+ символа)}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SEED_DEMO: ${SEED_DEMO:-false}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       APP_URL: ${APP_URL}
       API_PUBLIC_URL: ${PUBLIC_WEB_URL}/v1
@@ -76,8 +78,11 @@ services:
         APP_URL: ${APP_URL:?задайте APP_URL}
     restart: unless-stopped
     depends_on: [api]
+    # По умолчанию слушаем только localhost (за хостовым Nginx с доменом).
+    # Без домена: NGINX_BIND=0.0.0.0 — сайт на :8080, приложение на :8081 (deploy/install.sh).
     ports:
-      - "127.0.0.1:8080:80"
+      - "${NGINX_BIND:-127.0.0.1}:${SITE_PORT:-8080}:80"
+      - "${NGINX_BIND:-127.0.0.1}:${APP_PORT:-8081}:81"
     networks: [salon-net]
 
 volumes:

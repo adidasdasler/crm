@@ -23,7 +23,7 @@ docker compose up -d --remove-orphans
 
 echo "→ Проверка здоровья"
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:8080/v1/health >/dev/null; then
+  if curl -fsS "http://127.0.0.1:${SITE_PORT:-8080}/v1/health" >/dev/null; then
     echo "✓ Salon работает"
     docker image prune -f >/dev/null
     exit 0

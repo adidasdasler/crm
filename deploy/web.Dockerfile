@@ -3,8 +3,8 @@
 FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /repo
-ARG PUBLIC_WEB_URL=https://salon.ru
-ARG APP_URL=https://app.salon.ru
+ARG PUBLIC_WEB_URL=https://mioflow.ru
+ARG APP_URL=https://app.mioflow.ru
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
 COPY apps/mobile/package.json apps/mobile/
@@ -18,5 +18,6 @@ RUN cd apps/mobile && CI=1 EXPO_OFFLINE=1 EXPO_PUBLIC_API_URL=/v1 EXPO_PUBLIC_WE
 
 FROM nginx:1.27-alpine
 COPY deploy/nginx/internal.conf /etc/nginx/conf.d/default.conf
+COPY deploy/nginx/salon-common.conf /etc/nginx/snippets/salon-common.conf
 COPY --from=build /repo/apps/web/dist /srv/site
 COPY --from=build /repo/apps/mobile/dist /srv/app

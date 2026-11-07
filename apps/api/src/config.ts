@@ -11,6 +11,8 @@ const schema = z.object({
   JWT_REFRESH_TTL_DAYS: z.coerce.number().default(30),
   CORS_ORIGIN: z.string().default(''),
   COOKIE_DOMAIN: z.string().optional(),
+  /** Secure-cookie (только HTTPS). false — для временного запуска по IP без домена и сертификата. */
+  COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:5173'),
   /** Адрес веб-версии CRM (ссылки «оплатить» в уведомлениях) */
   APP_URL: z.string().url().default('http://localhost:8081'),
@@ -25,7 +27,7 @@ const schema = z.object({
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
   /** Можно указать свой прокси до Bot API, если api.telegram.org недоступен с сервера */
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
-  /** Публичный адрес API для регистрации вебхука, например https://salon.ru/v1 */
+  /** Публичный адрес API для регистрации вебхука, например https://mioflow.ru/v1 */
   API_PUBLIC_URL: z.string().url().optional(),
 
   // ── SMS (sms.ru) — запасной канал напоминаний ──
@@ -50,4 +52,5 @@ const schema = z.object({
 // Пустые переменные (например, `FOO=` в .env или docker-compose) считаем незаданными — тогда работают значения по умолчанию.
 export const env = schema.parse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')));
 export const isProd = env.NODE_ENV === 'production';
+export const cookieSecure = env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProd;
 export const paymentProvider = env.PAYMENT_PROVIDER ?? (env.YOOKASSA_SHOP_ID ? 'yookassa' : isProd ? null : 'mock');
