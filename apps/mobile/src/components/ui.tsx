@@ -27,6 +27,8 @@ export function Screen({ children, scroll = true, padded = true }: { children: R
 }
 /** На вебе/планшете не растягиваем контент на всю ширину. */
 const maxW: ViewStyle = Platform.OS === 'web' ? { width: '100%', maxWidth: 760, alignSelf: 'center' } : {};
+/** Ограничение ширины списков на широком экране (веб-версия на компьютере) */
+export const webMax = maxW;
 
 export function Card({ children, style, onPress }: { children: ReactNode; style?: ViewStyle; onPress?: () => void }) {
   const body = <View style={[s.card, style]}>{children}</View>;

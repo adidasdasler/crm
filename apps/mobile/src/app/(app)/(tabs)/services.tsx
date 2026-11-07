@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
-import { Button, C, Card, Chip, Empty, ErrorText, Fab, Muted } from '../../../components/ui';
+import { Button, C, Card, Chip, Empty, ErrorText, Fab, Muted, webMax } from '../../../components/ui';
 import { get, post } from '../../../lib/api';
 import { minutes, rub } from '../../../lib/format';
 import type { Service } from '../../../lib/types';
@@ -20,7 +20,7 @@ export default function Services() {
       <FlatList
         data={list.data ?? []}
         keyExtractor={(s) => s.id}
-        contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 100 }}
+        contentContainerStyle={[webMax, { padding: 16, gap: 8, paddingBottom: 100 }]}
         refreshControl={<RefreshControl refreshing={list.isRefetching} onRefresh={() => void list.refetch()} />}
         ListEmptyComponent={
           list.isLoading ? undefined : (

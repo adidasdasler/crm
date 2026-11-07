@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
-import { C, Card, Empty, ErrorText, Fab, Field, Muted } from '../../../components/ui';
+import { C, Card, Empty, ErrorText, Fab, Field, Muted, webMax } from '../../../components/ui';
 import { get } from '../../../lib/api';
 import { phonePretty, rub } from '../../../lib/format';
 import type { Customer } from '../../../lib/types';
@@ -15,7 +15,7 @@ export default function Customers() {
       <FlatList
         data={list.data ?? []}
         keyExtractor={(c) => c.id}
-        contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 100 }}
+        contentContainerStyle={[webMax, { padding: 16, gap: 8, paddingBottom: 100 }]}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={list.isRefetching} onRefresh={() => void list.refetch()} />}
         ListHeaderComponent={<View style={{ marginBottom: 4 }}><Field value={q} onChangeText={setQ} placeholder="Поиск по имени или телефону" /></View>}
