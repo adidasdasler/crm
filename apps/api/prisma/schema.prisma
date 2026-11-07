@@ -103,6 +103,11 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime? @db.Timestamptz(3)
   lastLoginAt         DateTime? @db.Timestamptz(3)
+  /// Telegram сотрудника: уведомления о новых записях и об оплате
+  telegramChatId      String?
+  /// SHA-256 одноразового токена привязки Telegram (deep link) и срок его действия
+  telegramLinkHash    String?   @unique
+  telegramLinkExpires DateTime? @db.Timestamptz(3)
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt           DateTime? @db.Timestamptz(3)
@@ -171,9 +176,9 @@ model Subscription {
   billingPeriod      BillingPeriod      @default(MONTHLY)
   trialEndsAt        DateTime?          @db.Timestamptz(3)
   currentPeriodEnd   DateTime?          @db.Timestamptz(3)
-  /// id сохранённого способа оплаты ЮKassa для автопродления
-  paymentMethodId    String?
   cancelAtPeriodEnd  Boolean            @default(false)
+  /// Когда последний раз напоминали об оплате (чтобы не слать дважды в день)
+  lastNoticeAt       DateTime?          @db.Timestamptz(3)
   createdAt          DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
 
@@ -186,6 +191,12 @@ model Payment {
   id             String        @id @default(uuid()) @db.Uuid
   tenantId       String        @db.Uuid
   subscriptionId String        @db.Uuid
+  /// За какой тариф и период платёж
+  planId         String        @db.Uuid
+  billingPeriod  BillingPeriod @default(MONTHLY)
+  /// Ссылка на страницу оплаты у провайдера
+  confirmationUrl String?
+  /// Копейки
   amount         Int
   currency       String        @default("RUB")
   status         PaymentStatus
@@ -313,6 +324,7 @@ model Customer {
   bookings Booking[]
 
   @@index([tenantId, name])
+  @@index([telegramChatId])
 }
 
 /// Визит. Пересечения у одного мастера запрещены EXCLUDE-ограничением (миграция 0002).

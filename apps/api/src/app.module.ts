@@ -4,6 +4,9 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { BillingController } from './billing/billing.controller';
+import { BillingService } from './billing/billing.service';
+import { SubscriptionGuard } from './billing/subscription.guard';
+import { BotController } from './notify/bot.controller';
 import { BookingsController } from './bookings/bookings.controller';
 import { BookingsService } from './bookings/bookings.service';
 import { CatalogController } from './catalog/catalog.controller';
@@ -34,14 +37,16 @@ class HealthController {
   ],
   controllers: [
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
-    CustomersController, BookingsController, PublicController, BillingController,
+    CustomersController, BookingsController, PublicController, BillingController, BotController,
   ],
   providers: [
     PrismaService,
     AuthService,
     BookingsService,
+    BillingService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: SubscriptionGuard },
   ],
 })
 export class AppModule {}

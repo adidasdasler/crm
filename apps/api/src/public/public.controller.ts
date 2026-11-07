@@ -1,12 +1,16 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
-import { env } from '../config';
 import { bookingInclude, BookingsService } from '../bookings/bookings.service';
 import { Public } from '../common/auth';
 import { audit } from '../common/audit';
-import { randomToken, sha256 } from '../common/crypto';
+import { sha256 } from '../common/crypto';
+import { manageToken, manageUrl } from '../common/manage-token';
+import { notifyStaff } from '../notify/staff';
+import { esc, telegram } from '../notify/telegram';
+import { CONSENT_VERSION } from '../common/legal';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
@@ -59,6 +63,9 @@ export class PublicController {
     return {
       name: t.name, slug: t.slug, phone: t.phone, address: t.address, timezone: t.timezone,
       available: t.available, maxDaysAhead: t.s.maxDaysAhead,
+      /** Реквизиты салона как оператора ПДн — для страницы согласия */
+      legalName: t.s.legalName ?? null, inn: t.s.inn ?? null,
+      telegramBot: telegram.enabled ? telegram.deepLink('')?.replace(/\?start=$/, '') ?? null : null,
     };
   }
 
@@ -103,13 +110,12 @@ export class PublicController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('book')
-  async book(@Param('slug') slug: string, @Body(new Zod(bookSchema)) dto: z.infer<typeof bookSchema>) {
+  async book(@Param('slug') slug: string, @Body(new Zod(bookSchema)) dto: z.infer<typeof bookSchema>, @Req() req: Request) {
     const t = await this.tenant(slug);
     if (!t.available) throw new AppError('BOOKING_UNAVAILABLE', 'Онлайн-запись в этот салон сейчас недоступна', 403);
 
     // Клиент может записаться только в реально свободный слот (с учётом minLeadMin).
     const date = DateTime.fromJSDate(dto.startsAt, { zone: t.timezone }).toISODate()!;
-    const token = randomToken(24);
 
     const booking = await this.prisma.withTenant(t.id, async (tx) => {
       const free = await this.bookings.slots(tx, t, { date, serviceIds: dto.serviceIds, resourceId: dto.resourceId, onlyPublic: true });
@@ -125,16 +131,31 @@ export class PublicController {
       } else if (dto.marketingConsent && !customer.marketingConsent) {
         await tx.customer.update({ where: { id: customer.id }, data: { marketingConsent: true } });
       }
-      return this.bookings.create(tx, t, { tenantId: t.id }, {
+      const created = await this.bookings.create(tx, t, { tenantId: t.id }, {
         customerId: customer.id,
         resourceId: resource.resourceId,
         serviceIds: dto.serviceIds,
         startsAt: dto.startsAt,
         notes: dto.comment,
         source: 'WIDGET',
-        manageTokenHash: sha256(token),
       });
+      // Факт согласия на обработку ПДн (152-ФЗ): версия текста, IP, время.
+      await tx.auditLog.create({
+        data: {
+          tenantId: t.id, action: 'consent.booking', entityType: 'Customer', entityId: customer.id,
+          after: { version: CONSENT_VERSION, bookingId: created.id, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 200) }, ip: req.ip,
+        },
+      });
+      return created;
     });
+
+    const token = manageToken(booking.id);
+    const when = new Date(booking.startsAt).toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    void notifyStaff(
+      this.prisma.system, t.id,
+      `🆕 <b>Онлайн-запись</b>\n${esc(when)} · ${esc(booking.resource.name)}\n${esc(booking.items.map((i) => i.name).join(', '))}\n${esc(dto.name)}, ${esc(dto.phone)}`,
+      { resourceId: booking.resourceId },
+    );
 
     return {
       id: booking.id,
@@ -144,8 +165,10 @@ export class PublicController {
       resource: booking.resource.name,
       services: booking.items.map((i) => i.name),
       /** Ссылка «управлять записью» (отмена), её же шлём в напоминаниях */
-      manageUrl: `${env.PUBLIC_WEB_URL}/b/${t.slug}/manage/${token}`,
+      manageUrl: manageUrl(t.slug, booking.id),
       manageToken: token,
+      /** Кнопка «Получать напоминания в Telegram» */
+      telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
     };
   }
 
@@ -162,6 +185,7 @@ export class PublicController {
       salon: { name: t.name, phone: t.phone, address: t.address },
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
       cancelBeforeHours: t.s.cancelBeforeHours,
+      telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
     };
   }
 

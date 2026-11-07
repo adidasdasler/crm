@@ -52,7 +52,7 @@ export async function createSalon(name = 'Salon') {
   const slug = `salon-${n}-${Date.now() % 100000}`;
   const reg = await api().post('/auth/register', {
     email: `owner${n}-${Date.now()}@test.ru`, password: 'password123', name: `Owner ${name}`,
-    salonName: name, slug, timezone: 'Europe/Moscow', acceptTerms: true,
+    salonName: name, slug, timezone: 'Europe/Moscow', acceptTerms: true, acceptPrivacy: true,
   });
   if (reg.status !== 201) throw new Error(JSON.stringify(reg.body));
   const token = reg.body.data.accessToken as string;
@@ -72,3 +72,21 @@ export const tomorrowAt = (hhmm: string, plusDays = 1) => {
   return DateTime.now().setZone('Europe/Moscow').plus({ days: plusDays }).set({ hour: h, minute: m, second: 0, millisecond: 0 }).toUTC().toISO()!;
 };
 export const tomorrowDate = (plusDays = 1) => DateTime.now().setZone('Europe/Moscow').plus({ days: plusDays }).toISODate()!;
+
+/** Перехват исходящих сообщений Telegram и SMS */
+export const outbox = { telegram: [] as { method: string; body: any }[], sms: [] as { phone: string; text: string }[] };
+export async function fakeMessengers(opts: { telegramBlocked?: () => boolean } = {}) {
+  const { telegram } = await import('../src/notify/telegram');
+  const { sms } = await import('../src/notify/sms');
+  telegram.transport = async (method, body) => {
+    outbox.telegram.push({ method, body });
+    if (method === 'sendMessage' && opts.telegramBlocked?.()) return { ok: false, blocked: true, error: 'Forbidden: bot was blocked by the user' };
+    return { ok: true };
+  };
+  sms.transport = async (phone, text) => {
+    outbox.sms.push({ phone, text });
+    return { ok: true, id: 'sms-1' };
+  };
+}
+export const tgUpdate = (update: object, secret = 'tg-webhook-secret') =>
+  api().post('/webhooks/telegram', { update_id: Math.floor(Math.random() * 1e9), ...update }).set('X-Telegram-Bot-Api-Secret-Token', secret);

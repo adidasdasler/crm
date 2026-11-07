@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, 
 import { z } from 'zod';
 import { Auth, AuthCtx, Roles, STAFF_ADMIN } from '../common/auth';
 import { audit } from '../common/audit';
-import { notFound } from '../common/errors';
+import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService, Tx } from '../common/prisma.service';
 import { DEFAULT_SCHEDULE, uuid, weekSchedule } from '../common/schemas';
@@ -53,6 +53,7 @@ export class ResourcesController {
   create(@Auth() a: AuthCtx, @Body(new Zod(base)) dto: Dto) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       const { serviceIds, ...data } = dto;
+      await assertMastersLimit(tx, a.tenantId, dto.isActive === false ? 0 : 1);
       const r = await tx.resource.create({
         data: { ...data, tenantId: a.tenantId, schedule: dto.schedule ?? DEFAULT_SCHEDULE },
       });
@@ -69,6 +70,7 @@ export class ResourcesController {
       const before = await tx.resource.findFirst({ where: { id, deletedAt: null } });
       if (!before) throw notFound('Мастер');
       const { serviceIds, ...data } = dto;
+      if (dto.isActive && !before.isActive) await assertMastersLimit(tx, a.tenantId, 1);
       const r = await tx.resource.update({ where: { id }, data });
       if (serviceIds) await this.setServices(tx, a.tenantId, id, serviceIds);
       await audit(tx, a, 'resource.update', 'Resource', id, before, r);
@@ -131,5 +133,16 @@ export class ResourcesController {
     await tx.serviceResource.createMany({
       data: [...new Set(serviceIds)].map((serviceId) => ({ tenantId, resourceId, serviceId })),
     });
+  }
+}
+
+/** Ограничение тарифа по числу активных мастеров. */
+async function assertMastersLimit(tx: Tx, tenantId: string, adding: number) {
+  if (!adding) return;
+  const sub = await tx.subscription.findUnique({ where: { tenantId }, include: { plan: true } });
+  const limit = Number((sub?.plan.limits as { masters?: number } | undefined)?.masters ?? Infinity);
+  const active = await tx.resource.count({ where: { deletedAt: null, isActive: true } });
+  if (active + adding > limit) {
+    throw new AppError('PLAN_LIMIT', `На тарифе «${sub!.plan.name}» можно до ${limit} мастеров. Перейдите на тариф выше в разделе «Подписка»`, 403);
   }
 }

@@ -28,7 +28,7 @@ describe('auth', () => {
   });
 
   it('блокировка после 5 неудачных попыток', async () => {
-    await api().post('/auth/register', { email: 'lock@test.ru', password: 'password123', name: 'LL', salonName: 'Lock', slug: 'lock-salon', acceptTerms: true });
+    await api().post('/auth/register', { email: 'lock@test.ru', password: 'password123', name: 'LL', salonName: 'Lock', slug: 'lock-salon', acceptTerms: true, acceptPrivacy: true });
     for (let i = 0; i < 5; i++) {
       expect((await api().post('/auth/login', { email: 'lock@test.ru', password: 'wrong-pass' })).status).toBe(401);
     }

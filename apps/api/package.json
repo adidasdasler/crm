@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "prisma:migrate": "prisma migrate deploy",
-    "prisma:seed": "node -r @swc-node/register prisma/seed.ts"
+    "prisma:seed": "node -r @swc-node/register prisma/seed.ts",
+    "dev:worker": "node --watch -r @swc-node/register src/worker.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.8",

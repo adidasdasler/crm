@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { Booking, BookingSource, BookingStatus, Prisma } from '@prisma/client';
 import { DateTime } from 'luxon';
+import { randomUUID } from 'node:crypto';
+import { manageTokenHash } from '../common/manage-token';
 import { audit } from '../common/audit';
 import { AppError, conflict, isOverlapError, notFound } from '../common/errors';
 import { Tx } from '../common/prisma.service';
@@ -41,7 +43,6 @@ export type CreateBookingInput = {
   price?: number;
   /** Сотрудник может поставить запись вне графика мастера */
   allowOutsideSchedule?: boolean;
-  manageTokenHash?: string;
 };
 
 @Injectable()
@@ -145,8 +146,10 @@ export class BookingsService {
       // Пересечение отсекает EXCLUDE-ограничение booking_no_overlap — атомарно, без гонок.
       // SAVEPOINT нужен, чтобы ошибка ограничения не «ломала» всю транзакцию.
       await tx.$executeRaw`SAVEPOINT booking_insert`;
+      const id = randomUUID();
       booking = await tx.booking.create({
         data: {
+          id,
           tenantId: tenant.id,
           customerId: customer.id,
           resourceId,
@@ -156,7 +159,8 @@ export class BookingsService {
           source: input.source,
           price: input.price ?? svc.price,
           notes: input.notes ?? null,
-          manageTokenHash: input.manageTokenHash,
+          // Ссылка «управлять записью» есть у каждой записи — её шлём в напоминаниях.
+          manageTokenHash: manageTokenHash(id),
           createdById: actor.userId ?? null,
           items: {
             create: svc.services.map((s, i) => ({

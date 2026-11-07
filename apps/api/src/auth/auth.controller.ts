@@ -27,8 +27,10 @@ const registerSchema = z.object({
   timezone: z.string().default('Europe/Moscow').refine((tz) => {
     try { new Intl.DateTimeFormat('ru', { timeZone: tz }); return true; } catch { return false; }
   }, 'Неизвестный часовой пояс'),
-  /** Согласие на обработку ПДн (152-ФЗ) — обязательно */
-  acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Необходимо согласие с условиями' }) }),
+  /** Принятие оферты */
+  acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Необходимо принять условия оферты' }) }),
+  /** Отдельное согласие на обработку ПДн (152-ФЗ, ст. 9) */
+  acceptPrivacy: z.literal(true, { errorMap: () => ({ message: 'Необходимо согласие на обработку персональных данных' }) }),
   /** honeypot: настоящий пользователь это поле не заполняет */
   website: z.string().max(0).optional(),
 });

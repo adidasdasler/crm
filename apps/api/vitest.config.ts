@@ -13,6 +13,11 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? 'postgresql://salon_app:salon_app@localhost:5432/salon_test',
       SYSTEM_DATABASE_URL: process.env.TEST_SYSTEM_DATABASE_URL ?? 'postgresql://salon:salon@localhost:5432/salon_test',
       JWT_SECRET: 'test-secret-test-secret-test-secret-123',
+      TELEGRAM_BOT_TOKEN: 'test-token',
+      TELEGRAM_BOT_USERNAME: 'salon_test_bot',
+      TELEGRAM_WEBHOOK_SECRET: 'tg-webhook-secret',
+      SMS_RU_API_KEY: 'test-sms-key',
+      PAYMENT_PROVIDER: 'mock',
     },
   },
 });

@@ -8,6 +8,7 @@ import { randomToken, sha256 } from '../common/crypto';
 import { AppError, conflict, isUniqueError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { DEFAULT_SCHEDULE } from '../common/schemas';
+import { CONSENT_VERSION } from '../common/legal';
 
 const MAX_FAILED = 5;
 const LOCK_MIN = 15;
@@ -63,7 +64,11 @@ export class AuthService {
           },
         });
         await tx.auditLog.create({
-          data: { tenantId: tenant.id, userId: user.id, action: 'tenant.register', entityType: 'Tenant', entityId: tenant.id },
+          data: {
+            tenantId: tenant.id, userId: user.id, action: 'tenant.register', entityType: 'Tenant', entityId: tenant.id,
+            // Доказательство принятия оферты и согласия на обработку ПДн
+            after: { offer: CONSENT_VERSION, privacyConsent: CONSENT_VERSION, userAgent: meta.userAgent?.slice(0, 200) }, ip: meta.ip,
+          },
         });
         return { user, tenant, membership };
       });
@@ -181,15 +186,17 @@ export class AuthService {
   async me(auth: AuthCtx) {
     const db = this.prisma.system;
     const [user, memberships] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true } }),
+      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true } }),
       db.membership.findMany({
         where: { userId: auth.userId, deletedAt: null },
         include: { tenant: { select: { id: true, name: true, slug: true, timezone: true } } },
       }),
     ]);
     const current = memberships.find((m) => m.tenantId === auth.tenantId);
+    const { telegramChatId, ...u } = user;
     return {
-      user,
+      user: u,
+      telegramLinked: !!telegramChatId,
       role: auth.role,
       resourceId: auth.resourceId,
       tenant: current?.tenant,
