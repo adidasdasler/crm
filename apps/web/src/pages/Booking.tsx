@@ -3,7 +3,12 @@ import { Link, useParams } from 'react-router';
 import { Mark } from '../Logo';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
 
-type Salon = { name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number };
+type Hours = ({ day: string; from: string; to: string } | null)[];
+type Salon = {
+  name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number;
+  about?: string | null; links?: Partial<Record<'site' | 'vk' | 'telegram' | 'max' | 'instagram' | 'whatsapp' | 'yandexMaps' | 'twoGis', string>>;
+  hours?: Hours; hoursText?: string; industry?: { label: string; terms: { staff: string } };
+};
 type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null };
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
@@ -85,7 +90,7 @@ export function BookingPage() {
   const days = Array.from({ length: Math.min(salon.maxDaysAhead, 21) }, (_, i) => dateInTz(tz, i));
 
   return (
-    <Shell salon={salon}>
+    <Shell salon={salon} full={step === 'services'}>
       {step !== 'done' && <Progress step={step} />}
 
       {step === 'services' && (
@@ -265,19 +270,81 @@ function Contacts(props: {
   );
 }
 
-function Shell({ salon, children }: { salon?: Salon; children: React.ReactNode }) {
+function Shell({ salon, full, children }: { salon?: Salon; full?: boolean; children: React.ReactNode }) {
   return (
-    <div className="mx-auto min-h-screen max-w-xl px-4 pb-28 pt-6">
-      {salon && (
-        <header className="mb-6">
-          <h1 className="display text-3xl">{salon.name}</h1>
-          {salon.address && <p className="text-ink-muted">{salon.address}</p>}
-          {salon.phone && <a href={`tel:${salon.phone}`} className="text-sm text-brand-600">{salon.phone}</a>}
+    <div className="min-h-screen">
+      {salon && (full ? <SalonHero salon={salon} /> : (
+        <header className="mx-auto max-w-xl px-4 pt-6">
+          <h1 className="display text-2xl">{salon.name}</h1>
+          {salon.address && <p className="text-sm text-ink-muted">{salon.address}</p>}
         </header>
-      )}
-      {children}
-      <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
+      ))}
+      <div className="mx-auto max-w-xl px-4 pb-28 pt-6">
+        {children}
+        <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
+      </div>
     </div>
+  );
+}
+
+const LINK_LABELS: Record<string, string> = { yandexMaps: 'Яндекс Карты', twoGis: '2ГИС', vk: 'ВКонтакте', telegram: 'Telegram', max: 'MAX', instagram: 'Instagram', whatsapp: 'WhatsApp', site: 'Сайт' };
+
+/** Открыто ли сейчас по часам работы салона (в его часовом поясе) */
+function openNow(hours: Hours | undefined, tz: string): { open: boolean; text: string } | null {
+  if (!hours) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.find((p) => p.type === 'weekday')!.value);
+  const now = `${parts.find((p) => p.type === 'hour')!.value}:${parts.find((p) => p.type === 'minute')!.value}`;
+  const today = hours[wd];
+  if (today && now >= today.from && now < today.to) return { open: true, text: `до ${today.to}` };
+  if (today && now < today.from) return { open: false, text: `откроется в ${today.from}` };
+  for (let k = 1; k <= 7; k++) {
+    const h = hours[(wd + k) % 7];
+    if (h) return { open: false, text: `откроется ${k === 1 ? 'завтра' : ['в пн', 'во вт', 'в ср', 'в чт', 'в пт', 'в сб', 'в вс'][(wd + k) % 7]} в ${h.from}` };
+  }
+  return null;
+}
+
+/** Мини-сайт салона: шапка с описанием, часами, адресом и ссылками */
+function SalonHero({ salon }: { salon: Salon }) {
+  const [more, setMore] = useState(false);
+  const status = openNow(salon.hours, salon.timezone);
+  const route = salon.links?.yandexMaps ?? (salon.address ? `https://yandex.ru/maps/?text=${encodeURIComponent(salon.address)}` : null);
+  const links = Object.entries(salon.links ?? {}).filter(([k, v]) => v && k !== 'yandexMaps');
+  return (
+    <header className="relative overflow-hidden bg-ink pb-8 pt-8 text-white">
+      <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-brand-600/60 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 left-0 h-56 w-56 rounded-full bg-blush-300/30 blur-3xl" />
+      <div className="relative mx-auto max-w-xl space-y-4 px-4">
+        <div className="flex items-center gap-4">
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl bg-blush-300 font-display text-3xl text-ink">{salon.name.replace(/[«»"']/g, '').slice(0, 1)}</div>
+          <div className="min-w-0">
+            {salon.industry && <p className="text-sm text-[#C9CCF2]">{salon.industry.label}</p>}
+            <h1 className="display text-3xl leading-tight">{salon.name}</h1>
+          </div>
+        </div>
+        {status && (
+          <p className="text-sm">
+            <span className={`font-semibold ${status.open ? 'text-[#7BE3A6]' : 'text-blush-300'}`}>{status.open ? 'Открыто' : 'Закрыто'}</span>{' '}
+            <span className="text-[#C9CCF2]">{status.text}</span>
+          </p>
+        )}
+        {salon.about && (
+          <p className={`text-[#E3E5F7] ${more ? '' : 'line-clamp-3'}`} onClick={() => setMore(true)}>{salon.about}</p>
+        )}
+        <div className="flex flex-wrap gap-2 text-sm font-semibold">
+          {route && <a href={route} target="_blank" rel="noreferrer" className="rounded-full bg-white px-4 py-2 text-ink">Маршрут</a>}
+          {salon.phone && <a href={`tel:${salon.phone}`} className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">Позвонить</a>}
+          {links.map(([k, v]) => <a key={k} href={v} target="_blank" rel="noreferrer" className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">{LINK_LABELS[k] ?? k}</a>)}
+        </div>
+        {(salon.address || salon.hoursText) && (
+          <div className="space-y-1 rounded-2xl bg-white/[0.07] p-4 text-sm ring-1 ring-white/10">
+            {salon.address && <p><span className="text-[#C9CCF2]">Адрес:</span> {salon.address}</p>}
+            {salon.hoursText && <p><span className="text-[#C9CCF2]">Часы:</span> {salon.hoursText}</p>}
+          </div>
+        )}
+      </div>
+    </header>
   );
 }
 

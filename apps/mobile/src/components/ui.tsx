@@ -82,7 +82,9 @@ export function Toggle({ label, value, onChange, hint }: { label: string; value:
         <Text style={s.body}>{label}</Text>
         {hint && <Text style={s.muted}>{hint}</Text>}
       </View>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: C.brand, false: C.border }} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: C.brand, false: C.border }}
+                  thumbColor="#FFFFFF"
+                  {...({ activeThumbColor: '#FFFFFF' } as object)} />
     </View>
   );
 }

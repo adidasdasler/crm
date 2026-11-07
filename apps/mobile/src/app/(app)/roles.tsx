@@ -47,6 +47,8 @@ export default function Roles() {
                   disabled={!owner || save.isPending}
                   onValueChange={(v) => save.mutate({ role: r.role, key: p.key, on: v })}
                   trackColor={{ true: C.brand, false: C.border }}
+                  thumbColor="#FFFFFF"
+                  {...({ activeThumbColor: '#FFFFFF' } as object)}
                   accessibilityLabel={`${r.label}: ${p.label}`}
                 />
               </View>
