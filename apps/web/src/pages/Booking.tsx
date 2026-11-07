@@ -1,0 +1,289 @@
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router';
+import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
+
+type Salon = { name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number };
+type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null };
+type Category = { id: string; name: string };
+type Master = { id: string; name: string; position: string | null };
+type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string };
+
+type Step = 'services' | 'master' | 'time' | 'contacts' | 'done';
+
+export function BookingPage() {
+  const { slug = '' } = useParams();
+  const [salon, setSalon] = useState<Salon | null>(null);
+  const [catalog, setCatalog] = useState<{ categories: Category[]; services: Service[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [step, setStep] = useState<Step>('services');
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [masters, setMasters] = useState<Master[]>([]);
+  const [masterId, setMasterId] = useState<string | null>(null);
+  const [date, setDate] = useState('');
+  const [slots, setSlots] = useState<SlotsByMaster | null>(null);
+  const [time, setTime] = useState<string | null>(null);
+  const [booked, setBooked] = useState<Booked | null>(null);
+
+  useEffect(() => {
+    Promise.all([api<Salon>(`/public/${slug}`), api<typeof catalog>(`/public/${slug}/services`)])
+      .then(([s, c]) => {
+        setSalon(s);
+        setCatalog(c);
+        setDate(dateInTz(s.timezone));
+        document.title = `Запись — ${s.name}`;
+      })
+      .catch((e: ApiError) => setError(e.status === 404 ? 'Салон не найден' : e.message));
+  }, [slug]);
+
+  const selected = useMemo(() => catalog?.services.filter((s) => serviceIds.includes(s.id)) ?? [], [catalog, serviceIds]);
+  const total = selected.reduce((a, s) => ({ price: a.price + s.price, duration: a.duration + s.duration }), { price: 0, duration: 0 });
+
+  useEffect(() => {
+    if (step !== 'master') return;
+    api<Master[]>(`/public/${slug}/resources?serviceIds=${serviceIds.join(',')}`).then(setMasters).catch(() => setMasters([]));
+  }, [step, slug, serviceIds]);
+
+  useEffect(() => {
+    if (step !== 'time' || !date) return;
+    setSlots(null);
+    const q = new URLSearchParams({ date, serviceIds: serviceIds.join(',') });
+    if (masterId) q.set('resourceId', masterId);
+    api<SlotsByMaster>(`/public/${slug}/slots?${q}`).then(setSlots).catch(() => setSlots([]));
+  }, [step, date, masterId, slug, serviceIds]);
+
+  /** «Любой мастер» — объединяем свободные времена всех мастеров. */
+  const times = useMemo(() => [...new Set((slots ?? []).flatMap((r) => r.slots))].sort(), [slots]);
+
+  if (error) return <Shell><div className="card text-center py-12"><p className="text-lg font-semibold">{error}</p></div></Shell>;
+  if (!salon || !catalog) return <Shell><Skeleton /></Shell>;
+  if (!salon.available) {
+    return (
+      <Shell salon={salon}>
+        <div className="card text-center py-10">
+          <p className="text-lg font-semibold">Онлайн-запись временно недоступна</p>
+          {salon.phone && <a className="btn-primary mt-4" href={`tel:${salon.phone}`}>Позвонить в салон</a>}
+        </div>
+      </Shell>
+    );
+  }
+
+  const tz = salon.timezone;
+  const days = Array.from({ length: Math.min(salon.maxDaysAhead, 21) }, (_, i) => dateInTz(tz, i));
+
+  return (
+    <Shell salon={salon}>
+      {step !== 'done' && <Progress step={step} />}
+
+      {step === 'services' && (
+        <section className="space-y-6">
+          <h2 className="text-xl font-bold">Выберите услуги</h2>
+          {[...catalog.categories, { id: null as unknown as string, name: catalog.categories.length ? 'Другое' : '' }].map((cat) => {
+            const items = catalog.services.filter((s) => s.categoryId === (cat.id ?? null));
+            if (!items.length) return null;
+            return (
+              <div key={cat.id ?? 'none'} className="space-y-2">
+                {cat.name && <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{cat.name}</h3>}
+                {items.map((s) => {
+                  const on = serviceIds.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setServiceIds(on ? serviceIds.filter((x) => x !== s.id) : serviceIds.length < 5 ? [...serviceIds, s.id] : serviceIds)}
+                      className={`card flex w-full items-start justify-between gap-4 text-left transition ${on ? 'ring-2 ring-brand-500' : 'hover:ring-slate-300'}`}
+                    >
+                      <div>
+                        <p className="font-semibold">{s.name}</p>
+                        {s.description && <p className="mt-1 text-sm text-slate-500">{s.description}</p>}
+                        <p className="mt-1 text-sm text-slate-500">{minutes(s.duration)}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="font-semibold">{rub(s.price)}</span>
+                        <span className={`grid h-6 w-6 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300'}`}>{on && '✓'}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+          <BottomBar disabled={!serviceIds.length} onNext={() => setStep('master')} label={serviceIds.length ? `Далее · ${rub(total.price)} · ${minutes(total.duration)}` : 'Выберите услугу'} />
+        </section>
+      )}
+
+      {step === 'master' && (
+        <section className="space-y-3">
+          <Back onClick={() => setStep('services')} />
+          <h2 className="text-xl font-bold">Выберите мастера</h2>
+          <button onClick={() => { setMasterId(null); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
+            <Avatar name="✦" />
+            <div><p className="font-semibold">Любой мастер</p><p className="text-sm text-slate-500">Покажем всё свободное время</p></div>
+          </button>
+          {masters.map((m) => (
+            <button key={m.id} onClick={() => { setMasterId(m.id); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
+              <Avatar name={m.name} />
+              <div><p className="font-semibold">{m.name}</p>{m.position && <p className="text-sm text-slate-500">{m.position}</p>}</div>
+            </button>
+          ))}
+        </section>
+      )}
+
+      {step === 'time' && (
+        <section className="space-y-4">
+          <Back onClick={() => setStep('master')} />
+          <h2 className="text-xl font-bold">Дата и время</h2>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2">
+            {days.map((d) => {
+              const dt = new Date(`${d}T12:00:00Z`);
+              const on = d === date;
+              return (
+                <button key={d} onClick={() => { setDate(d); setTime(null); }} className={`flex w-14 shrink-0 flex-col items-center rounded-xl py-2 ${on ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-slate-200'}`}>
+                  <span className="text-xs capitalize opacity-80">{dt.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' })}</span>
+                  <span className="text-lg font-semibold">{dt.getUTCDate()}</span>
+                </button>
+              );
+            })}
+          </div>
+          {slots === null ? (
+            <Skeleton />
+          ) : times.length === 0 ? (
+            <div className="card py-8 text-center text-slate-500">На этот день свободного времени нет — выберите другой</div>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {times.map((t) => (
+                <button key={t} onClick={() => setTime(t)} className={`rounded-xl py-3 font-semibold ${time === t ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-slate-200 hover:ring-brand-500'}`}>
+                  {fmtTime(t, tz)}
+                </button>
+              ))}
+            </div>
+          )}
+          <BottomBar disabled={!time} onNext={() => setStep('contacts')} label="Далее" />
+        </section>
+      )}
+
+      {step === 'contacts' && time && (
+        <Contacts
+          slug={slug}
+          tz={tz}
+          summary={{ services: selected, time, total, master: masters.find((m) => m.id === masterId)?.name ?? 'Любой мастер' }}
+          payload={{ serviceIds, resourceId: masterId, startsAt: time }}
+          onBack={() => setStep('time')}
+          onDone={(b) => { setBooked(b); setStep('done'); }}
+          onTaken={() => { setTime(null); setStep('time'); }}
+        />
+      )}
+
+      {step === 'done' && booked && (
+        <section className="card space-y-4 py-8 text-center">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-3xl text-emerald-600">✓</div>
+          <h2 className="text-2xl font-bold">Вы записаны!</h2>
+          <p className="text-lg first-letter:uppercase">{fmtDate(booked.startsAt, tz)}, {fmtTime(booked.startsAt, tz)}</p>
+          <p className="text-slate-600">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
+          {salon.address && <p className="text-slate-500">{salon.address}</p>}
+          <p className="text-sm text-slate-500">Сохраните ссылку — по ней можно отменить запись:</p>
+          <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
+        </section>
+      )}
+    </Shell>
+  );
+}
+
+function Contacts(props: {
+  slug: string;
+  tz: string;
+  summary: { services: Service[]; time: string; total: { price: number; duration: number }; master: string };
+  payload: { serviceIds: string[]; resourceId: string | null; startsAt: string };
+  onBack: () => void;
+  onDone: (b: Booked) => void;
+  onTaken: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('+7 ');
+  const [comment, setComment] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [website, setWebsite] = useState(''); // honeypot
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const b = await api<Booked>(`/public/${props.slug}/book`, {
+        method: 'POST',
+        body: JSON.stringify({ ...props.payload, name, phone, comment: comment || undefined, consent, website: website || undefined }),
+      });
+      props.onDone(b);
+    } catch (e) {
+      const ae = e as ApiError;
+      if (ae.code === 'SLOT_TAKEN') {
+        alert('Это время только что заняли. Выберите другое.');
+        props.onTaken();
+      } else setErr(ae.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Back onClick={props.onBack} />
+      <div className="card space-y-1">
+        <p className="font-semibold first-letter:uppercase">{fmtDate(props.summary.time, props.tz)}, {fmtTime(props.summary.time, props.tz)}</p>
+        <p className="text-sm text-slate-600">{props.summary.services.map((s) => s.name).join(', ')}</p>
+        <p className="text-sm text-slate-600">{props.summary.master} · {minutes(props.summary.total.duration)} · <b>{rub(props.summary.total.price)}</b></p>
+      </div>
+      <h2 className="text-xl font-bold">Ваши контакты</h2>
+      <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+      <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+      <textarea className="input" rows={2} placeholder="Комментарий (необязательно)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden />
+      <label className="flex items-start gap-3 text-sm text-slate-600">
+        <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+        <span>Я согласен(на) на <Link className="text-brand-600 underline" to="/privacy" target="_blank">обработку персональных данных</Link></span>
+      </label>
+      {err && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</p>}
+      <button className="btn-primary w-full" disabled={busy || !consent || name.trim().length < 1}>{busy ? 'Записываем…' : 'Записаться'}</button>
+    </form>
+  );
+}
+
+function Shell({ salon, children }: { salon?: Salon; children: React.ReactNode }) {
+  return (
+    <div className="mx-auto min-h-screen max-w-xl px-4 pb-28 pt-6">
+      {salon && (
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold">{salon.name}</h1>
+          {salon.address && <p className="text-slate-500">{salon.address}</p>}
+          {salon.phone && <a href={`tel:${salon.phone}`} className="text-sm text-brand-600">{salon.phone}</a>}
+        </header>
+      )}
+      {children}
+      <footer className="mt-10 text-center text-xs text-slate-400">Онлайн-запись работает на <Link to="/" className="underline">Salon</Link></footer>
+    </div>
+  );
+}
+
+const STEPS: Step[] = ['services', 'master', 'time', 'contacts'];
+function Progress({ step }: { step: Step }) {
+  const i = STEPS.indexOf(step);
+  return (
+    <div className="mb-6 flex gap-1.5">
+      {STEPS.map((s, j) => <div key={s} className={`h-1.5 flex-1 rounded-full ${j <= i ? 'bg-brand-600' : 'bg-slate-200'}`} />)}
+    </div>
+  );
+}
+function BottomBar({ disabled, onNext, label }: { disabled: boolean; onNext: () => void; label: string }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 border-t border-slate-100 bg-white/90 p-4 backdrop-blur" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+      <div className="mx-auto max-w-xl"><button className="btn-primary w-full" disabled={disabled} onClick={onNext}>{label}</button></div>
+    </div>
+  );
+}
+const Back = ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick} className="text-sm font-medium text-brand-600">← Назад</button>;
+const Avatar = ({ name }: { name: string }) => (
+  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">{name.slice(0, 1)}</div>
+);
+const Skeleton = () => <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200/70" />)}</div>;
