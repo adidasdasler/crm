@@ -37,7 +37,7 @@ services:
       DATABASE_URL: postgresql://salon_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-salon}
       SYSTEM_DATABASE_URL: postgresql://${POSTGRES_USER:-salon}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-salon}
       JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET (64+ символа)}
-      CORS_ORIGIN: ${CORS_ORIGIN}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
@@ -54,7 +54,8 @@ services:
       context: .
       dockerfile: deploy/web.Dockerfile
       args:
-        API_URL: ${API_URL:-/v1}
+        PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?задайте PUBLIC_WEB_URL}
+        APP_URL: ${APP_URL:?задайте APP_URL}
     restart: unless-stopped
     depends_on: [api]
     ports:

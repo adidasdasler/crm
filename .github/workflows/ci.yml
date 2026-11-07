@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: salon
+          POSTGRES_PASSWORD: salon
+          POSTGRES_DB: salon_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U salon" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SYSTEM_DATABASE_URL: postgresql://salon:salon@localhost:5432/salon_test
+      TEST_SYSTEM_DATABASE_URL: postgresql://salon:salon@localhost:5432/salon_test
+      TEST_DATABASE_URL: postgresql://salon_app:salon_app@localhost:5432/salon_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile --filter @salon/api...
+      - name: Migrate (owner) and enable app role (RLS)
+        working-directory: apps/api
+        run: |
+          npx prisma migrate deploy
+          PGPASSWORD=salon psql -h localhost -U salon -d salon_test -c "ALTER ROLE salon_app LOGIN PASSWORD 'salon_app';"
+      - run: pnpm --filter @salon/api typecheck
+      - name: Tests (incl. tenant isolation and race conditions)
+        run: pnpm --filter @salon/api test
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile --filter @salon/web... --filter @salon/mobile...
+      - run: pnpm --filter @salon/web build
+      - run: pnpm --filter @salon/mobile typecheck
+      - run: cd apps/mobile && CI=1 npx expo export --platform web --output-dir dist

@@ -1,0 +1,91 @@
+# Salon — онлайн-запись и CRM для салонов красоты
+
+SaaS для салонов на 1–10 мастеров: онлайн-запись для клиентов, календарь, база клиентов, мастера и графики, команда с ролями. Есть приложение для iOS и Android и веб-версия CRM.
+
+## Из чего состоит
+
+| Часть | Папка | Технологии | Где работает |
+|---|---|---|---|
+| **API** | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 (RLS) | `salon.ru/v1` |
+| **Сайт + онлайн-запись** | `apps/web` | React 19, Vite, Tailwind | `salon.ru`, `salon.ru/b/<салон>` |
+| **Приложение CRM** | `apps/mobile` | Expo SDK 58 (React Native) | iOS, Android, веб `app.salon.ru` |
+| **Деплой** | `deploy/`, `docker-compose.yml` | Docker, Nginx | VPS |
+
+Одна кодовая база `apps/mobile` собирается в три платформы: iOS, Android и веб.
+
+## Что уже работает
+
+- Регистрация салона: 14 дней пробного периода, согласие на обработку ПДн.
+- Роли OWNER, MANAGER, ADMIN, MASTER. Мастер видит только свои записи.
+- Мастера с недельным графиком, услуги с категориями, шаблоны (маникюр, парикмахерская, брови, барбершоп).
+- Клиенты: поиск, история визитов, заметки, метки, согласие на рассылки, импорт, обезличивание при удалении.
+- Записи:
+  - несколько услуг в одном визите;
+  - технический перерыв после услуги;
+  - «любой мастер»;
+  - запись вне графика для сотрудников;
+  - статусы с проверкой переходов;
+  - optimistic locking.
+- **Двойная запись невозможна:** её запрещает ограничение `EXCLUDE` в PostgreSQL. Тест: из 10 одновременных запросов проходит ровно один.
+- Онлайн-запись для клиентов: услуги → мастер → время → контакты. Клиент получает ссылку «управлять записью», по которой можно подтвердить или отменить визит.
+- Изоляция салонов на уровне БД (Row Level Security). Тесты проверяют, что салон B не видит данных салона A.
+- Безопасность:
+  - argon2id;
+  - JWT 15 минут + ротация refresh-токенов с обнаружением кражи;
+  - блокировка после 5 неудачных попыток входа;
+  - rate limit;
+  - CSRF-защита;
+  - аудит-лог.
+
+Что дальше (напоминания в Telegram/SMS, оплата через ЮKassa и т. д.): [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Быстрый старт (разработка)
+
+Нужны Node.js 22+, pnpm 10+, PostgreSQL 16.
+
+```bash
+pnpm install
+```
+
+```bash
+# БД: владелец схемы salon / роль приложения salon_app (создаётся миграцией)
+createuser -s salon && createdb -O salon salon
+```
+
+```bash
+cp apps/api/.env.example apps/api/.env
+cd apps/api && npx prisma migrate deploy && pnpm prisma:seed
+```
+
+```bash
+psql -d salon -c "ALTER ROLE salon_app LOGIN PASSWORD 'salon_app';"
+```
+
+Запуск, каждая команда в отдельном терминале:
+
+```bash
+pnpm dev:api      # http://localhost:4000/v1
+```
+
+```bash
+pnpm dev:web      # http://localhost:5173 и http://localhost:5173/b/demo
+```
+
+```bash
+pnpm dev:mobile   # Expo: w — веб, QR-код — Expo Go на телефоне
+```
+
+Демо-вход: `demo@salon.local` / `demo12345`.
+
+Тесты API (нужна отдельная БД `salon_test` с применёнными миграциями):
+
+```bash
+pnpm --filter @salon/api test
+```
+
+## Документация
+
+- [docs/DEPLOY.md](docs/DEPLOY.md) — деплой на VPS: Docker, Nginx, SSL, бэкапы.
+- [docs/MOBILE.md](docs/MOBILE.md) — публикация в App Store, Google Play и RuStore.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — ключевые решения и чем они отличаются от спецификации v3.0.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — план работ и чек-лист запуска.
