@@ -1,4 +1,4 @@
-import { industry } from '../common/industries';
+import { createTemplateServices, industry } from '../common/industries';
 import { readSettings } from '../common/tenant-settings';
 import { PERM_KEYS } from '../common/permissions';
 import { Injectable } from '@nestjs/common';
@@ -56,10 +56,7 @@ export class AuthService {
           data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE, color: '#2F3BFF' },
         });
         // Стартовый набор услуг по отрасли — салон сразу может принимать записи и правит цены под себя
-        for (const [i, t] of (dto.industry ? industry(dto.industry).templates : []).entries()) {
-          const s = await tx.service.create({ data: { ...t, tenantId: tenant.id, sortOrder: i } });
-          await tx.serviceResource.create({ data: { tenantId: tenant.id, serviceId: s.id, resourceId: resource.id } });
-        }
+        if (dto.industry) await createTemplateServices(tx, tenant.id, industry(dto.industry).templates, [resource.id]);
         const membership = await tx.membership.create({
           data: { tenantId: tenant.id, userId: user.id, role: 'OWNER', resourceId: resource.id },
         });

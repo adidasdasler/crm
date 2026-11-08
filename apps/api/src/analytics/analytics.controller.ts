@@ -181,7 +181,8 @@ export class AnalyticsController {
           }
           if (w.end - cur >= 30 * MIN) free.push(slot(cur, w.end, tz));
         }
-        return { id: r.id, name: r.name, color: r.color, capacityMin: Math.round(capacity), bookedMin: Math.round(booked), load: capacity ? Math.min(1, booked / capacity) : 0, bookings: mine.length, free };
+        const dayOver = work.length > 0 && now >= Math.max(...work.map((w) => w.end));
+        return { id: r.id, name: r.name, color: r.color, dayOver, capacityMin: Math.round(capacity), bookedMin: Math.round(booked), load: capacity ? Math.min(1, booked / capacity) : 0, bookings: mine.length, free };
       });
       const capacityMin = masters.reduce((s, m) => s + m.capacityMin, 0);
       const bookedMin = masters.reduce((s, m) => s + m.bookedMin, 0);
@@ -202,7 +203,10 @@ export class AnalyticsController {
       const names = new Map(resources.map((r) => [r.id, r.name]));
       return {
         date,
-        load: { value: capacityMin ? bookedMin / capacityMin : 0, bookedMin, capacityMin, masters, freeMin: masters.reduce((s, m) => s + m.free.reduce((x, f) => x + f.minutes, 0), 0) },
+        load: {
+          value: capacityMin ? bookedMin / capacityMin : 0, bookedMin, capacityMin, masters,
+          /** Рабочий день у всех работающих мастеров закончился */
+          dayOver: masters.some((m) => m.capacityMin > 0) && masters.every((m) => m.capacityMin === 0 || m.dayOver), freeMin: masters.reduce((s, m) => s + m.free.reduce((x, f) => x + f.minutes, 0), 0) },
         revenue: {
           expected: todays.reduce((s, b) => s + b.price, 0),
           done: todays.filter((b) => b.status === 'COMPLETED').reduce((s, b) => s + b.price, 0),

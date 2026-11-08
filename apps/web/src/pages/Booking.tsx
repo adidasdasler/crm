@@ -10,7 +10,8 @@ type Salon = {
   about?: string | null; links?: Partial<Record<'site' | 'vk' | 'telegram' | 'max' | 'instagram' | 'whatsapp' | 'yandexMaps' | 'twoGis', string>>;
   hours?: Hours; hoursText?: string; industry?: { label: string; terms: { staff: string } };
 };
-type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null };
+type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null; comboOf?: string[] };
+type Nearest = { resourceId: string; name: string; at: string };
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
@@ -38,6 +39,7 @@ export function BookingPage() {
   const [step, setStep] = useState<Step>('services');
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [masters, setMasters] = useState<Master[]>([]);
+  const [nearest, setNearest] = useState<Nearest[]>([]);
   const [masterId, setMasterId] = useState<string | null>(null);
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<SlotsByMaster | null>(null);
@@ -62,6 +64,8 @@ export function BookingPage() {
   useEffect(() => {
     if (step !== 'master') return;
     api<Master[]>(`/public/${slug}/resources?serviceIds=${serviceIds.join(',')}`).then(setMasters).catch(() => setMasters([]));
+    setNearest([]);
+    api<Nearest[]>(`/public/${slug}/nearest?serviceIds=${serviceIds.join(',')}`).then(setNearest).catch(() => setNearest([]));
   }, [step, slug, serviceIds]);
 
   useEffect(() => {
@@ -71,6 +75,8 @@ export function BookingPage() {
     if (masterId) q.set('resourceId', masterId);
     api<SlotsByMaster>(`/public/${slug}/slots?${q}`).then(setSlots).catch(() => setSlots([]));
   }, [step, date, masterId, slug, serviceIds]);
+
+  const nearestOf = (id: string) => nearest.find((n) => n.resourceId === id);
 
   /** «Любой мастер» — объединяем свободные времена всех мастеров. */
   const times = useMemo(() => [...new Set((slots ?? []).flatMap((r) => r.slots))].sort(), [slots]);
@@ -114,6 +120,7 @@ export function BookingPage() {
                     >
                       <div>
                         <p className="font-semibold">{s.name}</p>
+                        <ComboBadge s={s} all={catalog.services} />
                         {s.description && <p className="mt-1 text-sm text-ink-muted">{s.description}</p>}
                         <p className="mt-1 text-sm text-ink-muted">{minutes(s.duration)}</p>
                       </div>
@@ -135,14 +142,30 @@ export function BookingPage() {
         <section className="space-y-3">
           <Back onClick={() => setStep('services')} />
           <h2 className="display text-2xl">К кому?</h2>
+          {nearest[0] && (
+            <button
+              onClick={() => { setMasterId(nearest[0].resourceId); setDate(new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(nearest[0].at))); setTime(nearest[0].at); setStep('contacts'); }}
+              className="flex w-full items-center justify-between gap-3 rounded-3xl bg-ink p-4 text-left text-white"
+            >
+              <div>
+                <p className="text-sm text-[#C9CCF2]">Ближайшее свободное время</p>
+                <p className="text-lg font-semibold">{when(nearest[0].at, tz)} · {nearest[0].name}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-blush-300 px-4 py-2 text-sm font-semibold text-ink">Записаться</span>
+            </button>
+          )}
           <button onClick={() => { setMasterId(null); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
             <Avatar name="✦" />
-            <div><p className="font-semibold">Любой мастер</p><p className="text-sm text-ink-muted">Покажем всё свободное время</p></div>
+            <div><p className="font-semibold">Любой мастер</p><p className="text-sm text-ink-muted">{nearest[0] ? `Ближайшее: ${when(nearest[0].at, tz)}` : 'Покажем всё свободное время'}</p></div>
           </button>
           {masters.map((m) => (
             <button key={m.id} onClick={() => { setMasterId(m.id); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
               <Avatar name={m.name} />
-              <div><p className="font-semibold">{m.name}</p>{m.position && <p className="text-sm text-ink-muted">{m.position}</p>}</div>
+              <div>
+                <p className="font-semibold">{m.name}</p>
+                {m.position && <p className="text-sm text-ink-muted">{m.position}</p>}
+                {nearestOf(m.id) && <p className="text-sm font-medium text-brand-600">Ближайшее: {when(nearestOf(m.id)!.at, tz)}</p>}
+              </div>
             </button>
           ))}
         </section>
@@ -399,5 +422,28 @@ function Messengers({ booked }: { booked: Booked }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/** «Сегодня в 15:30 (через 40 мин)», «завтра в 11:00», «пт, 14 ноября в 12:00» */
+function when(iso: string, tz: string): string {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(iso));
+  const diffMin = Math.round((+new Date(iso) - Date.now()) / 60_000);
+  const t = fmtTime(iso, tz);
+  if (day === dateInTz(tz, 0)) return diffMin <= 120 ? `сегодня в ${t} (через ${diffMin < 60 ? `${Math.max(diffMin, 1)} мин` : `${Math.floor(diffMin / 60)} ч ${diffMin % 60} мин`})` : `сегодня в ${t}`;
+  if (day === dateInTz(tz, 1)) return `завтра в ${t}`;
+  return `${new Intl.DateTimeFormat('ru-RU', { weekday: 'short', day: 'numeric', month: 'long', timeZone: tz }).format(new Date(iso))} в ${t}`;
+}
+
+/** Комплекс услуг: из чего состоит и сколько клиент экономит */
+function ComboBadge({ s, all }: { s: Service; all: Service[] }) {
+  if (!s.comboOf?.length) return null;
+  const parts = all.filter((x) => s.comboOf!.includes(x.id));
+  const save = parts.reduce((a, x) => a + x.price, 0) - s.price;
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+      <span className="rounded-full bg-blush-300 px-2 py-0.5 font-semibold text-ink">Комплекс</span>
+      {save > 0 && <span className="font-semibold text-[#0F7A52]">выгода {rub(save)}</span>}
+    </p>
   );
 }

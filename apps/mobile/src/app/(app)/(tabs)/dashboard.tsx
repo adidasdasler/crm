@@ -147,7 +147,7 @@ function TodayCards({ d, tz, wide }: { d: Today; tz: string; wide: boolean }) {
   const cards: { key: CardKey; icon: ComponentProps<typeof Ionicons>['name']; label: string; value: string; hint: string; detail: ReactNode }[] = [
     {
       key: 'load', icon: 'speedometer-outline', label: 'Загрузка на сегодня', value: pctN(d.load.value),
-      hint: d.load.freeMin ? `свободно ещё ${minutes(d.load.freeMin)}` : d.load.capacityMin ? 'всё занято' : 'сегодня выходной',
+      hint: !d.load.capacityMin ? 'сегодня выходной' : d.load.dayOver ? 'рабочий день завершён' : d.load.freeMin ? `свободно ещё ${minutes(d.load.freeMin)}` : 'свободных окон нет',
       detail: d.load.masters.map((m) => (
         <View key={m.id} style={{ gap: 4, paddingVertical: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

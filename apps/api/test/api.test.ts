@@ -231,3 +231,37 @@ describe('мини-сайт и отрасли', () => {
     expect((await api().get('/public-meta/industries')).body.data.some((i: any) => i.code === 'education')).toBe(true);
   });
 });
+
+describe('комплексы и ближайшее время', () => {
+  it('барбершоп получает комплекс «стрижка + борода»; комплекс из комплекса нельзя; PATCH не сбрасывает перерыв', async () => {
+    const reg = await api().post('/auth/register', {
+      email: `barber-${Date.now()}@test.ru`, password: 'password123', name: 'Барбер', salonName: 'Борода', slug: `beard-${Date.now() % 100000}`,
+      industry: 'barber', acceptTerms: true, acceptPrivacy: true,
+    });
+    const a = api(reg.body.data.accessToken);
+    const slug = reg.body.data.tenant.slug;
+    const services = (await a.get('/services')).body.data as any[];
+    const combo = services.find((s) => s.name.startsWith('Комплекс'));
+    const parts = services.filter((s) => combo.comboOf.includes(s.id)).map((s) => s.name).sort();
+    expect(parts).toEqual(['Мужская стрижка', 'Стрижка бороды']);
+    const pub = (await api().get(`/public/${slug}/services`)).body.data.services;
+    expect(pub.find((s: any) => s.id === combo.id).comboOf).toHaveLength(2);
+
+    expect((await a.post('/services', { name: 'X', price: 1, duration: 30, comboOf: [combo.id, parts[0] && services[0].id] })).status).toBe(400);
+    expect((await a.post('/services', { name: 'X', price: 1, duration: 30, comboOf: [services[0].id] })).status).toBe(400);
+
+    const withBuffer = await a.post('/services', { name: 'Бритьё', price: 90000, duration: 30, bufferTime: 15 });
+    await a.patch(`/services/${withBuffer.body.data.id}`, { price: 95000 });
+    expect((await a.get('/services')).body.data.find((s: any) => s.id === withBuffer.body.data.id)).toMatchObject({ price: 95000, bufferTime: 15 });
+  });
+
+  it('ближайшее свободное время у мастеров', async () => {
+    const s = await createSalon('Nearest');
+    const r = await api().get(`/public/${s.slug}/nearest?serviceIds=${s.serviceId}`);
+    expect(r.status).toBe(200);
+    expect(r.body.data).toHaveLength(1);
+    expect(r.body.data[0].resourceId).toBe(s.resourceId);
+    expect(new Date(r.body.data[0].at).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(r.body.data[0].at).getTime() - Date.now()).toBeLessThan(2 * 86400_000);
+  });
+});

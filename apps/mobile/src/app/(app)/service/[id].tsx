@@ -13,13 +13,13 @@ export default function ServiceScreen() {
   const services = useQuery({ queryKey: ['services'], queryFn: () => get<Service[]>('/services') });
   const resources = useQuery({ queryKey: ['resources'], queryFn: () => get<Resource[]>('/resources') });
   const existing = services.data?.find((s) => s.id === id);
-  const [f, setF] = useState({ name: '', description: '', price: '', duration: '60', bufferTime: '0', isActive: true, isPublic: true, resourceIds: [] as string[] });
+  const [f, setF] = useState({ name: '', description: '', price: '', duration: '60', bufferTime: '0', isActive: true, isPublic: true, resourceIds: [] as string[], comboOf: [] as string[] });
 
   useEffect(() => {
     if (existing) {
       setF({
         name: existing.name, description: existing.description ?? '', price: String(existing.price / 100), duration: String(existing.duration),
-        bufferTime: String(existing.bufferTime), isActive: existing.isActive, isPublic: existing.isPublic, resourceIds: existing.resourceIds,
+        bufferTime: String(existing.bufferTime), isActive: existing.isActive, isPublic: existing.isPublic, resourceIds: existing.resourceIds, comboOf: existing.comboOf ?? [],
       });
     } else if (isNew && resources.data) setF((x) => ({ ...x, resourceIds: resources.data.map((r) => r.id) }));
   }, [existing, isNew, resources.data]);
@@ -29,7 +29,7 @@ export default function ServiceScreen() {
     mutationFn: () => {
       const body = {
         name: f.name, description: f.description || null, price: Math.round(parseFloat(f.price.replace(',', '.') || '0') * 100),
-        duration: parseInt(f.duration, 10), bufferTime: parseInt(f.bufferTime || '0', 10), isActive: f.isActive, isPublic: f.isPublic, resourceIds: f.resourceIds,
+        duration: parseInt(f.duration, 10), bufferTime: parseInt(f.bufferTime || '0', 10), isActive: f.isActive, isPublic: f.isPublic, resourceIds: f.resourceIds, comboOf: f.comboOf,
       };
       return isNew ? post('/services', body) : patch(`/services/${id}`, body);
     },
@@ -55,6 +55,19 @@ export default function ServiceScreen() {
       <Field label="Перерыв после, мин" value={f.bufferTime} onChangeText={(bufferTime) => setF({ ...f, bufferTime })} keyboardType="number-pad" />
       <Muted>Перерыв — время на уборку/подготовку. Клиент его не видит, но мастер в это время занят.</Muted>
       <Field label="Описание для клиентов" value={f.description} onChangeText={(description) => setF({ ...f, description })} multiline />
+      <H>Комплекс</H>
+      <Muted>Отметьте 2–5 услуг, если это набор со своей ценой (например, «стрижка + борода»). Клиент увидит метку «Комплекс» и свою выгоду.</Muted>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {(services.data ?? []).filter((s) => s.id !== id && !s.comboOf?.length && s.isActive).map((s) => (
+          <Chip key={s.id} label={s.name} active={f.comboOf.includes(s.id)}
+            onPress={() => setF({ ...f, comboOf: f.comboOf.includes(s.id) ? f.comboOf.filter((x) => x !== s.id) : [...f.comboOf, s.id].slice(0, 5) })} />
+        ))}
+      </View>
+      {f.comboOf.length > 0 && (() => {
+        const sum = (services.data ?? []).filter((s) => f.comboOf.includes(s.id)).reduce((a, s) => a + s.price, 0);
+        const price = Math.round(parseFloat(f.price.replace(',', '.') || '0') * 100);
+        return <Muted>{f.comboOf.length < 2 ? 'Выберите ещё хотя бы одну услугу' : `По отдельности ${Math.round(sum / 100)} ₽${sum > price ? ` · выгода клиента ${Math.round((sum - price) / 100)} ₽` : ''}`}</Muted>;
+      })()}
       <H>Кто оказывает</H>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {(resources.data ?? []).map((r) => (
@@ -65,7 +78,7 @@ export default function ServiceScreen() {
       <Toggle label="Показывать в онлайн-записи" value={f.isPublic} onChange={(isPublic) => setF({ ...f, isPublic })} />
       <Toggle label="Активна" value={f.isActive} onChange={(isActive) => setF({ ...f, isActive })} />
       <ErrorText error={save.error ?? remove.error} />
-      <Button title="Сохранить" onPress={() => save.mutate()} loading={save.isPending} disabled={!f.name || !(parseInt(f.duration, 10) >= 5)} />
+      <Button title="Сохранить" onPress={() => save.mutate()} loading={save.isPending} disabled={!f.name || !(parseInt(f.duration, 10) >= 5) || f.comboOf.length === 1} />
       {!isNew && <Button title="Удалить услугу" variant="danger" onPress={askRemove} loading={remove.isPending} />}
     </Screen>
   );

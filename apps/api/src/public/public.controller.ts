@@ -28,6 +28,9 @@ const slotsQuery = z.object({
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
   resourceId: uuid.optional(),
 });
+const nearestQuery = z.object({
+  serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
+});
 const bookSchema = z.object({
   serviceIds: z.array(uuid).min(1).max(5),
   resourceId: uuid.nullable(),
@@ -96,7 +99,7 @@ export class PublicController {
         tx.service.findMany({
           where: { deletedAt: null, isActive: true, isPublic: true, resources: { some: { resource: { isActive: true, deletedAt: null } } } },
           orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-          select: { id: true, name: true, description: true, price: true, duration: true, categoryId: true },
+          select: { id: true, name: true, description: true, price: true, duration: true, categoryId: true, comboOf: true },
         }),
       ]);
       return { categories, services };
@@ -124,6 +127,26 @@ export class PublicController {
     const t = await this.tenant(slug);
     if (!t.available) return [];
     return this.prisma.withTenant(t.id, (tx) => this.bookings.slots(tx, t, { ...q, onlyPublic: true }));
+  }
+
+  /**
+   * Ближайшее свободное время у каждого мастера (до 7 дней вперёд) — «через 40 минут у Ивана».
+   * Удобно барбершопам и тем, кто записывается «на сейчас».
+   */
+  @Get('nearest')
+  async nearest(@Param('slug') slug: string, @Query(new Zod(nearestQuery)) q: z.infer<typeof nearestQuery>) {
+    const t = await this.tenant(slug);
+    if (!t.available) return [];
+    return this.prisma.withTenant(t.id, async (tx) => {
+      const found = new Map<string, { resourceId: string; name: string; at: string }>();
+      const start = DateTime.now().setZone(t.timezone).startOf('day');
+      for (let i = 0; i < Math.min(7, t.s.maxDaysAhead + 1); i++) {
+        const rows = await this.bookings.slots(tx, t, { date: start.plus({ days: i }).toISODate()!, serviceIds: q.serviceIds, onlyPublic: true });
+        for (const r of rows) if (r.slots.length && !found.has(r.resourceId)) found.set(r.resourceId, { resourceId: r.resourceId, name: r.name, at: r.slots[0] });
+        if (rows.length && rows.every((r) => found.has(r.resourceId))) break;
+      }
+      return [...found.values()].sort((a, b) => a.at.localeCompare(b.at));
+    });
   }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })

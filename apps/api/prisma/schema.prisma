@@ -299,6 +299,8 @@ model Service {
   isActive    Boolean   @default(true)
   isPublic    Boolean   @default(true)
   sortOrder   Int       @default(0)
+  /// Комплекс: из каких услуг состоит (выгода показывается клиенту)
+  comboOf     String[]  @default([]) @db.Uuid
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt   DateTime? @db.Timestamptz(3)

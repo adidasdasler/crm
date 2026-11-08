@@ -13,7 +13,8 @@ export type Terms = {
   /** салон / студия / центр */
   place: string;
 };
-type Tpl = { name: string; price: number; duration: number; bufferTime?: number };
+/** combo — названия услуг этого же шаблона, из которых состоит комплекс */
+type Tpl = { name: string; price: number; duration: number; bufferTime?: number; combo?: string[] };
 export type Industry = { code: string; label: string; group: string; schemaType: string; terms: Terms; templates: Tpl[] };
 
 const BEAUTY: Terms = { staff: 'Мастер', staffPlural: 'Мастера', client: 'Клиент', clientPlural: 'Клиенты', place: 'Салон' };
@@ -29,6 +30,7 @@ export const INDUSTRIES: Industry[] = [
   { code: 'nails', label: 'Ногтевая студия', group: 'Красота', schemaType: 'NailSalon', terms: STUDIO, templates: [
     { name: 'Маникюр без покрытия', price: r(1200), duration: 60 }, { name: 'Маникюр с покрытием гель-лак', price: r(2200), duration: 120, bufferTime: 10 },
     { name: 'Педикюр с покрытием', price: r(2800), duration: 120, bufferTime: 10 }, { name: 'Снятие покрытия', price: r(300), duration: 15 },
+    { name: 'Комплекс: маникюр + педикюр с покрытием', price: r(4600), duration: 210, bufferTime: 10, combo: ['Маникюр с покрытием гель-лак', 'Педикюр с покрытием'] },
   ] },
   { code: 'hair', label: 'Парикмахерская', group: 'Красота', schemaType: 'HairSalon', terms: BEAUTY, templates: [
     { name: 'Женская стрижка', price: r(2000), duration: 60 }, { name: 'Мужская стрижка', price: r(1200), duration: 45 },
@@ -36,7 +38,7 @@ export const INDUSTRIES: Industry[] = [
   ] },
   { code: 'barber', label: 'Барбершоп', group: 'Красота', schemaType: 'HairSalon', terms: { ...BEAUTY, staff: 'Барбер', staffPlural: 'Барберы', place: 'Барбершоп' }, templates: [
     { name: 'Мужская стрижка', price: r(1500), duration: 60 }, { name: 'Стрижка бороды', price: r(1000), duration: 30 },
-    { name: 'Стрижка + борода', price: r(2300), duration: 90 },
+    { name: 'Комплекс: стрижка + борода', price: r(2200), duration: 75, combo: ['Мужская стрижка', 'Стрижка бороды'] },
   ] },
   { code: 'brows', label: 'Брови и ресницы', group: 'Красота', schemaType: 'BeautySalon', terms: STUDIO, templates: [
     { name: 'Коррекция бровей', price: r(800), duration: 30 }, { name: 'Окрашивание бровей', price: r(700), duration: 30 },
@@ -82,3 +84,21 @@ export const INDUSTRIES: Industry[] = [
 
 export const INDUSTRY_CODES = INDUSTRIES.map((i) => i.code) as [string, ...string[]];
 export const industry = (code?: string | null): Industry => INDUSTRIES.find((i) => i.code === code) ?? INDUSTRIES[0];
+
+/** Создать услуги шаблона: сначала обычные, затем комплексы со ссылками на них */
+export async function createTemplateServices(
+  tx: { service: { create: (a: { data: any }) => Promise<{ id: string; name: string }> }; serviceResource: { createMany: (a: { data: any[]; skipDuplicates?: boolean }) => Promise<unknown> } },
+  tenantId: string, templates: Tpl[], resourceIds: string[],
+) {
+  const byName = new Map<string, string>();
+  const created: { id: string; name: string }[] = [];
+  const ordered = [...templates.filter((t) => !t.combo), ...templates.filter((t) => t.combo)];
+  for (const [i, { combo, ...t }] of ordered.entries()) {
+    const comboOf = (combo ?? []).map((n) => byName.get(n)).filter((x): x is string => !!x);
+    const s = await tx.service.create({ data: { ...t, tenantId, sortOrder: i, ...(comboOf.length >= 2 ? { comboOf } : {}) } });
+    byName.set(s.name, s.id);
+    created.push(s);
+    if (resourceIds.length) await tx.serviceResource.createMany({ data: resourceIds.map((resourceId) => ({ tenantId, serviceId: s.id, resourceId })), skipDuplicates: true });
+  }
+  return created;
+}

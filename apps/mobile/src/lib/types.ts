@@ -17,7 +17,7 @@ export type Me = {
   industry?: { code: string; label: string; terms: Terms };
 };
 export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; schedule: Week; isActive: boolean; serviceIds: string[] };
-export type Service = { id: string; name: string; description: string | null; price: number; duration: number; bufferTime: number; isActive: boolean; isPublic: boolean; categoryId: string | null; resourceIds: string[] };
+export type Service = { id: string; name: string; description: string | null; price: number; duration: number; bufferTime: number; isActive: boolean; isPublic: boolean; categoryId: string | null; resourceIds: string[]; comboOf?: string[] };
 export type Customer = {
   id: string; name: string; phone: string; email: string | null; notes: string | null; tags: string[];
   totalVisits: number; totalSpent: number; lastVisitAt: string | null; marketingConsent: boolean; telegramChatId: string | null; maxUserId?: string | null; vkUserId?: string | null;
@@ -64,7 +64,7 @@ export type Analytics = {
 export type Today = {
   date: string;
   load: {
-    value: number; bookedMin: number; capacityMin: number; freeMin: number;
+    value: number; bookedMin: number; capacityMin: number; freeMin: number; dayOver: boolean;
     masters: { id: string; name: string; color: string; capacityMin: number; bookedMin: number; load: number; bookings: number; free: { from: string; to: string; minutes: number }[] }[];
   };
   revenue: {
