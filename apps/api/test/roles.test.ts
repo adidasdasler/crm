@@ -110,3 +110,30 @@ describe('роли и доступы', () => {
     expect((await s.api.get('/analytics/summary?from=2020-01-01&to=2026-01-01')).status).toBe(400);
   });
 });
+
+describe('карточки «Сегодня»', () => {
+  it('загрузка, ожидаемый доход и лучший мастер; мастеру недоступно', async () => {
+    const { DateTime } = await import('luxon');
+    const s = await createSalon('Today');
+    const day = DateTime.now().setZone('Europe/Moscow').startOf('day');
+    const c = await system.customer.create({ data: { tenantId: s.tenantId, name: 'Сегодняшний', phone: '+79993330001' } });
+    const at = (h: number) => day.set({ hour: h }).toJSDate();
+    await system.booking.create({ data: { tenantId: s.tenantId, customerId: c.id, resourceId: s.resourceId, startsAt: at(10), endsAt: at(12), blockedUntil: at(12), price: 300000, status: 'COMPLETED' } });
+    await system.booking.create({ data: { tenantId: s.tenantId, customerId: c.id, resourceId: s.resourceId, startsAt: at(18), endsAt: at(19), blockedUntil: at(19), price: 100000 } });
+    await system.booking.create({ data: { tenantId: s.tenantId, customerId: c.id, resourceId: s.resourceId, startsAt: at(15), endsAt: at(16), blockedUntil: at(16), price: 999900, status: 'CANCELLED' } });
+
+    const r = await s.api.get('/analytics/today');
+    expect(r.status).toBe(200);
+    const d = r.body.data;
+    expect(d.load).toMatchObject({ bookedMin: 180, capacityMin: 600 });
+    expect(d.load.value).toBeCloseTo(0.3);
+    expect(d.revenue).toMatchObject({ expected: 400000, done: 300000, bookings: 2 });
+    expect(d.revenue.list.map((b: any) => b.customer)).toEqual(['Сегодняшний', 'Сегодняшний']);
+    expect(d.topMaster.top).toMatchObject({ id: s.resourceId, amount: 400000, bookings: 2, share: 1 });
+
+    const m = await s.api.post('/resources', { name: 'Мастер' });
+    const inv = await s.api.post('/team', { email: `t-${Date.now()}@test.ru`, name: 'М', role: 'MASTER', resourceId: m.body.data.id });
+    const login = await api().post('/auth/login', { email: inv.body.data.user.email, password: inv.body.data.tempPassword });
+    expect((await api(login.body.data.accessToken).get('/analytics/today')).status).toBe(403);
+  });
+});

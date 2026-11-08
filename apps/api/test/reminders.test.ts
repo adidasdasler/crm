@@ -172,3 +172,58 @@ describe('напоминания и Telegram-бот', () => {
     expect(tomorrowDate()).toBeTruthy();
   });
 });
+
+describe('запись через мессенджеры', () => {
+  const { createHmac } = require('node:crypto') as typeof import('node:crypto');
+  /** Подписать initData так же, как это делает Telegram */
+  const initData = (userId: number, authDate = Math.floor(Date.now() / 1000), token = 'test-token') => {
+    const p = new URLSearchParams({ auth_date: String(authDate), query_id: 'AAE', user: JSON.stringify({ id: userId, first_name: 'Ира' }) });
+    const check = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join('\n');
+    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+    p.set('hash', createHmac('sha256', secret).update(check).digest('hex'));
+    return p.toString();
+  };
+
+  it('бот по ссылке s_<салон> присылает кнопку мини-приложения и ставит кнопку меню', async () => {
+    const s = await createSalon('BotEntry');
+    const links = (await s.api.get('/tenant/booking-links')).body.data;
+    expect(links.telegram).toBe(`https://t.me/salon_test_bot?start=s_${s.slug}`);
+    expect(links.max).toBe(`https://max.ru/mioflow_test_bot?start=s_${s.slug}`);
+    expect(links.vk).toBe(`https://vk.me/mioflow_test?ref=s_${s.slug}`);
+
+    clearOutbox();
+    await tgUpdate({ message: { chat: { id: 6060 }, text: `/start s_${s.slug}` } });
+    const msg = outbox.telegram.find((m) => m.method === 'sendMessage')!;
+    expect(msg.body.text).toContain('BotEntry');
+    expect(msg.body.reply_markup.inline_keyboard[0][0].web_app.url).toBe(`http://localhost:5173/b/${s.slug}?src=telegram`);
+    const menu = outbox.telegram.find((m) => m.method === 'setChatMenuButton')!;
+    expect(menu.body).toMatchObject({ chat_id: '6060', menu_button: { type: 'web_app', text: 'Записаться' } });
+
+    // MAX: та же ссылка обычной кнопкой
+    await maxUpdate({ update_type: 'bot_started', user: { user_id: 77 }, payload: `s_${s.slug}` });
+    const m = outbox.max.find((x) => x.path === '/messages?user_id=77')!;
+    expect(m.body.attachments[0].payload.buttons[0][0]).toMatchObject({ type: 'link', url: `http://localhost:5173/b/${s.slug}?src=max` });
+
+    await tgUpdate({ message: { chat: { id: 6061 }, text: '/start s_no-such-salon' } });
+    expect(outbox.telegram.filter((x) => x.method === 'sendMessage').at(-1)!.body.text).toContain('недоступна');
+  });
+
+  it('запись из мини-приложения Telegram сразу подключает напоминания; поддельная подпись игнорируется', async () => {
+    const s = await createSalon('MiniApp');
+    const startsAt = tomorrowAt('13:00', 2);
+    const body = { serviceIds: [s.serviceId], resourceId: null, startsAt, name: 'Ира', phone: '+79994440001', consent: true, ref: 'telegram' };
+    const r = await api().post(`/public/${s.slug}/book`, { ...body, tgInitData: initData(9001) });
+    expect(r.status).toBe(201);
+    expect(r.body.data.telegramLinked).toBe(true);
+    expect((await system.customer.findFirstOrThrow({ where: { phone: '+79994440001' } })).telegramChatId).toBe('9001');
+
+    const fake = initData(9002, undefined, 'wrong-token');
+    const r2 = await api().post(`/public/${s.slug}/book`, { ...body, startsAt: tomorrowAt('16:00', 2), phone: '+79994440002', tgInitData: fake });
+    expect(r2.body.data.telegramLinked).toBe(false);
+    expect((await system.customer.findFirstOrThrow({ where: { phone: '+79994440002' } })).telegramChatId).toBeNull();
+
+    const old = initData(9003, Math.floor(Date.now() / 1000) - 3 * 86400);
+    const r3 = await api().post(`/public/${s.slug}/book`, { ...body, startsAt: tomorrowAt('18:00', 2), phone: '+79994440003', tgInitData: old });
+    expect(r3.body.data.telegramLinked).toBe(false);
+  });
+});

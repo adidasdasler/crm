@@ -42,6 +42,8 @@ const bookSchema = z.object({
   website: z.string().max(0).optional(),
   /** Email для напоминаний (необязательно) — если клиент не пользуется мессенджерами */
   email: z.string().trim().toLowerCase().email('Некорректный email').max(200).optional().or(z.literal('').transform(() => undefined)),
+  /** Запись из мини-приложения Telegram: подписанные данные пользователя (WebApp initData) */
+  tgInitData: z.string().max(4096).optional(),
   /** Откуда пришёл клиент: yandex_maps, 2gis, vk, instagram, site, qr… (из ссылки ?src=) */
   ref: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,32}$/).optional().or(z.literal('').transform(() => undefined)),
 });
@@ -132,6 +134,8 @@ export class PublicController {
 
     // Клиент может записаться только в реально свободный слот (с учётом minLeadMin).
     const date = DateTime.fromJSDate(dto.startsAt, { zone: t.timezone }).toISODate()!;
+    // Мини-приложение Telegram: подпись проверена — напоминания сразу пойдут в этот чат, без лишних кнопок
+    const tgUser = dto.tgInitData ? telegram.verifyInitData(dto.tgInitData) : null;
 
     const booking = await this.prisma.withTenant(t.id, async (tx) => {
       const free = await this.bookings.slots(tx, t, { date, serviceIds: dto.serviceIds, resourceId: dto.resourceId, onlyPublic: true });
@@ -151,12 +155,16 @@ export class PublicController {
       }
       if (!customer) {
         customer = await tx.customer.create({
-          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent },
+          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent, telegramChatId: tgUser?.id },
         });
-      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email)) {
-        await tx.customer.update({
+      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email) || (tgUser && customer.telegramChatId !== tgUser.id)) {
+        customer = await tx.customer.update({
           where: { id: customer.id },
-          data: { ...(dto.marketingConsent ? { marketingConsent: true } : {}), ...(dto.email && !customer.email ? { email: dto.email } : {}) },
+          data: {
+            ...(dto.marketingConsent ? { marketingConsent: true } : {}),
+            ...(dto.email && !customer.email ? { email: dto.email } : {}),
+            ...(tgUser ? { telegramChatId: tgUser.id } : {}),
+          },
         });
       }
       const created = await this.bookings.create(tx, t, { tenantId: t.id }, {
@@ -200,6 +208,8 @@ export class PublicController {
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
       /** Кнопки «Получать напоминания в …» — только для подключённых у нас мессенджеров */
       messengers: messengerLinks(token),
+      /** Запись из мини-приложения Telegram — напоминания уже подключены */
+      telegramLinked: !!tgUser,
     };
   }
 

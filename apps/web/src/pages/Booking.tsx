@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Mark } from '../Logo';
+import { tg, tgFirstName, tgInitData } from '../lib/telegram';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
 
 type Hours = ({ day: string; from: string; to: string } | null)[];
@@ -13,7 +14,7 @@ type Service = { id: string; name: string; description: string | null; price: nu
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null } };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
 
 /** Источник перехода: ?src=yandex, ?src=2gis, ?src=vk… — салон видит в отчёте, откуда приходят клиенты */
 function readRef(): string | undefined {
@@ -50,6 +51,7 @@ export function BookingPage() {
         setCatalog(c);
         setDate(dateInTz(s.timezone));
         document.title = `Запись — ${s.name}`;
+        tg.ready();
       })
       .catch((e: ApiError) => setError(e.status === 404 ? 'Салон не найден' : e.message));
   }, [slug]);
@@ -198,7 +200,13 @@ export function BookingPage() {
           <p className="text-lg first-letter:uppercase">{fmtDate(booked.startsAt, tz)}, {fmtTime(booked.startsAt, tz)}</p>
           <p className="text-ink-muted">{booked.services.join(', ')} · мастер {booked.resource} · {rub(booked.price)}</p>
           {salon.address && <p className="text-ink-muted">{salon.address}</p>}
-          <Messengers booked={booked} />
+          {booked.telegramLinked ? (
+            <div className="space-y-3 rounded-3xl bg-brand-50 p-5">
+              <p className="font-semibold">Напомним здесь, в Telegram</p>
+              <p className="text-sm text-ink-muted">За сутки и за 2 часа — с кнопками «Подтвердить» и «Отменить».</p>
+              <button className="btn-primary w-full" onClick={() => tg.close()}>Готово</button>
+            </div>
+          ) : <Messengers booked={booked} />}
           <p className="text-sm text-ink-muted">По этой ссылке можно подтвердить или отменить запись:</p>
           <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
         </section>
@@ -216,7 +224,7 @@ function Contacts(props: {
   onDone: (b: Booked) => void;
   onTaken: () => void;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => tgFirstName() ?? '');
   const [phone, setPhone] = useState('+7 ');
   const [email, setEmail] = useState('');
   const [comment, setComment] = useState('');
@@ -232,7 +240,7 @@ function Contacts(props: {
     try {
       const b = await api<Booked>(`/public/${props.slug}/book`, {
         method: 'POST',
-        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef(), comment: comment || undefined, consent, website: website || undefined }),
+        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef() ?? (tgInitData() ? 'telegram' : undefined), tgInitData: tgInitData() ?? undefined, comment: comment || undefined, consent, website: website || undefined }),
       });
       props.onDone(b);
     } catch (e) {

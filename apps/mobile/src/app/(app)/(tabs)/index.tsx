@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { F, Text } from '../../../components/Text';
 import { SubscriptionBanner } from '../../../components/SubscriptionBanner';
@@ -11,8 +11,16 @@ import { can, useMe } from '../../../lib/auth';
 import { addDays, dayLabel, dayTitle, rub, STATUS, time, today } from '../../../lib/format';
 import type { Booking, Resource } from '../../../lib/types';
 
+/** Владелец при запуске приложения сразу попадает на «Сегодня» (один раз за запуск) */
+let startRedirectDone = false;
+
 export default function Calendar() {
   const me = useMe();
+  useEffect(() => {
+    if (startRedirectDone) return;
+    startRedirectDone = true;
+    if (can(me, 'analytics.view')) router.navigate('/dashboard');
+  }, [me]);
   const tz = me.tenant.timezone;
   const [day, setDay] = useState(today(tz));
   const [resourceId, setResourceId] = useState<string | null>(null);

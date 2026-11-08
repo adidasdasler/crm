@@ -9,7 +9,8 @@ import { InlineButton, telegram } from './telegram';
 
 export type ChannelName = 'TELEGRAM' | 'MAX' | 'VK' | 'EMAIL';
 /** data — действие кнопки («c:<id>» подтвердить, «x:<id>» отменить); url — ссылка */
-export type Button = { text: string; data?: string; url?: string };
+/** webApp — в Telegram открыть ссылку как мини-приложение (в остальных каналах это обычная ссылка) */
+export type Button = { text: string; data?: string; url?: string; webApp?: boolean };
 export type SendResult = { ok: boolean; error?: string; /** получатель запретил сообщения — канал отвязать */ blocked?: boolean };
 export type Channel = { name: ChannelName; enabled: () => boolean; send: (to: string, html: string, buttons?: Button[][], subject?: string) => Promise<SendResult> };
 
@@ -17,11 +18,14 @@ export const stripHtml = (html: string) =>
   html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 // ─── Telegram ───
+export const toTelegramButtons = (buttons?: Button[][]): InlineButton[][] | undefined =>
+  buttons?.map((row) => row.map((b): InlineButton => (b.url && b.webApp ? { text: b.text, web_app: { url: b.url } } : b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.data })));
+
 const tgChannel: Channel = {
   name: 'TELEGRAM',
   enabled: () => telegram.enabled,
   send: (to, html, buttons) =>
-    telegram.send(to, html, buttons?.map((row) => row.map((b): InlineButton => (b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.data })))),
+    telegram.send(to, html, toTelegramButtons(buttons)),
 };
 
 // ─── MAX (https://dev.max.ru/docs-api): POST /messages?user_id=…, токен в заголовке Authorization ───

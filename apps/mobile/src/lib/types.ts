@@ -60,3 +60,20 @@ export type Analytics = {
   masters: { id: string; name: string; color: string; bookings: number; amount: number; bookedMin: number; capacityMin: number; load: number }[];
   services: { name: string; count: number; amount: number }[];
 };
+
+export type Today = {
+  date: string;
+  load: {
+    value: number; bookedMin: number; capacityMin: number; freeMin: number;
+    masters: { id: string; name: string; color: string; capacityMin: number; bookedMin: number; load: number; bookings: number; free: { from: string; to: string; minutes: number }[] }[];
+  };
+  revenue: {
+    expected: number; done: number; bookings: number;
+    list: { id: string; startsAt: string; price: number; status: BookingStatus; customer: string; services: string[]; master: string }[];
+  };
+  topMaster: {
+    period: string;
+    top: { id: string; name: string; color: string; amount: number; bookings: number; share: number; avgCheck: number } | null;
+    ranking: { id: string; name: string; color: string; amount: number; bookings: number; share: number; avgCheck: number }[];
+  };
+};

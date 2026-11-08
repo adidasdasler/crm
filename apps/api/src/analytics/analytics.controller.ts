@@ -134,4 +134,92 @@ export class AnalyticsController {
       };
     });
   }
+
+  /**
+   * Три карточки «на сегодня» — первый экран владельца:
+   * загрузка, ожидаемый доход, самый прибыльный мастер (за 7 дней). Внутри — детали для раскрытия.
+   */
+  @Can('analytics.view')
+  @Get('today')
+  today(@Auth() a: AuthCtx) {
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const { timezone: tz } = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { timezone: true } });
+      const day = DateTime.now().setZone(tz).startOf('day');
+      const date = day.toISODate()!;
+      const start = day.toJSDate();
+      const end = day.plus({ days: 1 }).toJSDate();
+      const weekStart = day.minus({ days: 6 }).toJSDate();
+      const [resources, todays, week] = await Promise.all([
+        tx.resource.findMany({ where: { deletedAt: null, isActive: true }, select: { id: true, name: true, color: true, schedule: true }, orderBy: { sortOrder: 'asc' } }),
+        tx.booking.findMany({
+          where: { startsAt: { gte: start, lt: end }, status: { in: ACTIVE as never } },
+          orderBy: { startsAt: 'asc' },
+          select: {
+            id: true, startsAt: true, endsAt: true, price: true, status: true, resourceId: true,
+            customer: { select: { name: true } }, items: { select: { name: true }, orderBy: { sortOrder: 'asc' } },
+          },
+        }),
+        tx.booking.findMany({ where: { startsAt: { gte: weekStart, lt: end }, status: { in: ACTIVE as never } }, select: { resourceId: true, price: true, status: true } }),
+      ]);
+      const now = Date.now();
+      const MIN = 60_000;
+
+      const masters = resources.map((r) => {
+        const work = workIntervals(r.schedule as WeekSchedule, date, tz);
+        const mine = todays.filter((b) => b.resourceId === r.id);
+        const capacity = work.reduce((s, w) => s + (w.end - w.start) / MIN, 0);
+        const booked = mine.reduce((s, b) => s + (+b.endsAt - +b.startsAt) / MIN, 0);
+        // Свободные окна от 30 минут, которые ещё не прошли — их можно «продать» сегодня
+        const free: { from: string; to: string; minutes: number }[] = [];
+        for (const w of work) {
+          let cur = Math.max(w.start, now);
+          for (const b of mine) {
+            const bs = +b.startsAt, be = +b.endsAt;
+            if (be <= cur || bs >= w.end) continue;
+            if (bs - cur >= 30 * MIN) free.push(slot(cur, bs, tz));
+            cur = Math.max(cur, be);
+          }
+          if (w.end - cur >= 30 * MIN) free.push(slot(cur, w.end, tz));
+        }
+        return { id: r.id, name: r.name, color: r.color, capacityMin: Math.round(capacity), bookedMin: Math.round(booked), load: capacity ? Math.min(1, booked / capacity) : 0, bookings: mine.length, free };
+      });
+      const capacityMin = masters.reduce((s, m) => s + m.capacityMin, 0);
+      const bookedMin = masters.reduce((s, m) => s + m.bookedMin, 0);
+
+      const byMaster = new Map<string, { amount: number; bookings: number }>();
+      for (const b of week) {
+        const m = byMaster.get(b.resourceId) ?? { amount: 0, bookings: 0 };
+        m.amount += b.price;
+        m.bookings += 1;
+        byMaster.set(b.resourceId, m);
+      }
+      const weekTotal = week.reduce((s, b) => s + b.price, 0);
+      const ranking = resources
+        .map((r) => ({ id: r.id, name: r.name, color: r.color, ...(byMaster.get(r.id) ?? { amount: 0, bookings: 0 }) }))
+        .map((r) => ({ ...r, share: weekTotal ? r.amount / weekTotal : 0, avgCheck: r.bookings ? Math.round(r.amount / r.bookings) : 0 }))
+        .sort((x, y) => y.amount - x.amount);
+
+      const names = new Map(resources.map((r) => [r.id, r.name]));
+      return {
+        date,
+        load: { value: capacityMin ? bookedMin / capacityMin : 0, bookedMin, capacityMin, masters, freeMin: masters.reduce((s, m) => s + m.free.reduce((x, f) => x + f.minutes, 0), 0) },
+        revenue: {
+          expected: todays.reduce((s, b) => s + b.price, 0),
+          done: todays.filter((b) => b.status === 'COMPLETED').reduce((s, b) => s + b.price, 0),
+          bookings: todays.length,
+          list: todays.map((b) => ({
+            id: b.id, startsAt: b.startsAt, price: b.price, status: b.status, customer: b.customer.name,
+            services: b.items.map((i) => i.name), master: names.get(b.resourceId) ?? '',
+          })),
+        },
+        topMaster: { period: '7d', top: ranking[0] && ranking[0].amount > 0 ? ranking[0] : null, ranking },
+      };
+    });
+  }
 }
+
+const slot = (from: number, to: number, tz: string) => ({
+  from: DateTime.fromMillis(from).setZone(tz).toFormat('HH:mm'),
+  to: DateTime.fromMillis(to).setZone(tz).toFormat('HH:mm'),
+  minutes: Math.round((to - from) / 60_000),
+});

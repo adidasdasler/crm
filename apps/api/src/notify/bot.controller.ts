@@ -5,9 +5,9 @@ import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
-import { Button } from './channels';
+import { toTelegramButtons } from './channels';
 import { ClientBotService } from './client-bot.service';
-import { esc, InlineButton, telegram } from './telegram';
+import { esc, telegram } from './telegram';
 
 type TgUpdate = {
   update_id: number;
@@ -72,6 +72,8 @@ export class BotController {
 
     const reply = await this.clientBot.linkCustomer('TELEGRAM', chatId, payload);
     await telegram.send(chatId, reply.text, toTg(reply.buttons));
+    // Кнопка «Записаться» в меню чата — клиент вернётся к записи в этот салон в одно касание
+    if (reply.bookingUrl) await telegram.setMenuButton(chatId, 'Записаться', reply.bookingUrl);
   }
 
   private async onCallback(q: NonNullable<TgUpdate['callback_query']>) {
@@ -84,5 +86,4 @@ export class BotController {
 }
 
 /** Кнопки общего формата → кнопки Telegram */
-const toTg = (buttons?: Button[][]): InlineButton[][] | undefined =>
-  buttons?.map((row) => row.map((b) => (b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.data })));
+const toTg = toTelegramButtons;

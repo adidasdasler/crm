@@ -1,4 +1,7 @@
 import { industry } from '../common/industries';
+import { env } from '../config';
+import { max, vk } from '../notify/channels';
+import { telegram } from '../notify/telegram';
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
@@ -125,6 +128,19 @@ export class TenantsController {
       // Роль в уже выданном access-токене обновится при следующем refresh (до 15 минут)
       return upd;
     });
+  }
+
+  /** Ссылки для записи через мессенджеры: салон ставит их в свой канал, группу, профиль */
+  @Get('tenant/booking-links')
+  async bookingLinks(@Auth() a: AuthCtx) {
+    const t = await this.prisma.app.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } });
+    const payload = `s_${t.slug}`;
+    return {
+      web: `${env.PUBLIC_WEB_URL}/b/${t.slug}`,
+      telegram: telegram.enabled ? telegram.deepLink(payload) : null,
+      max: max.enabled ? max.deepLink(payload) : null,
+      vk: vk.enabled ? vk.deepLink(payload) : null,
+    };
   }
 
   // ─── Роли и доступы ───

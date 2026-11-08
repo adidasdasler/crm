@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { ComponentProps, useState } from 'react';
 import { Image, Linking, Platform, Pressable, Share, View } from 'react-native';
 import { F, Text } from '../../components/Text';
 import { Button, C, Card, Chip, H, Muted, Screen } from '../../components/ui';
-import { API_URL, PUBLIC_WEB_URL } from '../../lib/api';
+import { API_URL, get, PUBLIC_WEB_URL } from '../../lib/api';
 import { useMe } from '../../lib/auth';
 
 type Place = {
@@ -43,6 +44,7 @@ const PLACES: Place[] = [
 export default function Maps() {
   const me = useMe();
   const [src, setSrc] = useState('yandex');
+  const bots = useQuery({ queryKey: ['booking-links'], queryFn: () => get<{ web: string; telegram: string | null; max: string | null; vk: string | null }>('/tenant/booking-links') });
   const place = PLACES.find((p) => p.src === src)!;
   const link = `${PUBLIC_WEB_URL}/b/${me.tenant.slug}?src=${src}`;
   // В вебе API_URL относительный (/v1 на том же домене), в приложении — полный адрес
@@ -98,6 +100,35 @@ export default function Maps() {
         <Image source={{ uri: qr }} style={{ width: 200, height: 200 }} accessibilityLabel="QR-код ссылки на запись" />
         <Muted>QR ведёт на запись с меткой «{place.title}»</Muted>
         <Pressable onPress={() => Linking.openURL(qrPrint)}><Text style={{ color: C.brand, fontWeight: '600' }}>Открыть для печати</Text></Pressable>
+      </Card>
+
+      <Card>
+        <Text style={{ fontSize: 18, fontWeight: '700' }}>Запись прямо в мессенджере</Text>
+        <Muted>Для тех, кто не хочет ставить приложение и звонить. Клиент открывает ссылку — бот присылает кнопку «Записаться», запись открывается внутри мессенджера, а напоминания приходят туда же.</Muted>
+        {[
+          { key: 'telegram', label: 'Telegram', color: '#229ED9', icon: 'paper-plane' as const },
+          { key: 'max', label: 'MAX', color: '#7A3BFF', icon: 'chatbubble-ellipses' as const },
+          { key: 'vk', label: 'ВКонтакте', color: '#0077FF', icon: 'logo-vk' as const },
+        ].map((m) => {
+          const url = bots.data?.[m.key as 'telegram' | 'max' | 'vk'];
+          return (
+            <View key={m.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: m.color, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={m.icon} size={16} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '600' }}>{m.label}</Text>
+                {url ? <Text style={{ color: C.brandDark, fontSize: 13 }} selectable numberOfLines={1}>{url}</Text> : <Muted>Бот подключается после настройки домена</Muted>}
+              </View>
+              {url && (
+                <Pressable onPress={() => (Platform.OS === 'web' ? navigator.clipboard?.writeText(url).then(() => alert('Ссылка скопирована')) : Share.share({ message: url }))} accessibilityRole="button" accessibilityLabel={`Скопировать ссылку ${m.label}`}>
+                  <Ionicons name="copy-outline" size={20} color={C.brand} />
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+        <Muted>Поставьте ссылку в описание канала, группы или в закреплённое сообщение.</Muted>
       </Card>
 
       <Muted>Сколько клиентов пришло с каждой площадки — в разделе «Обзор» → «Откуда клиенты».</Muted>

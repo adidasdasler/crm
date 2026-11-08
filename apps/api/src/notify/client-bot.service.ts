@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { env } from '../config';
 import { BookingsService } from '../bookings/bookings.service';
 import { sha256 } from '../common/crypto';
 import { manageUrl } from '../common/manage-token';
@@ -15,7 +16,7 @@ export const STATUS_TEXT: Record<string, string> = {
 };
 const CHANNEL_NAME: Record<ChannelName, string> = { TELEGRAM: 'Telegram', MAX: 'MAX', VK: 'ВКонтакте', EMAIL: 'email' };
 
-export type BotReply = { text: string; buttons?: Button[][] };
+export type BotReply = { text: string; buttons?: Button[][]; /** ссылка на запись в салон (для кнопки меню Telegram) */ bookingUrl?: string };
 
 /**
  * Общая логика клиентских ботов (Telegram, MAX, ВКонтакте):
@@ -28,8 +29,10 @@ export class ClientBotService {
   /** Клиент перешёл по ссылке «Получать напоминания» (payload b_<токен записи>). */
   async linkCustomer(channel: ChannelName, externalId: string, payload: string): Promise<BotReply> {
     const db = this.prisma.system;
+    // s_<адрес салона> — запись в салон прямо из мессенджера (ссылку салон ставит в свой канал, группу, Карты)
+    if (payload.startsWith('s_')) return this.salonEntry(channel, payload.slice(2));
     if (!payload.startsWith('b_')) {
-      return { text: 'Здравствуйте! Это MioFlow — напоминания о записи к мастеру. Чтобы подключить их, нажмите кнопку мессенджера после онлайн-записи.' };
+      return { text: 'Здравствуйте! Это MioFlow — онлайн-запись к мастеру и напоминания о визите. Откройте ссылку на запись от вашего салона или нажмите кнопку мессенджера после записи на сайте.' };
     }
     const b = await db.booking.findUnique({
       where: { manageTokenHash: sha256(payload.slice(2)) },
@@ -46,6 +49,19 @@ export class ClientBotService {
     return {
       text: `${body}\n\nГотово! Напомним о визите за сутки и за 2 часа. Отменить или подтвердить можно кнопками ниже.`,
       buttons: ['SCHEDULED', 'CONFIRMED'].includes(b.status) ? bookingButtons(b.id, b.status, url) : undefined,
+    };
+  }
+
+  private async salonEntry(channel: ChannelName, slug: string): Promise<BotReply> {
+    if (!/^[a-z0-9-]{3,32}$/.test(slug)) return { text: 'Салон не найден. Проверьте ссылку.' };
+    const t = await this.prisma.system.tenant.findFirst({ where: { slug, deletedAt: null } });
+    if (!t || !readSettings(t.settings).onlineBookingEnabled) return { text: 'Онлайн-запись в этот салон сейчас недоступна.' };
+    const url = `${env.PUBLIC_WEB_URL}/b/${t.slug}?src=${channel.toLowerCase()}`;
+    const lines = [`<b>${esc(t.name)}</b>`, t.address ? `📍 ${esc(t.address)}` : '', '', 'Выберите услугу, мастера и удобное время — запись займёт минуту. Напоминание о визите придёт сюда же.'];
+    return {
+      text: lines.filter((l, i) => l || i === 2).join('\n'),
+      buttons: [[{ text: '📅 Записаться онлайн', url, webApp: true }]],
+      bookingUrl: channel === 'TELEGRAM' ? url : undefined,
     };
   }
 
