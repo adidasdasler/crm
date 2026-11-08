@@ -308,6 +308,7 @@ model Service {
   category  ServiceCategory?  @relation(fields: [categoryId], references: [id])
   resources ServiceResource[]
   items     BookingItem[]
+  materials ServiceMaterial[]
 
   @@index([tenantId])
 }
@@ -444,4 +445,85 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, entityType, entityId])
+}
+
+enum StockMovementType {
+  RECEIPT
+  SERVICE
+  WRITE_OFF
+  ADJUST
+  RETURN
+}
+
+/// Материал на складе. Количества — в тысячных долях единицы (1 мл = 1000).
+model Material {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  name        String
+  unit        String    @default("шт")
+  category    String?
+  stock       Int       @default(0)
+  minStock    Int       @default(0)
+  /// Последняя цена закупки за единицу, копейки
+  lastCost    Int       @default(0)
+  trackExpiry Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  batches   MaterialBatch[]
+  movements StockMovement[]
+  services  ServiceMaterial[]
+
+  @@index([tenantId])
+}
+
+model MaterialBatch {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  materialId  String    @db.Uuid
+  qty         Int
+  remaining   Int
+  costPerUnit Int       @default(0)
+  expiresAt   DateTime? @db.Date
+  receivedAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  material  Material        @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  movements StockMovement[]
+
+  @@index([tenantId, materialId, expiresAt], map: "MaterialBatch_material_idx")
+}
+
+model StockMovement {
+  id          String            @id @default(uuid()) @db.Uuid
+  tenantId    String            @db.Uuid
+  materialId  String            @db.Uuid
+  batchId     String?           @db.Uuid
+  type        StockMovementType
+  qty         Int
+  costPerUnit Int               @default(0)
+  bookingId   String?           @db.Uuid
+  userId      String?           @db.Uuid
+  note        String?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+
+  material Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  batch    MaterialBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, materialId, createdAt], map: "StockMovement_material_idx")
+  @@index([bookingId], map: "StockMovement_booking_idx")
+}
+
+model ServiceMaterial {
+  tenantId   String @db.Uuid
+  serviceId  String @db.Uuid
+  materialId String @db.Uuid
+  qty        Int
+
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, materialId])
+  @@index([tenantId])
 }

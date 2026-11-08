@@ -4,7 +4,7 @@ export type Week = Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', [stri
 
 export type Perm =
   | 'bookings.all' | 'customers.view' | 'customers.contacts' | 'customers.export' | 'catalog.manage'
-  | 'staff.manage' | 'team.manage' | 'settings.manage' | 'analytics.view';
+  | 'staff.manage' | 'stock.manage' | 'team.manage' | 'settings.manage' | 'analytics.view';
 
 export type Me = {
   user: { id: string; email: string; name: string };
@@ -52,7 +52,7 @@ export type Analytics = {
   period: { from: string; to: string; days: number };
   totals: {
     revenue: number; booked: number; bookings: number; completed: number; cancelled: number; noShow: number; noShowRate: number;
-    avgCheck: number; onlineShare: number; newCustomers: number; load: number;
+    avgCheck: number; onlineShare: number; newCustomers: number; load: number; materialCost: number;
   };
   previous: { booked: number; bookings: number };
   byDay: { date: string; revenue: number; bookings: number }[];
@@ -76,4 +76,18 @@ export type Today = {
     top: { id: string; name: string; color: string; amount: number; bookings: number; share: number; avgCheck: number } | null;
     ranking: { id: string; name: string; color: string; amount: number; bookings: number; share: number; avgCheck: number }[];
   };
+};
+
+export type Material = {
+  id: string; name: string; unit: string; category: string | null; trackExpiry: boolean; isActive: boolean;
+  stock: number; minStock: number; price: number; value: number; low: boolean; nearestExpiry?: string | null;
+};
+export type MaterialDetail = Material & {
+  batches: { id: string; qty: number; remaining: number; price: number; expiresAt: string | null; receivedAt: string }[];
+  movements: { id: string; type: string; label: string; qty: number; price: number; bookingId: string | null; note: string | null; createdAt: string }[];
+  norms: { serviceId: string; service: string; qty: number }[];
+};
+export type StockAlerts = {
+  low: { materialId: string; name: string; unit: string; stock: number; minStock: number }[];
+  expiring: { batchId: string; materialId: string; name: string; unit: string; remaining: number; expiresAt: string; expired: boolean; daysLeft: number }[];
 };

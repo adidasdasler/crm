@@ -47,9 +47,30 @@ async function seedDemo() {
     { name: 'Коррекция и окрашивание бровей', price: 140000, duration: 45, bufferTime: 0, r: [olga] },
     { name: 'Ламинирование ресниц', price: 250000, duration: 75, bufferTime: 15, r: [olga] },
   ];
+  const svcIds: Record<string, string> = {};
   for (const { r, ...s } of services) {
     const svc = await db.service.create({ data: { ...s, tenantId: t.id } });
+    svcIds[s.name] = svc.id;
     await db.serviceResource.createMany({ data: r.map((x) => ({ tenantId: t.id, serviceId: svc.id, resourceId: x.id })) });
+  }
+  // Склад: материалы с партиями и нормами расхода (количества — в тысячных долях единицы)
+  const day = (n: number) => new Date(Date.now() + n * 86400_000);
+  const stock = [
+    { name: 'Гель-лак', unit: 'мл', category: 'Покрытия', minStock: 30, trackExpiry: true, batches: [[20, 90000, 12], [30, 85000, 240]], norms: { 'Маникюр с покрытием': 500 } },
+    { name: 'Пилки одноразовые', unit: 'шт', category: 'Расходники', minStock: 50, trackExpiry: false, batches: [[40, 600, null]], norms: { 'Маникюр с покрытием': 1000, 'Маникюр без покрытия': 1000 } },
+    { name: 'Краска для бровей', unit: 'мл', category: 'Брови', minStock: 20, trackExpiry: true, batches: [[60, 4000, 150]], norms: { 'Коррекция и окрашивание бровей': 1000 } },
+    { name: 'Состав для ламинирования (саше)', unit: 'шт', category: 'Ресницы', minStock: 10, trackExpiry: true, batches: [[24, 35000, 90]], norms: { 'Ламинирование ресниц': 1000 } },
+  ] as const;
+  for (const m of stock) {
+    const total = m.batches.reduce((a, [q]) => a + q * 1000, 0);
+    const mat = await db.material.create({
+      data: { tenantId: t.id, name: m.name, unit: m.unit, category: m.category, minStock: m.minStock * 1000, trackExpiry: m.trackExpiry, stock: total, lastCost: m.batches[0][1] },
+    });
+    for (const [q, cost, exp] of m.batches) {
+      const b = await db.materialBatch.create({ data: { tenantId: t.id, materialId: mat.id, qty: q * 1000, remaining: q * 1000, costPerUnit: cost, expiresAt: exp ? day(exp) : null } });
+      await db.stockMovement.create({ data: { tenantId: t.id, materialId: mat.id, batchId: b.id, type: 'RECEIPT', qty: q * 1000, costPerUnit: cost, note: 'демо-приход' } });
+    }
+    for (const [svc, q] of Object.entries(m.norms)) await db.serviceMaterial.create({ data: { tenantId: t.id, serviceId: svcIds[svc], materialId: mat.id, qty: q } });
   }
   await db.customer.createMany({
     data: [

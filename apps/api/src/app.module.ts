@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountController } from './auth/account.controller';
 import { AnalyticsController } from './analytics/analytics.controller';
+import { StockController } from './stock/stock.controller';
 import { MiniSiteController } from './public/minisite.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -40,7 +41,7 @@ class HealthController {
       skipIf: () => process.env.NODE_ENV === 'test',
     }),
   ],
-  controllers: [AnalyticsController, MiniSiteController, 
+  controllers: [AnalyticsController, StockController, MiniSiteController, 
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
     CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController, MessengersController,
   ],

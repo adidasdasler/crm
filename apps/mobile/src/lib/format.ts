@@ -58,3 +58,8 @@ export const phonePretty = (p: string) => {
   const m = p.match(/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/);
   return m ? `+7 ${m[1]} ${m[2]}-${m[3]}-${m[4]}` : p;
 };
+
+/** Количество со знаком единицы: «0,5 мл», «12 шт» */
+export const qtyText = (n: number, unit: string) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ${unit}`;
+/** «2027-12-31» → «31 декабря 2027 г.» */
+export const dateRu = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });

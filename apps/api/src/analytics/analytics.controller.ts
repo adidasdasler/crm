@@ -43,7 +43,7 @@ export class AnalyticsController {
       const end = to.plus({ days: 1 }).startOf('day').toJSDate();
       const prevStart = from.minus({ days }).startOf('day').toJSDate();
 
-      const [bookings, prev, resources, newCustomers] = await Promise.all([
+      const [bookings, prev, resources, newCustomers, used] = await Promise.all([
         tx.booking.findMany({
           where: { startsAt: { gte: start, lt: end } },
           select: {
@@ -54,7 +54,10 @@ export class AnalyticsController {
         tx.booking.findMany({ where: { startsAt: { gte: prevStart, lt: start } }, select: { status: true, price: true } }),
         tx.resource.findMany({ where: { deletedAt: null, isActive: true }, select: { id: true, name: true, color: true, schedule: true }, orderBy: { sortOrder: 'asc' } }),
         tx.customer.count({ where: { deletedAt: null, createdAt: { gte: start, lt: end } } }),
+        // Материалы, израсходованные на визиты за период (по цене партии)
+        tx.stockMovement.findMany({ where: { type: { in: ['SERVICE', 'RETURN'] }, createdAt: { gte: start, lt: end } }, select: { qty: true, costPerUnit: true } }),
       ]);
+      const materialCost = Math.max(0, -Math.round(used.reduce((s, m) => s + (m.qty / 1000) * m.costPerUnit, 0)));
 
       const active = bookings.filter((b) => ACTIVE.includes(b.status));
       const completed = bookings.filter((b) => b.status === 'COMPLETED');
@@ -121,6 +124,7 @@ export class AnalyticsController {
           avgCheck: active.length ? Math.round(sum(active) / active.length) : 0,
           onlineShare: active.length ? online / active.length : 0,
           newCustomers,
+          materialCost,
           load: masters.reduce((s, m) => s + m.capacityMin, 0) ? masters.reduce((s, m) => s + m.bookedMin, 0) / masters.reduce((s, m) => s + m.capacityMin, 0) : 0,
         },
         previous: {

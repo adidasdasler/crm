@@ -149,6 +149,10 @@ export async function purgeDeletedTenants(db: import('@prisma/client').PrismaCli
   const old = await db.tenant.findMany({ where: { deletedAt: { lt: new Date(+now - 30 * 86400_000) }, NOT: { slug: { startsWith: 'deleted-' } } }, select: { id: true } });
   for (const { id: tenantId } of old) {
     await db.$transaction([
+      db.stockMovement.deleteMany({ where: { tenantId } }),
+      db.serviceMaterial.deleteMany({ where: { tenantId } }),
+      db.materialBatch.deleteMany({ where: { tenantId } }),
+      db.material.deleteMany({ where: { tenantId } }),
       db.reminder.deleteMany({ where: { tenantId } }),
       db.bookingItem.deleteMany({ where: { tenantId } }),
       db.booking.deleteMany({ where: { tenantId } }),

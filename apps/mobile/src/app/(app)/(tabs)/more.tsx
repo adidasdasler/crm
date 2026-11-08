@@ -5,7 +5,10 @@ import { F, Text } from '../../../components/Text';
 import { Button, C, Card, Muted, Row, Screen } from '../../../components/ui';
 import { API_URL, del, get, post, PUBLIC_WEB_URL, tokens } from '../../../lib/api';
 import { can, useAuth, useMe, useTerms } from '../../../lib/auth';
-import type { Subscription } from '../../../lib/types';
+import type { StockAlerts, Subscription } from '../../../lib/types';
+
+const stockHint = (a: StockAlerts) =>
+  [a.low.length && `заканчивается: ${a.low.length}`, a.expiring.length && `срок годности: ${a.expiring.length}`].filter(Boolean).join(' · ') || 'Всё в порядке';
 
 const SUB_STATUS: Record<string, string> = { TRIAL: 'Пробный период', ACTIVE: 'Активна', PAST_DUE: 'Ожидает оплаты', CANCELLED: 'Отменена', EXPIRED: 'Истекла' };
 
@@ -15,6 +18,7 @@ export default function More() {
   const qc = useQueryClient();
   const isOwner = me.role === 'OWNER';
   const terms = useTerms();
+  const stockAlerts = useQuery({ queryKey: ['stock', 'alerts'], queryFn: () => get<StockAlerts>('/stock/alerts'), enabled: can(me, 'stock.manage') });
   const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription') });
   const toggleTelegram = async () => {
     try {
@@ -80,6 +84,7 @@ export default function More() {
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
         {can(me, 'staff.manage') && <Row icon="cut-outline" title={`${terms.staffPlural} и графики`} onPress={() => router.push('/masters')} />}
+        {can(me, 'stock.manage') && <Row icon="cube-outline" title="Склад" subtitle={stockAlerts.data ? stockHint(stockAlerts.data) : 'Материалы, приход, остатки'} onPress={() => router.push('/stock')} />}
         {can(me, 'team.manage') && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
         {isOwner && <Row icon="shield-checkmark-outline" title="Роли и доступы" subtitle="Кто что видит: записи, клиенты, отчёты" onPress={() => router.push('/roles')} />}
         {can(me, 'settings.manage') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}

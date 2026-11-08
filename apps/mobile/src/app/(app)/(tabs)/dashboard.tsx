@@ -72,6 +72,7 @@ export default function Dashboard() {
             <Kpi icon="wallet-outline" label="Средний чек" value={rub(d.totals.avgCheck)} wide={wide} />
             <Kpi icon="speedometer-outline" label="Загрузка мастеров" value={pct(d.totals.load)} hint="занятое время / по графику" wide={wide} />
             <Kpi icon="person-add-outline" label="Новых клиентов" value={String(d.totals.newCustomers)} wide={wide} />
+            {d.totals.materialCost > 0 && <Kpi icon="cube-outline" label="Материалы" value={rub(d.totals.materialCost)} hint={`${pct(d.totals.revenue ? d.totals.materialCost / d.totals.revenue : 0)} от оплаченного`} wide={wide} />}
             <Kpi icon="close-circle-outline" label="Не пришли" value={pct(d.totals.noShowRate)} hint={`отмен: ${d.totals.cancelled}`} wide={wide} tone={d.totals.noShowRate > 0.1 ? 'bad' : undefined} />
           </View>
 

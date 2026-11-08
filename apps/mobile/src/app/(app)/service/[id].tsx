@@ -1,10 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { TextInput } from 'react-native';
+import { Text } from '../../../components/Text';
+import { can, useMe } from '../../../lib/auth';
 import { Alert, Platform, View } from 'react-native';
-import { Button, Chip, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../../components/ui';
-import { del, get, patch, post } from '../../../lib/api';
-import type { Resource, Service } from '../../../lib/types';
+import { Button, C, Chip, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../../components/ui';
+import { del, get, patch, post, put } from '../../../lib/api';
+import type { Material, Resource, Service } from '../../../lib/types';
+
+type Norm = { materialId: string; name: string; unit: string; qty: string };
 
 export default function ServiceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,6 +18,12 @@ export default function ServiceScreen() {
   const services = useQuery({ queryKey: ['services'], queryFn: () => get<Service[]>('/services') });
   const resources = useQuery({ queryKey: ['resources'], queryFn: () => get<Resource[]>('/resources') });
   const existing = services.data?.find((s) => s.id === id);
+  const me = useMe();
+  const stockOn = can(me, 'stock.manage') || can(me, 'catalog.manage');
+  const materials = useQuery({ queryKey: ['stock', 'materials'], queryFn: () => get<Material[]>('/stock/materials'), enabled: stockOn });
+  const normsQ = useQuery({ queryKey: ['stock', 'norms', id], queryFn: () => get<{ materialId: string; name: string; unit: string; qty: number }[]>(`/stock/norms/${id}`), enabled: stockOn && !isNew });
+  const [norms, setNorms] = useState<Norm[] | null>(null);
+  useEffect(() => { if (normsQ.data && norms === null) setNorms(normsQ.data.map((n) => ({ ...n, qty: String(n.qty) }))); }, [normsQ.data, norms]);
   const [f, setF] = useState({ name: '', description: '', price: '', duration: '60', bufferTime: '0', isActive: true, isPublic: true, resourceIds: [] as string[], comboOf: [] as string[] });
 
   useEffect(() => {
@@ -26,12 +37,17 @@ export default function ServiceScreen() {
 
   const done = () => { qc.invalidateQueries({ queryKey: ['services'] }); qc.invalidateQueries({ queryKey: ['resources'] }); router.back(); };
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const body = {
         name: f.name, description: f.description || null, price: Math.round(parseFloat(f.price.replace(',', '.') || '0') * 100),
         duration: parseInt(f.duration, 10), bufferTime: parseInt(f.bufferTime || '0', 10), isActive: f.isActive, isPublic: f.isPublic, resourceIds: f.resourceIds, comboOf: f.comboOf,
       };
-      return isNew ? post('/services', body) : patch(`/services/${id}`, body);
+      const saved = await (isNew ? post<Service>('/services', body) : patch<Service>(`/services/${id}`, body));
+      if (norms) {
+        await put(`/stock/norms/${saved.id}`, { items: norms.filter((n) => parseFloat(n.qty.replace(',', '.')) > 0).map((n) => ({ materialId: n.materialId, qty: parseFloat(n.qty.replace(',', '.')) })) });
+        qc.invalidateQueries({ queryKey: ['stock'] });
+      }
+      return saved;
     },
     onSuccess: done,
   });
@@ -68,6 +84,32 @@ export default function ServiceScreen() {
         const price = Math.round(parseFloat(f.price.replace(',', '.') || '0') * 100);
         return <Muted>{f.comboOf.length < 2 ? 'Выберите ещё хотя бы одну услугу' : `По отдельности ${Math.round(sum / 100)} ₽${sum > price ? ` · выгода клиента ${Math.round((sum - price) / 100)} ₽` : ''}`}</Muted>;
       })()}
+      {stockOn && (materials.data?.length ?? 0) > 0 && (
+        <>
+          <H>Расход материалов</H>
+          <Muted>Сколько уходит на одну услугу. При завершении визита спишется со склада автоматически.</Muted>
+          {(norms ?? []).map((n, i) => (
+            <View key={n.materialId} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ flex: 1 }}>{n.name}</Text>
+              <TextInput
+                value={n.qty}
+                onChangeText={(qty) => setNorms((norms ?? []).map((x, j) => (j === i ? { ...x, qty } : x)))}
+                keyboardType="decimal-pad"
+                accessibilityLabel={`Расход: ${n.name}`}
+                style={{ width: 72, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'right', color: C.text, backgroundColor: C.card }}
+              />
+              <Text style={{ width: 40, color: C.muted }}>{n.unit}</Text>
+              <Text style={{ color: C.danger, fontWeight: '600' }} onPress={() => setNorms((norms ?? []).filter((_, j) => j !== i))}>✕</Text>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {(materials.data ?? []).filter((m) => m.isActive && !(norms ?? []).some((n) => n.materialId === m.id)).map((m) => (
+              <Chip key={m.id} label={`+ ${m.name}`} onPress={() => setNorms([...(norms ?? []), { materialId: m.id, name: m.name, unit: m.unit, qty: '' }])} />
+            ))}
+          </View>
+          {f.comboOf.length > 0 && !(norms ?? []).length && <Muted>Для комплекса без своих норм спишутся нормы входящих услуг.</Muted>}
+        </>
+      )}
       <H>Кто оказывает</H>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {(resources.data ?? []).map((r) => (

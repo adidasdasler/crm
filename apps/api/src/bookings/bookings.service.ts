@@ -1,3 +1,4 @@
+import { consumeForBooking, returnForBooking } from '../stock/stock';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { Booking, BookingSource, BookingStatus, Prisma } from '@prisma/client';
 import { DateTime } from 'luxon';
@@ -220,6 +221,9 @@ export class BookingsService {
         },
       });
     }
+    // Склад: при завершении визита списываем материалы по нормам услуг, при откате — возвращаем
+    if (to === 'COMPLETED') await consumeForBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
+    else if (b.status === 'COMPLETED') await returnForBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
     if (to === 'CANCELLED' || to === 'NO_SHOW') {
       await tx.reminder.updateMany({ where: { bookingId: id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
     }
