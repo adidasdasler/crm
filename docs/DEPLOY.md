@@ -99,52 +99,17 @@ systemctl status ИМЯ_СЛУЖБЫ_БОТА --no-pager
 
 ## Подключение домена mioflow.ru (для реальных клиентов)
 
-1. Купите `mioflow.ru`. У регистратора создайте A-записи: `mioflow.ru`, `www`, `app` → IP сервера.
-2. В `/opt/mioflow/.env` замените строки:
-
-   ```
-   PUBLIC_WEB_URL=https://mioflow.ru
-   APP_URL=https://app.mioflow.ru
-   NGINX_BIND=127.0.0.1
-   COOKIE_SECURE=true
-   ```
-
-3. **Если хостовый Nginx уже стоит** (например, для вебхуков ботов) — добавляется ещё один сайт, существующие конфиги не меняются:
+1. Купите `mioflow.ru` и создайте у регистратора три A-записи на IP сервера: `@` (сам домен), `www`, `app`.
+2. Подождите, пока DNS обновится (обычно 15–60 минут). Проверка: `getent hosts mioflow.ru app.mioflow.ru` на сервере показывает IP сервера.
+3. Запустите:
 
    ```bash
-   sudo cp /opt/mioflow/deploy/nginx/host-mioflow.conf /etc/nginx/sites-available/mioflow.conf
+   cd /opt/mioflow && sudo git pull --ff-only && sudo bash deploy/scripts/enable-domain.sh mioflow.ru --email ваша@почта.ru
    ```
 
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/mioflow.conf /etc/nginx/sites-enabled/ && sudo mkdir -p /var/www/certbot
-   ```
+Скрипт проверит DNS и порты 80/443, при необходимости поставит nginx и certbot (без обновления других пакетов), добавит один файл `/etc/nginx/sites-available/mioflow.conf`, получит сертификат Let's Encrypt (продлевается сам), пропишет новые адреса в `.env` и перезапустит MioFlow. Чужие сайты и боты не затрагиваются: каждый конфиг проверяется `nginx -t`, при ошибке всё возвращается как было. Если порт 80 или 443 занят не Nginx, скрипт остановится, ничего не меняя.
 
-   Если Nginx нет, установите его: `sudo apt-get install -y --no-upgrade nginx certbot`.
-
-4. Временно закомментируйте в `mioflow.conf` блок `server { listen 443 ... }`. Проверьте конфиг и перезагрузите Nginx. `reload` не обрывает соединения других сайтов:
-
-   ```bash
-   sudo nginx -t && sudo systemctl reload nginx
-   ```
-
-5. Получите сертификат:
-
-   ```bash
-   sudo certbot certonly --webroot -w /var/www/certbot -d mioflow.ru -d www.mioflow.ru -d app.mioflow.ru
-   ```
-
-6. Раскомментируйте блок 443 и снова выполните `sudo nginx -t && sudo systemctl reload nginx`.
-7. Примените новые адреса:
-
-   ```bash
-   cd /opt/mioflow && sudo docker compose up -d
-   ```
-
-8. Если открывали порты 8080/8081 в ufw, закройте их:
-
-   ```bash
-   sudo ufw delete allow 8080/tcp; sudo ufw delete allow 8081/tcp
-   ```
+Шаблон конфига — `deploy/nginx/host-mioflow.conf`.
 
 ---
 
