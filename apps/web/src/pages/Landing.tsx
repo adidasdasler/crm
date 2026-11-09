@@ -88,7 +88,7 @@ export function Landing() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a href={register} className="btn-primary whitespace-nowrap px-7 py-4 text-lg shadow-[0_12px_30px_-10px_rgba(47,59,255,.7)]">Попробовать 14 дней бесплатно</a>
-              <a href="/b/demo" className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Записаться как клиент</a>
+              <a href="/b/demo" className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Пример страницы записи</a>
             </div>
             <p className="text-ink-muted">Работаете одна или один? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Регистрация для частного мастера — 290 ₽/мес</a></p>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
