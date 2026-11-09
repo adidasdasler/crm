@@ -6,6 +6,7 @@ import { Text } from '../../../components/Text';
 import { Button, C, Card, Chip, ErrorText, Field, H, Muted, Screen } from '../../../components/ui';
 import { ApiError, get, post } from '../../../lib/api';
 import { can, useMe } from '../../../lib/auth';
+import { useOnline } from '../../../lib/offline';
 import { addDays, dayLabel, minutes, phonePretty, rub, time, today, zonedToIso } from '../../../lib/format';
 import type { Customer, Resource, Service } from '../../../lib/types';
 
@@ -13,6 +14,7 @@ type Slots = { resourceId: string; name: string; slots: string[] }[];
 
 export default function NewBooking() {
   const me = useMe();
+  const online = useOnline();
   const tz = me.tenant.timezone;
   const qc = useQueryClient();
   const params = useLocalSearchParams<{ day?: string; resourceId?: string; customerId?: string }>();
@@ -87,6 +89,12 @@ export default function NewBooking() {
 
   return (
     <Screen>
+      {!online && (
+        <View style={{ backgroundColor: '#FFF4DB', borderRadius: 16, padding: 12 }}>
+          <Text style={{ fontWeight: '600', color: '#7A5600' }}>Нет интернета — новую запись создать нельзя</Text>
+          <Text style={{ color: '#7A5600' }}>Иначе можно записать двух клиентов на одно время. Запишите клиента, когда появится связь.</Text>
+        </View>
+      )}
       <H>Клиент</H>
       {customer ? (
         <Card>
@@ -166,7 +174,7 @@ export default function NewBooking() {
 
       <Field label="Комментарий" value={notes} onChangeText={setNotes} multiline placeholder="Пожелания к визиту" />
       <ErrorText error={save.error} />
-      <Button title={startsAt ? `Записать на ${time(startsAt, tz)}` : 'Записать'} onPress={() => save.mutate()} loading={save.isPending} disabled={!canSave} />
+      <Button title={startsAt ? `Записать на ${time(startsAt, tz)}` : 'Записать'} onPress={() => save.mutate()} loading={save.isPending} disabled={!canSave || !online} />
     </Screen>
   );
 }

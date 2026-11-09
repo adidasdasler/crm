@@ -1,4 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
+import { View } from 'react-native';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { OfflineBar, useOfflineBarVisible } from '../../components/OfflineBar';
 import { useEffect } from 'react';
 import { listenNotificationTaps, registerPush } from '../../lib/push';
 import { F } from '../../components/Text';
@@ -8,6 +11,8 @@ import { useAuth } from '../../lib/auth';
 /** Всё внутри (app) — только для вошедших. */
 export default function AppLayout() {
   const { status } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bar = useOfflineBarVisible();
   useEffect(() => {
     if (status !== 'authed') return;
     registerPush();
@@ -16,6 +21,10 @@ export default function AppLayout() {
   if (status === 'loading') return <Loading />;
   if (status === 'guest') return <Redirect href="/login" />;
   return (
+    <View style={{ flex: 1 }}>
+      <OfflineBar />
+      {/* Полоса уже заняла место под вырезом экрана — заголовкам отступ сверху не нужен */}
+      <SafeAreaInsetsContext.Provider value={bar ? { ...insets, top: 0 } : insets}>
     <Stack screenOptions={{ headerTintColor: C.brand, headerTitleStyle: { color: C.text, fontFamily: F.semibold }, headerShadowVisible: false, headerBackTitle: 'Назад', contentStyle: { backgroundColor: C.bg } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="booking/new" options={{ title: 'Новая запись', presentation: 'modal' }} />
@@ -35,5 +44,7 @@ export default function AppLayout() {
       <Stack.Screen name="billing" options={{ title: 'Подписка' }} />
       <Stack.Screen name="delete-account" options={{ title: 'Удаление аккаунта' }} />
     </Stack>
+      </SafeAreaInsetsContext.Provider>
+    </View>
   );
 }

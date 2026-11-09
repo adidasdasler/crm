@@ -1,6 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { get, post, setOnUnauthorized, tokens } from './api';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ApiError, get, post, setOnUnauthorized, tokens } from './api';
+import { clearOffline } from './offline';
+
+const ME_KEY = 'mioflow-me-v1';
 import { unregisterPush } from './push';
 import type { Me, Perm } from './types';
 
@@ -22,16 +27,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const reload = useCallback(async () => {
     try {
-      setMe(await get<Me>('/auth/me'));
+      const m = await get<Me>('/auth/me');
+      setMe(m);
       setStatus('authed');
-    } catch {
+      void AsyncStorage.setItem(ME_KEY, JSON.stringify(m)).catch(() => null);
+    } catch (e) {
+      // Нет сети, но вход был — работаем с сохранённым профилем (офлайн-режим)
+      // В вебе сессия в cookie — токена в памяти нет
+      if ((e as ApiError).status === 0 && (Platform.OS === 'web' || (await tokens.access()))) {
+        const cached = await AsyncStorage.getItem(ME_KEY).catch(() => null);
+        if (cached) {
+          setMe(JSON.parse(cached) as Me);
+          setStatus('authed');
+          return;
+        }
+      }
       setMe(null);
       setStatus('guest');
     }
   }, []);
 
   useEffect(() => {
-    setOnUnauthorized(() => { setMe(null); setStatus('guest'); qc.clear(); });
+    setOnUnauthorized(() => { setMe(null); setStatus('guest'); qc.clear(); void AsyncStorage.removeItem(ME_KEY).catch(() => null); void clearOffline(); });
     tokens.load().then(reload);
   }, [reload, qc]);
 
@@ -52,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await post('/auth/logout', { refreshToken: (await tokens.refresh()) ?? undefined }).catch(() => null);
       await tokens.clear();
       qc.clear();
+      await Promise.all([AsyncStorage.removeItem(ME_KEY).catch(() => null), clearOffline()]);
       setMe(null);
       setStatus('guest');
     },

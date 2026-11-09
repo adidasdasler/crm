@@ -55,13 +55,18 @@ let onUnauthorized: () => void = () => {};
 export const setOnUnauthorized = (fn: () => void) => { onUnauthorized = fn; };
 
 /** Один refresh на все параллельные запросы (single-flight). */
-let refreshing: Promise<boolean> | null = null;
-async function refreshTokens(): Promise<boolean> {
+let refreshing: Promise<boolean | 'offline'> | null = null;
+async function refreshTokens(): Promise<boolean | 'offline'> {
   refreshing ??= (async () => {
     try {
       const refreshToken = await tokens.refresh();
       if (!isWeb && !refreshToken) return false;
-      const res = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify(isWeb ? {} : { refreshToken }) });
+      let res: Response;
+      try {
+        res = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify(isWeb ? {} : { refreshToken }) });
+      } catch {
+        return 'offline'; // нет сети — это не повод выходить из аккаунта
+      }
       if (!res.ok) return false;
       const body = await res.json();
       await tokens.save(body.data);
@@ -94,8 +99,11 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
     throw new ApiError('NETWORK', 'Нет связи с сервером. Проверьте интернет', 0);
   }
   if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
-    if (await refreshTokens()) res = await req();
-    else {
+    const r = await refreshTokens();
+    if (r === 'offline') throw new ApiError('NETWORK', 'Нет связи с сервером. Проверьте интернет', 0);
+    if (r) {
+      try { res = await req(); } catch { throw new ApiError('NETWORK', 'Нет связи с сервером. Проверьте интернет', 0); }
+    } else {
       await tokens.clear();
       onUnauthorized();
     }

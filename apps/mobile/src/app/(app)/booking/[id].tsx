@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { onlineManager, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { enqueueStatus, useOnline, useOutbox } from '../../../lib/offline';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Alert, Linking, Platform, View } from 'react-native';
 import { F, Text } from '../../../components/Text';
@@ -20,11 +21,31 @@ export default function BookingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const tz = useMe().tenant.timezone;
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['booking', id], queryFn: () => get<Booking>(`/bookings/${id}`) });
+  const q = useQuery({
+    queryKey: ['booking', id],
+    queryFn: () => get<Booking>(`/bookings/${id}`),
+    // Без сети карточка открывается из сохранённого расписания, даже если её не открывали раньше
+    initialData: () => qc.getQueriesData<Booking[]>({ queryKey: ['bookings'] }).flatMap(([, list]) => (Array.isArray(list) ? list : [])).find((x) => x.id === id),
+    initialDataUpdatedAt: 0,
+  });
+  const online = useOnline();
+  const queued = useOutbox().queue.some((x) => x.bookingId === id);
 
   const status = useMutation({
-    mutationFn: (to: BookingStatus) => post<Booking>(`/bookings/${id}/status`, { status: to, version: q.data?.version }),
+    mutationFn: async (to: BookingStatus) => {
+      const b = q.data!;
+      const label = `${b.customer.name}, ${time(b.startsAt, tz)}`;
+      // Нет связи — отметка в очередь, уйдёт на сервер, когда интернет появится
+      if (!onlineManager.isOnline()) { enqueueStatus(qc, b, to, label); return null; }
+      try {
+        return await post<Booking>(`/bookings/${id}/status`, { status: to, version: b.version });
+      } catch (e) {
+        if ((e as ApiError).status === 0) { enqueueStatus(qc, b, to, label); return null; }
+        throw e;
+      }
+    },
     onSuccess: (b) => {
+      if (!b) return;
       qc.setQueryData(['booking', id], b);
       qc.invalidateQueries({ queryKey: ['bookings'] });
     },
@@ -105,6 +126,8 @@ export default function BookingScreen() {
       )}
 
       <ErrorText error={status.error} />
+      {queued && <Muted>⏳ Отметка сохранена в телефоне и уйдёт на сервер, когда появится интернет.</Muted>}
+      {!online && !queued && <Muted>Нет интернета: отметки «пришёл», «завершён», «не пришёл» сохранятся и отправятся позже.</Muted>}
       {(ACTIONS[b.status] ?? []).map((a) => (
         <Button key={a.to} title={a.title} variant={a.variant} loading={status.isPending && status.variables === a.to} onPress={() => status.mutate(a.to)} />
       ))}

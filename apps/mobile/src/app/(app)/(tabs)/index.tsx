@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
@@ -31,6 +31,15 @@ export default function Calendar() {
     queryFn: () => get<Booking[]>(`/bookings?date=${day}`),
     refetchInterval: 30_000, // вместо WebSocket на старте — обновление раз в 30 секунд
   });
+
+  // Пока есть связь — заранее сохраняем ближайшие 3 дня: без интернета расписание будет под рукой
+  const qc = useQueryClient();
+  useEffect(() => {
+    for (let i = 1; i <= 3; i++) {
+      const d = addDays(day, i);
+      void qc.prefetchQuery({ queryKey: ['bookings', d], queryFn: () => get<Booking[]>(`/bookings?date=${d}`), staleTime: 5 * 60_000 });
+    }
+  }, [day, qc]);
 
   const list = useMemo(
     () => (bookings.data ?? []).filter((b) => !resourceId || b.resourceId === resourceId),
