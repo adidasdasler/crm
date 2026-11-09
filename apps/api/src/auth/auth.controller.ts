@@ -43,7 +43,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({ email, password: z.string().min(1).max(128), tenantId: uuid.optional() });
 const refreshSchema = z.object({ refreshToken: z.string().min(10).optional() });
 
-const REFRESH_COOKIE_PATH = '/v1/auth';
+export const REFRESH_COOKIE_PATH = '/v1/auth';
 
 /**
  * Веб-клиент получает токены в httpOnly-cookie.

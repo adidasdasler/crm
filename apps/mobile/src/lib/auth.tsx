@@ -28,6 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     try {
       const m = await get<Me>('/auth/me');
+      // Аккаунт без салона (удалён или убран из команды) — как будто не вошли, иначе экраны падают на me.tenant
+      if (!m.tenant) {
+        await post('/auth/logout', {}).catch(() => null);
+        await tokens.clear();
+        void AsyncStorage.removeItem(ME_KEY).catch(() => null);
+        setMe(null);
+        setStatus('guest');
+        return;
+      }
       setMe(m);
       setStatus('authed');
       void AsyncStorage.setItem(ME_KEY, JSON.stringify(m)).catch(() => null);

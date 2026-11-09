@@ -56,6 +56,9 @@ export const Can = (...perms: Perm[]) => SetMetadata(PERMS, perms);
 /** Настройки прав салона кэшируются на 10 секунд, чтобы не читать БД на каждый запрос */
 const permCache = new Map<string, { at: number; v: PermissionOverrides | undefined }>();
 export const invalidatePermissions = (tenantId: string) => permCache.delete(tenantId);
+/** Активен ли доступ пользователя к салону (не удалён аккаунт, сотрудник или салон) — кэш на 10 секунд */
+const accessCache = new Map<string, { at: number; ok: boolean }>();
+export const invalidateAccess = (userId: string) => { for (const k of accessCache.keys()) if (k.startsWith(`${userId}:`)) accessCache.delete(k); };
 
 /** Роли, которые управляют салоном (всё, кроме мастера). */
 export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
@@ -70,6 +73,17 @@ export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector, private readonly prisma: PrismaService) {}
+
+  private async hasAccess(userId: string, tenantId: string): Promise<boolean> {
+    const key = `${userId}:${tenantId}`;
+    const hit = accessCache.get(key);
+    if (hit && Date.now() - hit.at < 10_000) return hit.ok;
+    const m = await this.prisma.system.membership.findFirst({
+      where: { userId, tenantId, deletedAt: null, user: { deletedAt: null }, tenant: { deletedAt: null } }, select: { id: true },
+    });
+    accessCache.set(key, { at: Date.now(), ok: !!m });
+    return !!m;
+  }
 
   private async overrides(tenantId: string): Promise<PermissionOverrides | undefined> {
     const hit = permCache.get(tenantId);
@@ -102,6 +116,9 @@ export class AuthGuard implements CanActivate {
     } catch {
       throw new AppError('TOKEN_EXPIRED', 'Сессия истекла', 401);
     }
+
+    // Токен ещё действует, но аккаунт удалён или сотрудника убрали из салона — сессия закончена
+    if (!(await this.hasAccess(req.auth.userId, req.auth.tenantId))) throw new AppError('UNAUTHORIZED', 'Сессия завершена, войдите снова', 401);
 
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES, targets);
     if (roles?.length && !roles.includes(req.auth.role)) throw forbidden();

@@ -4,13 +4,14 @@ import { Throttle } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can, Public, Roles } from '../common/auth';
+import { Auth, AuthCtx, Can, invalidateAccess, Public, Roles } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
 import { mailer } from '../notify/mailer';
+import { REFRESH_COOKIE_PATH } from './auth.controller';
 import { AuthService } from './auth.service';
 
 const email = z.string().trim().toLowerCase().email('Некорректный email');
@@ -88,7 +89,7 @@ export class AccountController {
    */
   @HttpCode(200)
   @Post('me/delete')
-  async deleteAccount(@Auth() a: AuthCtx, @Body(new Zod(z.object({ password: z.string().min(1) }))) dto: { password: string }) {
+  async deleteAccount(@Auth() a: AuthCtx, @Body(new Zod(z.object({ password: z.string().min(1) }))) dto: { password: string }, @Res({ passthrough: true }) res: Response) {
     const db = this.prisma.system;
     const user = await db.user.findUniqueOrThrow({ where: { id: a.userId } });
     if (!(await argon2.verify(user.passwordHash, dto.password))) throw new AppError('INVALID_CREDENTIALS', 'Неверный пароль', 400);
@@ -97,7 +98,8 @@ export class AccountController {
     await db.$transaction(async (tx) => {
       const owned = await tx.membership.findMany({ where: { userId: user.id, role: 'OWNER', deletedAt: null }, select: { tenantId: true } });
       for (const { tenantId } of owned) {
-        await tx.tenant.update({ where: { id: tenantId }, data: { deletedAt: now } });
+        // Адрес страницы освобождаем сразу — можно заново зарегистрироваться с тем же названием
+        await tx.tenant.update({ where: { id: tenantId }, data: { deletedAt: now, slug: `removed-${tenantId}` } });
         await tx.subscription.updateMany({ where: { tenantId }, data: { status: 'CANCELLED' } });
         await tx.membership.updateMany({ where: { tenantId, deletedAt: null }, data: { deletedAt: now } });
         await tx.auditLog.create({ data: { tenantId, userId: user.id, action: 'tenant.delete', entityType: 'Tenant', entityId: tenantId } });
@@ -115,6 +117,10 @@ export class AccountController {
         },
       });
     });
+    invalidateAccess(user.id);
+    // Веб: стираем cookie сессии, иначе браузер ещё 15 минут считается «вошедшим»
+    res.clearCookie('access_token', { path: '/', domain: env.COOKIE_DOMAIN });
+    res.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH, domain: env.COOKIE_DOMAIN });
     return { ok: true };
   }
 

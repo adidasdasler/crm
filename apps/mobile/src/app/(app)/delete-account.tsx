@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Text } from '../../components/Text';
 import { Button, C, Card, ErrorText, Field, Muted, Screen } from '../../components/ui';
-import { post, tokens } from '../../lib/api';
+import { post } from '../../lib/api';
 import { useAuth, useMe } from '../../lib/auth';
 
 /** Удаление аккаунта прямо в приложении (требование App Store и Google Play). */
 export default function DeleteAccount() {
   const me = useMe();
-  const { reload } = useAuth();
+  const { logout } = useAuth();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -18,8 +18,8 @@ export default function DeleteAccount() {
     setError(null);
     try {
       await post('/me/delete', { password });
-      await tokens.clear();
-      await reload();
+      // Полный выход: токены, кэш профиля и офлайн-данные
+      await logout();
     } catch (e) {
       setError(e);
       setBusy(false);

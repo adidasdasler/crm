@@ -84,7 +84,12 @@ describe('удаление аккаунта и выгрузка', () => {
     expect((await s.api.post('/me/delete', { password: 'password123' })).status).toBe(200);
 
     expect((await api().post('/auth/login', { email, password: 'password123' })).status).toBe(401);
+    // Ещё не истёкшие токены владельца и сотрудника сразу перестают работать
+    expect((await s.api.get('/auth/me')).status).toBe(401);
+    expect((await api(admin.body.data.accessToken).get('/bookings')).status).toBe(401);
     expect((await api().get(`/public/${s.slug}`)).status).toBe(404);
+    // Адрес страницы освободился сразу
+    expect((await api().get(`/auth/check-slug?slug=${s.slug}`)).body.data.available).toBe(true);
     expect((await api().post('/auth/refresh', { refreshToken: admin.body.data.refreshToken })).status).toBe(401);
     // Email освободился — можно зарегистрироваться заново
     expect((await api().post('/auth/register', { email, password: 'password123', name: 'Снова', salonName: 'Новый салон', slug: `again-${Date.now() % 100000}`, acceptTerms: true, acceptPrivacy: true })).status).toBe(201);
