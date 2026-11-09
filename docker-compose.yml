@@ -42,6 +42,9 @@ services:
     cap_drop: [ALL]
     depends_on:
       postgres: { condition: service_healthy }
+    # Фото дизайнов (попадают в зашифрованный бэкап вместе с базой)
+    volumes:
+      - uploads:/data/uploads
     environment: &api-env
       NODE_ENV: production
       PORT: 4000
@@ -55,6 +58,7 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       SEED_DEMO: ${SEED_DEMO:-false}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?задайте PUBLIC_WEB_URL}
+      UPLOADS_DIR: /data/uploads
       APP_URL: ${APP_URL:?задайте APP_URL}
       API_PUBLIC_URL: ${PUBLIC_WEB_URL}/v1
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -88,6 +92,9 @@ services:
     cap_drop: [ALL]
     depends_on:
       api: { condition: service_healthy }
+    # Нужен воркеру, чтобы удалять фото салонов, удалённых больше 30 дней назад
+    volumes:
+      - uploads:/data/uploads
     command: ["node", "dist/worker.js"]
     environment: *api-env
     networks: [db, web]
@@ -111,6 +118,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
 
 networks:
   # База данных — во внутренней сети без доступа в интернет

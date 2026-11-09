@@ -120,3 +120,28 @@ export const post = <T>(path: string, json?: unknown) => api<T>(path, { method: 
 export const patch = <T>(path: string, json: unknown) => api<T>(path, { method: 'PATCH', json });
 export const put = <T>(path: string, json: unknown) => api<T>(path, { method: 'PUT', json });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
+
+/** Загрузка файлов (multipart). Content-Type с границей ставит сам fetch. */
+export async function upload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const send = () => {
+    const headers: Record<string, string> = { 'X-Requested-With': 'salon' };
+    if (!isWeb) {
+      headers['X-Client'] = 'mobile';
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return fetch(API_URL + path, { method: 'POST', body: form, headers, credentials: isWeb ? 'include' : 'omit' });
+  };
+  let res: Response;
+  try {
+    res = await send();
+    if (res.status === 401) {
+      const r = await refreshTokens();
+      if (r === true) res = await send();
+    }
+  } catch {
+    throw new ApiError('NETWORK', 'Нет связи с сервером. Проверьте интернет', 0);
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.success) throw new ApiError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `Ошибка ${res.status}`, res.status);
+  return body.data as T;
+}

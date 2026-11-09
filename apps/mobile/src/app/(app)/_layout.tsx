@@ -37,6 +37,9 @@ export default function AppLayout() {
       <Stack.Screen name="roles" options={{ title: 'Роли и доступы' }} />
       <Stack.Screen name="maps" options={{ title: 'Карты и ссылки' }} />
       <Stack.Screen name="loyalty" options={{ title: 'Депозиты и абонементы' }} />
+      <Stack.Screen name="designs/index" options={{ title: 'Библиотека дизайнов' }} />
+      <Stack.Screen name="designs/new" options={{ title: 'Фото работы', presentation: 'modal' }} />
+      <Stack.Screen name="designs/[id]" options={{ title: 'Дизайн' }} />
       <Stack.Screen name="stock/index" options={{ title: 'Склад' }} />
       <Stack.Screen name="stock/[id]" options={{ title: 'Материал' }} />
       <Stack.Screen name="stock/inventory" options={{ title: 'Инвентаризация' }} />

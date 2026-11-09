@@ -117,6 +117,8 @@ export class CustomersController {
           email: null, notes: null, birthDate: null, telegramChatId: null, vkUserId: null, maxUserId: null, tags: [], marketingConsent: false,
         },
       });
+      // Фото работ остаются в библиотеке салона, но без связи с человеком
+      await tx.design.updateMany({ where: { customerId: id }, data: { customerId: null, bookingId: null } });
       await audit(tx, a, 'customer.delete', 'Customer', id);
       return { ok: true };
     });

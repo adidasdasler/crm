@@ -13,6 +13,8 @@ const schema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   /** Secure-cookie (только HTTPS). false — для временного запуска по IP без домена и сертификата. */
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
+  /** Где хранить фото дизайнов (том Docker). Потом можно переключить на S3 */
+  UPLOADS_DIR: z.string().default('./uploads'),
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:5173'),
   /** Адрес веб-версии CRM (ссылки «оплатить» в уведомлениях) */
   APP_URL: z.string().url().default('http://localhost:8081'),

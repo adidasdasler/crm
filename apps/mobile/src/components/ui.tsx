@@ -76,16 +76,19 @@ export function Field({ label, error, ...props }: TextInputProps & { label?: str
 }
 
 export function Toggle({ label, value, onChange, hint }: { label: string; value: boolean; onChange: (v: boolean) => void; hint?: string }) {
+  // Нажимается вся строка, а не только маленький переключатель
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+    <Pressable onPress={() => onChange(!value)} accessibilityRole="switch" accessibilityState={{ checked: value }} accessibilityLabel={label}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <View style={{ flex: 1 }}>
         <Text style={s.body}>{label}</Text>
         {hint && <Text style={s.muted}>{hint}</Text>}
       </View>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: C.brand, false: C.border }}
-                  thumbColor="#FFFFFF"
-                  {...({ activeThumbColor: '#FFFFFF' } as object)} />
-    </View>
+      {/* Нажатие обрабатывает только строка: иначе в вебе переключатель сработал бы дважды и вернулся назад */}
+      <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+        <Switch value={value} trackColor={{ true: C.brand, false: C.border }} thumbColor="#FFFFFF" {...({ activeThumbColor: '#FFFFFF' } as object)} />
+      </View>
+    </Pressable>
   );
 }
 

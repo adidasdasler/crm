@@ -114,3 +114,10 @@ export type Account = {
   entries: { id: string; type: string; label: string; money: number; bonus: number; method: string | null; bookingId: string | null; note: string | null; createdAt: string }[];
   passes: CustomerPass[];
 };
+
+export type Design = {
+  id: string; title: string | null; tags: string[]; serviceId: string | null; resourceId: string | null; bookingId: string | null; customerId: string | null;
+  materialIds: string[]; materialNote: string | null; isPublic: boolean; width: number | null; height: number | null; createdById: string | null; createdAt: string;
+  service: string | null; master: string | null; customer: string | null;
+  materials?: { id: string; name: string; unit: string }[]; canEdit?: boolean;
+};

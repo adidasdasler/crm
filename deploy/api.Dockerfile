@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out /app
+# Папка для фото дизайнов: том Docker наследует её владельца при первом создании
+RUN mkdir -p /data/uploads && chown node:node /data/uploads
 USER node
 EXPOSE 4000
 ENTRYPOINT ["/usr/bin/tini", "--"]

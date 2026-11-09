@@ -125,6 +125,9 @@ export default function BookingScreen() {
         </Card>
       )}
 
+      {['ARRIVED', 'COMPLETED'].includes(b.status) && (
+        <Button variant="ghost" icon="camera-outline" title="Фото работы" onPress={() => router.push({ pathname: '/designs/new', params: { bookingId: b.id } })} />
+      )}
       <ErrorText error={status.error} />
       {queued && <Muted>⏳ Отметка сохранена в телефоне и уйдёт на сервер, когда появится интернет.</Muted>}
       {!online && !queued && <Muted>Нет интернета: отметки «пришёл», «завершён», «не пришёл» сохранятся и отправятся позже.</Muted>}

@@ -1,4 +1,6 @@
 import swc from 'unplugin-swc';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -26,6 +28,7 @@ export default defineConfig({
       SMTP_URL: 'smtp://localhost:2525',
       PAYMENT_PROVIDER: 'mock',
       PUSH_ENABLED: 'true',
+      UPLOADS_DIR: join(tmpdir(), 'mioflow-test-uploads'),
     },
   },
 });

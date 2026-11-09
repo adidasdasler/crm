@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import * as QRCode from 'qrcode';
 import { Public } from '../common/auth';
@@ -7,6 +7,7 @@ import { industry, INDUSTRIES } from '../common/industries';
 import { PrismaService } from '../common/prisma.service';
 import { readSettings } from '../common/tenant-settings';
 import { env } from '../config';
+import { storage } from '../media/storage';
 import { renderMiniSite, salonHours } from './minisite';
 
 /** Метки источника для ссылок записи: салон видит в «Обзоре», откуда пришёл клиент */
@@ -48,6 +49,32 @@ export class MiniSiteController {
       hours: salonHours(masters.map((m) => m.schedule)), services, masters: masters.map(({ name, position }) => ({ name, position })), links: s.links ?? {},
     });
     res.set('Cache-Control', 'public, max-age=600').type('text/html; charset=utf-8').send(html);
+  }
+
+  /** Портфолио салона: опубликованные фото работ */
+  @Get('public/:slug/portfolio')
+  async portfolio(@Param('slug') slug: string) {
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null }, select: { id: true } });
+    if (!t) throw notFound('Салон');
+    return this.prisma.withTenant(t.id, async (tx) => {
+      const rows = await tx.design.findMany({ where: { isPublic: true }, orderBy: { createdAt: 'desc' }, take: 60, select: { id: true, title: true, tags: true, resourceId: true, serviceId: true, width: true, height: true } });
+      const [res, svc] = await Promise.all([
+        tx.resource.findMany({ where: { id: { in: rows.map((r) => r.resourceId).filter((x): x is string => !!x) } }, select: { id: true, name: true } }),
+        tx.service.findMany({ where: { id: { in: rows.map((r) => r.serviceId).filter((x): x is string => !!x) } }, select: { id: true, name: true } }),
+      ]);
+      return rows.map(({ resourceId, serviceId, ...r }) => ({ ...r, master: res.find((x) => x.id === resourceId)?.name ?? null, service: svc.find((x) => x.id === serviceId)?.name ?? null }));
+    });
+  }
+
+  @Get('public/:slug/portfolio/:id/:size')
+  async portfolioImage(@Param('slug') slug: string, @Param('id', ParseUUIDPipe) id: string, @Param('size') size: string, @Res() res: Response) {
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null }, select: { id: true } });
+    if (!t) throw notFound('Салон');
+    const d = await this.prisma.withTenant(t.id, (tx) => tx.design.findFirst({ where: { id, isPublic: true }, select: { fileKey: true, thumbKey: true } }));
+    if (!d) throw notFound('Фото');
+    const buf = await storage.get(size === 'thumb' ? d.thumbKey : d.fileKey);
+    if (!buf) throw notFound('Фото');
+    res.set({ 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' }).type('image/jpeg').send(buf);
   }
 
   /** QR-код ссылки записи — для стойки администратора, визиток, наклейки на зеркало */

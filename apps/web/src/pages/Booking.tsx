@@ -138,6 +138,7 @@ export function BookingPage() {
               </div>
             );
           })}
+          <Portfolio slug={slug} />
           <BottomBar disabled={!serviceIds.length} onNext={() => setStep('master')} label={serviceIds.length ? `Далее · ${rub(total.price)} · ${minutes(total.duration)}` : 'Выберите услугу'} />
         </section>
       )}
@@ -482,5 +483,43 @@ function Offers({ salon }: { salon: Salon }) {
       })}
       <p className="sr-only">Оформить депозит или абонемент можно в салоне.</p>
     </div>
+  );
+}
+
+type Work = { id: string; title: string | null; tags: string[]; master: string | null; service: string | null; width: number | null; height: number | null };
+/** Портфолио: опубликованные салоном фото работ. Нажатие — крупно. */
+function Portfolio({ slug }: { slug: string }) {
+  const [works, setWorks] = useState<Work[]>([]);
+  const [open, setOpen] = useState<Work | null>(null);
+  useEffect(() => { api<Work[]>(`/public/${slug}/portfolio`).then(setWorks).catch(() => setWorks([])); }, [slug]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  if (!works.length) return null;
+  const src = (w: Work, size: 'thumb' | 'full') => `/v1/public/${slug}/portfolio/${w.id}/${size}`;
+  return (
+    <section className="space-y-3 pt-4">
+      <h2 className="display text-2xl">Наши работы</h2>
+      <div className="grid grid-cols-3 gap-1.5">
+        {works.slice(0, 12).map((w) => (
+          <button key={w.id} onClick={() => setOpen(w)} className="aspect-square overflow-hidden rounded-2xl bg-brand-50" aria-label={w.title ?? 'Фото работы'}>
+            <img src={src(w, 'thumb')} alt={w.title ?? ''} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div role="dialog" aria-modal="true" aria-label={open.title ?? 'Фото работы'} className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-ink/90 p-4" onClick={() => setOpen(null)}>
+          <img src={src(open, 'full')} alt={open.title ?? ''} className="max-h-[75vh] max-w-full rounded-2xl object-contain" />
+          <div className="mt-3 text-center text-white">
+            {open.title && <p className="font-semibold">{open.title}</p>}
+            <p className="text-sm text-[#C9CCF2]">{[open.service, open.master && `мастер ${open.master}`].filter(Boolean).join(' · ')}</p>
+          </div>
+          <button className="btn mt-4 bg-white text-ink" onClick={() => setOpen(null)}>Закрыть</button>
+        </div>
+      )}
+    </section>
   );
 }

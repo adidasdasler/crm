@@ -27,17 +27,30 @@ docker compose exec -T postgres pg_dump -U postgres -d "$DB" --no-owner --format
   | gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 3 -o "$FILE" 3<<<"$PASS"
 chmod 600 "$FILE"
 
+# Фото дизайнов — отдельным зашифрованным архивом (если сервис уже с библиотекой дизайнов)
+UPL="$DIR/mioflow-uploads-$(date +%Y%m%d-%H%M%S).tar.gz.gpg"
+if docker compose exec -T api test -d /data/uploads 2>/dev/null; then
+  docker compose exec -T api tar -C /data/uploads -cf - . \
+    | gzip -6 \
+    | gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 3 -o "$UPL" 3<<<"$PASS"
+  chmod 600 "$UPL"
+  gpg --batch --quiet --decrypt --passphrase-fd 3 "$UPL" 3<<<"$PASS" | gunzip -t
+else
+  UPL=""
+fi
+
 # Проверка: файл не пустой, расшифровывается и архив целый (полная проверка, без обрыва потока)
 SIZE=$(stat -c %s "$FILE")
 [ "$SIZE" -gt 1000 ] || { echo "$(date -Is) ✗ Подозрительно маленький бэкап ($SIZE байт)"; exit 1; }
 gpg --batch --quiet --decrypt --passphrase-fd 3 "$FILE" 3<<<"$PASS" | gunzip -t
 
-find "$DIR" -name 'mioflow-*.sql.gz.gpg' -mtime +"$KEEP_DAYS" -delete
+find "$DIR" \( -name 'mioflow-*.sql.gz.gpg' -o -name 'mioflow-uploads-*.tar.gz.gpg' \) -mtime +"$KEEP_DAYS" -delete
 
 # Копия вне сервера (Yandex Object Storage, Selectel S3 и т. п.), если настроен rclone
 if [ -n "$REMOTE" ]; then
   if command -v rclone >/dev/null; then
     rclone copy "$FILE" "$REMOTE" --quiet && echo "$(date -Is) ↑ скопировано в $REMOTE"
+    if [ -n "$UPL" ]; then rclone copy "$UPL" "$REMOTE" --quiet; fi
   else
     echo "$(date -Is) ! BACKUP_RCLONE_REMOTE задан, но rclone не установлен — копия вне сервера не сделана"
   fi

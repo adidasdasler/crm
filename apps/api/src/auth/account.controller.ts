@@ -1,3 +1,4 @@
+import { storage } from '../media/storage';
 import { Body, Controller, Delete, Get, HttpCode, Post, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
@@ -149,6 +150,7 @@ export async function purgeDeletedTenants(db: import('@prisma/client').PrismaCli
   const old = await db.tenant.findMany({ where: { deletedAt: { lt: new Date(+now - 30 * 86400_000) }, NOT: { slug: { startsWith: 'deleted-' } } }, select: { id: true } });
   for (const { id: tenantId } of old) {
     await db.$transaction([
+      db.design.deleteMany({ where: { tenantId } }),
       db.passUse.deleteMany({ where: { tenantId } }),
       db.customerPass.deleteMany({ where: { tenantId } }),
       db.passPlan.deleteMany({ where: { tenantId } }),
@@ -171,6 +173,8 @@ export async function purgeDeletedTenants(db: import('@prisma/client').PrismaCli
       // Платежи и подписку оставляем (учёт доходов), салон обезличиваем.
       db.tenant.update({ where: { id: tenantId }, data: { slug: `deleted-${tenantId}`, name: 'Удалённый салон', phone: null, address: null, settings: {} } }),
     ]);
+    // Фото дизайнов салона — с диска (или из S3)
+    await storage.removePrefix(tenantId).catch(() => null);
   }
   return { purged: old.length };
 }

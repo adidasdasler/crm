@@ -645,3 +645,28 @@ model PassUse {
 
   @@index([passId], map: "PassUse_pass_idx")
 }
+
+/// Фото работы мастера (библиотека дизайнов, портфолио)
+model Design {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  title        String?
+  tags         String[] @default([])
+  serviceId    String?  @db.Uuid
+  resourceId   String?  @db.Uuid
+  bookingId    String?  @db.Uuid
+  customerId   String?  @db.Uuid
+  materialIds  String[] @default([]) @db.Uuid
+  materialNote String?
+  isPublic     Boolean  @default(false)
+  fileKey      String
+  thumbKey     String
+  width        Int?
+  height       Int?
+  createdById  String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt], map: "Design_tenant_idx")
+  @@index([tenantId, customerId], map: "Design_customer_idx")
+}

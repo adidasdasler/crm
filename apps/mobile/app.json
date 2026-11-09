@@ -42,7 +42,15 @@
           "icon": "./assets/android-icon-monochrome.png"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MioFlow открывает фото, чтобы вы могли добавить снимки своих работ в библиотеку дизайнов салона.",
+          "cameraPermission": "MioFlow использует камеру, чтобы вы могли сфотографировать работу и добавить её в библиотеку дизайнов.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

@@ -5,6 +5,7 @@ import { Linking, View } from 'react-native';
 import { Text } from '../../../components/Text';
 import { Button, C, Card, ErrorText, Field, H, Loading, Muted, Screen, Toggle } from '../../../components/ui';
 import { get, patch, post } from '../../../lib/api';
+import { PastDesigns } from '../../../components/PastDesigns';
 import { Wallet } from '../../../components/Wallet';
 import { can, useMe } from '../../../lib/auth';
 import { dateTitle, rub, STATUS } from '../../../lib/format';
@@ -56,6 +57,7 @@ export default function CustomerScreen() {
       )}
       {c && <Muted>{reminderChannel(c)}</Muted>}
       {c && (can(me, 'finance.manage') || can(me, 'customers.view')) && <Wallet customerId={c.id} />}
+      {c && <PastDesigns customerId={c.id} />}
       <Field label="Имя" value={f.name} onChangeText={(name) => setF({ ...f, name })} />
       <Field label="Телефон" value={f.phone} onChangeText={(phone) => setF({ ...f, phone })} keyboardType="phone-pad" />
       <Field label="Заметки" value={f.notes} onChangeText={(notes) => setF({ ...f, notes })} multiline placeholder="Предпочтения клиента (без сведений о здоровье)" />
