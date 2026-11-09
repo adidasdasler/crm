@@ -8,6 +8,7 @@ import { F, Text } from '../components/Text';
 import { Button, C, Chip, ErrorText, Field, Muted, Screen } from '../components/ui';
 import { ApiError, get, PUBLIC_WEB_URL } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { SignedInGate } from '../components/SignedInGate';
 import type { IndustryInfo } from '../lib/types';
 
 const translit = (s: string) => {
@@ -32,6 +33,7 @@ export default function Register() {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [done, setDone] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
 
   useEffect(() => {
@@ -43,13 +45,15 @@ export default function Register() {
     return () => clearTimeout(t);
   }, [f.slug]);
 
-  if (status === 'authed') return <Redirect href="/" />;
+  // Только что зарегистрировались — в приложение; уже были в аккаунте — спросим, а не перебросим молча
+  if (status === 'authed') return done ? <Redirect href="/" /> : <SignedInGate action="register" />;
 
   async function submit() {
     setBusy(true);
     setError(null);
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+      setDone(true);
       await register({
         ...f, kind, email: f.email.trim(), phone: f.phone || undefined, timezone, industry, acceptTerms: accept, acceptPrivacy,
         // Частному мастеру название и адрес не обязательны: возьмём имя, свободный адрес подберёт сервер

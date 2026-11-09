@@ -4,18 +4,20 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button, C, ErrorText, Field, Loading, Logo, Screen } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { SignedInGate } from '../components/SignedInGate';
 
 /** Общий вход в демо-салон — данные там сбрасываются каждую ночь */
 export const DEMO = { email: 'demo@salon.local', password: 'demo12345' };
 
 export default function Login() {
-  const { status, login } = useAuth();
+  const { status, login, me } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const params = useLocalSearchParams<{ demo?: string }>();
   const autoDemo = useRef(false);
+  const [done, setDone] = useState(false);
 
   // Ссылка «Попробовать без регистрации» с главной: mioflow.ru → app.mioflow.ru/login?demo=1
   useEffect(() => {
@@ -23,12 +25,14 @@ export default function Login() {
   }, [params.demo, status]);
 
   if (status === 'loading') return <Loading />;
-  if (status === 'authed') return <Redirect href="/" />;
+  // Пришли по ссылке «демо», а вошли в свой аккаунт — спросим, а не покажем свои данные
+  if (status === 'authed') return params.demo && !done && me?.tenant?.slug !== 'demo' ? <SignedInGate action="demo" /> : <Redirect href="/" />;
 
   async function demo() {
     setBusy(true);
     setError(null);
     try {
+      setDone(true);
       await login(DEMO.email, DEMO.password);
     } catch (e) {
       setError(e);
@@ -40,6 +44,7 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
+      setDone(true);
       await login(email.trim(), password);
     } catch (e) {
       setError(e);
