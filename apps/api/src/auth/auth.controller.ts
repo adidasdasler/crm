@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { cookieSecure, env } from '../config';
-import { Auth, AuthCtx, Public } from '../common/auth';
+import { Auth, AuthCtx, Public, NoDemo } from '../common/auth';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
 import { uuid } from '../common/schemas';
@@ -121,6 +121,7 @@ export class AuthController {
   }
 
   @HttpCode(200)
+  @NoDemo()
   @Post('change-password')
   async changePassword(@Auth() auth: AuthCtx, @Body(new Zod(z.object({ currentPassword: z.string(), newPassword: password }))) dto: { currentPassword: string; newPassword: string }) {
     await this.auth.changePassword(auth, dto.currentPassword, dto.newPassword);
@@ -128,6 +129,7 @@ export class AuthController {
   }
 
   @HttpCode(200)
+  @NoDemo()
   @Post('revoke-sessions')
   async revokeSessions(@Auth() auth: AuthCtx) {
     await this.auth.revokeAllSessions(auth.userId);

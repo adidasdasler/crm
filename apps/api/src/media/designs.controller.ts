@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { memoryStorage } from 'multer';
 import { z } from 'zod';
 import { audit } from '../common/audit';
-import { Auth, AuthCtx, can } from '../common/auth';
+import { Auth, AuthCtx, can, NoDemo } from '../common/auth';
 import { AppError, forbidden, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService, Tx } from '../common/prisma.service';
@@ -47,6 +47,7 @@ type Files = { image?: Express.Multer.File[]; thumb?: Express.Multer.File[] };
 export class DesignsController {
   constructor(private readonly prisma: PrismaService) {}
 
+  @NoDemo()
   @Post()
   @UseInterceptors(FileFieldsInterceptor([{ name: 'image', maxCount: 1 }, { name: 'thumb', maxCount: 1 }], { storage: memoryStorage(), limits: { fileSize: MAX_BYTES, files: 2, fields: 5 } }))
   async create(@Auth() a: AuthCtx, @UploadedFiles() files: Files, @Body('data') raw: string) {
@@ -125,6 +126,7 @@ export class DesignsController {
     });
   }
 
+  @NoDemo()
   @Patch(':id')
   update(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(metaSchema.omit({ bookingId: true }))) dto: Omit<z.infer<typeof metaSchema>, 'bookingId'>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {

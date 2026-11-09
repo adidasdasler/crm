@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import * as argon2 from 'argon2';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can, invalidateAccess, Public, Roles } from '../common/auth';
+import { Auth, AuthCtx, Can, invalidateAccess, Public, Roles, NoDemo } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
@@ -66,6 +66,7 @@ export class AccountController {
     return { ok: true };
   }
 
+  @NoDemo()
   @Post('me/push-tokens')
   async addPushToken(@Auth() a: AuthCtx, @Body(new Zod(z.object({ token: z.string().regex(/^Expo(nent)?PushToken\[.+\]$/), platform: z.enum(['ios', 'android']) }))) dto: { token: string; platform: string }) {
     await this.prisma.system.pushToken.upsert({
@@ -88,6 +89,7 @@ export class AccountController {
    * Владелец удаляет и свои салоны: доступ закрывается сразу, данные стираются воркером через 30 дней.
    */
   @HttpCode(200)
+  @NoDemo()
   @Post('me/delete')
   async deleteAccount(@Auth() a: AuthCtx, @Body(new Zod(z.object({ password: z.string().min(1) }))) dto: { password: string }, @Res({ passthrough: true }) res: Response) {
     const db = this.prisma.system;

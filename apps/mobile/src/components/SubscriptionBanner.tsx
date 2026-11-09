@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Pressable } from 'react-native';
+import { DemoBanner } from './DemoBanner';
 import { Text } from './Text';
 import { get } from '../lib/api';
 import { useMe } from '../lib/auth';
@@ -11,6 +12,7 @@ export function SubscriptionBanner() {
   const me = useMe();
   const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription'), refetchInterval: 10 * 60_000 });
   const s = sub.data;
+  if (me.tenant.slug === 'demo') return <DemoBanner />;
   if (!s) return null;
   const soon = (s.status === 'TRIAL' || s.status === 'ACTIVE') && s.daysLeft !== null && s.daysLeft <= 3;
   if (!soon && s.status !== 'PAST_DUE' && s.status !== 'EXPIRED') return null;

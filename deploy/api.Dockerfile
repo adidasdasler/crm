@@ -8,7 +8,7 @@ COPY apps/api/package.json apps/api/
 RUN pnpm install --frozen-lockfile --filter @salon/api...
 COPY apps/api apps/api
 RUN cd apps/api && npx prisma generate && pnpm build \
- && npx tsc prisma/seed.ts --outDir dist-seed --esModuleInterop --skipLibCheck --module commonjs --target es2022
+ && npx tsc prisma/seed.ts --outDir dist-seed --rootDir . --esModuleInterop --skipLibCheck --module commonjs --target es2022
 RUN pnpm deploy --filter @salon/api --prod --legacy /out \
  && cp -r apps/api/dist apps/api/dist-seed apps/api/prisma /out/ \
  && cd /out && npx prisma@6.19.3 generate --schema prisma/schema.prisma
@@ -25,4 +25,4 @@ USER node
 EXPOSE 4000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 # Миграции применяются при старте (идемпотентно), затем seed тарифов и запуск API.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist-seed/seed.js && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist-seed/prisma/seed.js && node dist/main.js"]

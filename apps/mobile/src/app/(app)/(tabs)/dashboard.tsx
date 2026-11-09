@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
+import { DemoBanner } from '../../../components/DemoBanner';
 import { ComponentProps, ReactNode, useState } from 'react';
 import { LayoutAnimation, Pressable, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { F, Text } from '../../../components/Text';
@@ -36,6 +37,8 @@ export default function Dashboard() {
   const maxSrc = Math.max(1, ...(d?.sources.map((x) => x.count) ?? [1]));
 
   return (
+    <>
+    <DemoBanner />
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
       contentContainerStyle={[webMax, { padding: 16, gap: 12, paddingBottom: 40 }, wide && { maxWidth: 1100 }]}
@@ -108,6 +111,7 @@ export default function Dashboard() {
         </>
       )}
     </ScrollView>
+    </>
   );
 }
 

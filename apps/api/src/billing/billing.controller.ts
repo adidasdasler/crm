@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { Auth, AuthCtx, Public, Roles } from '../common/auth';
+import { Auth, AuthCtx, Public, Roles, NoDemo } from '../common/auth';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
@@ -58,6 +58,7 @@ export class BillingController {
 
   /** Создать ссылку на оплату (оплата вручную каждый месяц/год, без автосписаний). */
   @Roles('OWNER')
+  @NoDemo()
   @Post('billing/pay')
   async pay(@Auth() a: AuthCtx, @Body(new Zod(paySchema)) dto: z.infer<typeof paySchema>) {
     const p = await this.billing.createPaymentLink(a.tenantId, dto.planCode, dto.period);

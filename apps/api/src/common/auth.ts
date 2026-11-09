@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import type { Role } from '@prisma/client';
 import type { Request } from 'express';
 import { jwtVerify, SignJWT } from 'jose';
+import { DEMO_SLUG } from '../demo/demo';
 import { env } from '../config';
 import { AppError, forbidden } from './errors';
 import { Perm, PermissionOverrides, resolvePermissions } from './permissions';
@@ -18,6 +19,8 @@ export type AuthCtx = {
   resourceId: string | null;
   /** Права с учётом настроек салона (заполняет AuthGuard) */
   perms?: ReadonlySet<Perm>;
+  /** Демо-салон с общим входом (заполняет AuthGuard) */
+  demo?: boolean;
 };
 
 /** Есть ли у пользователя право. Владелец может всё. */
@@ -52,12 +55,16 @@ export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
 export const PERMS = 'perms';
 /** Эндпоинт доступен, если у роли есть хотя бы одно из прав */
 export const Can = (...perms: Perm[]) => SetMetadata(PERMS, perms);
+const NO_DEMO = 'noDemo';
+/** Действие закрыто в демо-салоне: удаление, пароли, сотрудники, публичные данные, оплата */
+export const NoDemo = () => SetMetadata(NO_DEMO, true);
+export const demoBlocked = () => new AppError('DEMO_READONLY', 'В демо это недоступно. Зарегистрируйтесь — 14 дней бесплатно, и всё заработает', 403);
 
 /** Настройки прав салона кэшируются на 10 секунд, чтобы не читать БД на каждый запрос */
 const permCache = new Map<string, { at: number; v: PermissionOverrides | undefined }>();
 export const invalidatePermissions = (tenantId: string) => permCache.delete(tenantId);
 /** Активен ли доступ пользователя к салону (не удалён аккаунт, сотрудник или салон) — кэш на 10 секунд */
-const accessCache = new Map<string, { at: number; ok: boolean }>();
+const accessCache = new Map<string, { at: number; ok: boolean; demo: boolean }>();
 export const invalidateAccess = (userId: string) => { for (const k of accessCache.keys()) if (k.startsWith(`${userId}:`)) accessCache.delete(k); };
 
 /** Роли, которые управляют салоном (всё, кроме мастера). */
@@ -74,15 +81,16 @@ export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
 export class AuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector, private readonly prisma: PrismaService) {}
 
-  private async hasAccess(userId: string, tenantId: string): Promise<boolean> {
+  private async access(userId: string, tenantId: string): Promise<{ ok: boolean; demo: boolean }> {
     const key = `${userId}:${tenantId}`;
     const hit = accessCache.get(key);
-    if (hit && Date.now() - hit.at < 10_000) return hit.ok;
+    if (hit && Date.now() - hit.at < 10_000) return hit;
     const m = await this.prisma.system.membership.findFirst({
-      where: { userId, tenantId, deletedAt: null, user: { deletedAt: null }, tenant: { deletedAt: null } }, select: { id: true },
+      where: { userId, tenantId, deletedAt: null, user: { deletedAt: null }, tenant: { deletedAt: null } }, select: { tenant: { select: { slug: true } } },
     });
-    accessCache.set(key, { at: Date.now(), ok: !!m });
-    return !!m;
+    const v = { at: Date.now(), ok: !!m, demo: m?.tenant.slug === DEMO_SLUG };
+    accessCache.set(key, v);
+    return v;
   }
 
   private async overrides(tenantId: string): Promise<PermissionOverrides | undefined> {
@@ -118,7 +126,10 @@ export class AuthGuard implements CanActivate {
     }
 
     // Токен ещё действует, но аккаунт удалён или сотрудника убрали из салона — сессия закончена
-    if (!(await this.hasAccess(req.auth.userId, req.auth.tenantId))) throw new AppError('UNAUTHORIZED', 'Сессия завершена, войдите снова', 401);
+    const access = await this.access(req.auth.userId, req.auth.tenantId);
+    if (!access.ok) throw new AppError('UNAUTHORIZED', 'Сессия завершена, войдите снова', 401);
+    req.auth.demo = access.demo;
+    if (access.demo && this.reflector.getAllAndOverride<boolean>(NO_DEMO, targets)) throw demoBlocked();
 
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES, targets);
     if (roles?.length && !roles.includes(req.auth.role)) throw forbidden();

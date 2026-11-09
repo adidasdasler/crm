@@ -1,3 +1,4 @@
+import { DEMO_SLUG } from '../demo/demo';
 import { Prisma, PrismaClient, ReminderChannel } from '@prisma/client';
 import { manageToken, manageTokenHash, manageUrl } from '../common/manage-token';
 import { readSettings } from '../common/tenant-settings';
@@ -75,6 +76,8 @@ async function processOne(db: PrismaClient, id: string, now: Date): Promise<Outc
   });
   const b = r.booking;
   const tenant = await db.tenant.findUniqueOrThrow({ where: { id: b.tenantId } });
+  // Демо-салон: в нём записываются посетители сайта, настоящим людям ничего не шлём
+  if (tenant.slug === DEMO_SLUG) return { status: 'CANCELLED', error: 'demo' };
   const feedback = r.type === 'AFTER_VISIT';
   if (feedback) {
     if (b.status !== 'COMPLETED') return { status: 'CANCELLED', error: `booking ${b.status}` };

@@ -5,6 +5,7 @@
  */
 import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
+import { demoResetTick } from './demo/demo';
 import { purgeDeletedTenants } from './auth/account.controller';
 import { billingTick } from './billing/billing.service';
 import { env } from './config';
@@ -46,6 +47,7 @@ async function main() {
     loop('billing', 60 * 60_000, () => billingTick(db)),
     loop('purge', 6 * 60 * 60_000, () => purgeDeletedTenants(db)),
     loop('insights', 60 * 60_000, () => insightsDigestTick(db)),
+    loop('demo', 30 * 60_000, () => demoResetTick(db)),
   ]);
 }
 

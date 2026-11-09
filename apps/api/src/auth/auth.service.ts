@@ -1,3 +1,4 @@
+import { DEMO_EMAIL } from '../demo/demo';
 import { createTemplateServices, industry } from '../common/industries';
 import { readSettings } from '../common/tenant-settings';
 import { PERM_KEYS } from '../common/permissions';
@@ -117,10 +118,13 @@ export class AuthService {
       await argon2.hash(dto.password).catch(() => null);
       throw invalid;
     }
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
+    // Общий демо-вход не блокируем: иначе любой может запереть его неверными паролями
+    const demo = user.email === DEMO_EMAIL;
+    if (!demo && user.lockedUntil && user.lockedUntil > new Date()) {
       throw new AppError('ACCOUNT_LOCKED', 'Слишком много попыток. Попробуйте через 15 минут', 423);
     }
     if (!(await argon2.verify(user.passwordHash, dto.password))) {
+      if (demo) throw invalid;
       const attempts = user.failedLoginAttempts + 1;
       await db.user.update({
         where: { id: user.id },

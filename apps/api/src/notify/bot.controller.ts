@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Headers, HttpCode, Post } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
-import { Auth, AuthCtx, Public } from '../common/auth';
+import { Auth, AuthCtx, Public, NoDemo } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
@@ -38,6 +38,7 @@ export class BotController {
   }
 
   // ─── Привязка Telegram сотрудника (уведомления о новых записях и об оплате) ───
+  @NoDemo()
   @Post('me/telegram')
   async linkStaff(@Auth() a: AuthCtx) {
     if (!telegram.enabled || !env.TELEGRAM_BOT_USERNAME) throw new AppError('TELEGRAM_DISABLED', 'Telegram-бот ещё не настроен', 503);

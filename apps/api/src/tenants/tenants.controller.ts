@@ -5,7 +5,7 @@ import { telegram } from '../notify/telegram';
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can, invalidatePermissions, Roles } from '../common/auth';
+import { Auth, AuthCtx, Can, invalidatePermissions, Roles, NoDemo } from '../common/auth';
 import { permissionMatrix, permissionsSchema } from '../common/permissions';
 import { audit } from '../common/audit';
 import { randomToken } from '../common/crypto';
@@ -47,6 +47,7 @@ export class TenantsController {
   }
 
   @Can('settings.manage')
+  @NoDemo()
   @Patch('tenant')
   update(@Auth() a: AuthCtx, @Body(new Zod(updateSchema)) dto: z.infer<typeof updateSchema>) {
     if (dto.timezone) {
@@ -82,6 +83,7 @@ export class TenantsController {
    * просто добавляем человека в салон.
    */
   @Can('team.manage')
+  @NoDemo()
   @Post('team')
   async invite(@Auth() a: AuthCtx, @Body(new Zod(inviteSchema)) dto: z.infer<typeof inviteSchema>) {
     if (dto.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Назначить управляющего может только владелец', 403);
@@ -109,6 +111,7 @@ export class TenantsController {
 
   /** Сменить роль сотрудника или привязку к мастеру */
   @Can('team.manage')
+  @NoDemo()
   @Patch('team/:id')
   async updateMember(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(memberSchema)) dto: z.infer<typeof memberSchema>) {
     if (dto.role === 'MANAGER' && a.role !== 'OWNER') throw new AppError('FORBIDDEN', 'Назначить управляющего может только владелец', 403);
@@ -151,6 +154,7 @@ export class TenantsController {
   }
 
   @Roles('OWNER')
+  @NoDemo()
   @Put('tenant/permissions')
   setPermissions(@Auth() a: AuthCtx, @Body(new Zod(z.object({ permissions: permissionsSchema }))) dto: { permissions: z.infer<typeof permissionsSchema> }) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {
@@ -166,6 +170,7 @@ export class TenantsController {
   }
 
   @Can('team.manage')
+  @NoDemo()
   @Delete('team/:id')
   async removeMember(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {

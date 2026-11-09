@@ -1,3 +1,4 @@
+import { DEMO_SLUG } from '../demo/demo';
 import type { PrismaClient } from '@prisma/client';
 import { push } from './push';
 import { esc, telegram } from './telegram';
@@ -14,6 +15,8 @@ export async function notifyStaff(
   opts: { resourceId?: string; ownersOnly?: boolean; buttons?: { text: string; url: string }[][]; push?: { title: string; body: string; data?: Record<string, string> } } = {},
 ) {
   try {
+    // Демо-салоном пользуются все желающие — уведомления оттуда никому не нужны
+    if ((await system.tenant.findUnique({ where: { id: tenantId }, select: { slug: true } }))?.slug === DEMO_SLUG) return 0;
     const members = await system.membership.findMany({
       where: {
         tenantId,

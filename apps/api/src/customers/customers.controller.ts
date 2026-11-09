@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can, can } from '../common/auth';
+import { Auth, AuthCtx, Can, can, NoDemo } from '../common/auth';
 import { maskEmail, maskPhone } from '../common/permissions';
 import { audit } from '../common/audit';
 import { conflict, isUniqueError, notFound } from '../common/errors';
@@ -126,6 +126,7 @@ export class CustomersController {
 
   /** Импорт (например, выгрузка из другой CRM). Существующие по телефону — пропускаются. */
   @Can('customers.view')
+  @NoDemo()
   @Post('import')
   import(@Auth() a: AuthCtx, @Body(new Zod(importSchema)) dto: z.infer<typeof importSchema>) {
     return this.prisma.withTenant(a.tenantId, async (tx) => {

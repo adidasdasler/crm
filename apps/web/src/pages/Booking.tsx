@@ -116,7 +116,7 @@ export function BookingPage() {
       {slug === 'demo' && (
         <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           Это демонстрационный салон — так клиенты видят запись. Чтобы записаться к своему мастеру, откройте ссылку, которую он вам прислал
-          (вида mioflow.ru/b/имя-мастера).
+          (вида mioflow.ru/b/имя-мастера). Уведомления из демо не отправляются, ночью записи стираются.
         </p>
       )}
       {step !== 'done' && <Progress step={step} />}
