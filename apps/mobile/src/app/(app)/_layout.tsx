@@ -29,6 +29,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="booking/new" options={{ title: 'Новая запись', presentation: 'modal' }} />
       <Stack.Screen name="booking/[id]" options={{ title: 'Запись' }} />
+      <Stack.Screen name="timeoff/new" options={{ title: 'Закрыть время', presentation: 'modal' }} />
       <Stack.Screen name="customer/[id]" options={{ title: 'Клиент' }} />
       <Stack.Screen name="service/[id]" options={{ title: 'Услуга', presentation: 'modal' }} />
       <Stack.Screen name="master/[id]" options={{ title: 'Мастер' }} />

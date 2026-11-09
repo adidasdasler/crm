@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { DateTime } from 'luxon';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can } from '../common/auth';
+import { Auth, AuthCtx, Can, can } from '../common/auth';
 import { audit } from '../common/audit';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
@@ -18,8 +19,17 @@ const base = z.object({
   serviceIds: z.array(uuid).optional(),
 });
 const timeOffSchema = z
-  .object({ startsAt: z.coerce.date(), endsAt: z.coerce.date(), reason: z.string().max(200).nullish() })
-  .refine((v) => v.startsAt < v.endsAt, 'Начало должно быть раньше конца');
+  .object({
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date(),
+    reason: z.string().trim().max(200).nullish(),
+    /** Повторять в то же время каждый день до этой даты включительно (например, обед) */
+    repeatUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /** Закрыть, даже если на это время уже есть записи */
+    force: z.boolean().optional(),
+  })
+  .refine((v) => v.startsAt < v.endsAt, 'Начало должно быть раньше конца')
+  .refine((v) => +v.endsAt - +v.startsAt <= 31 * 86400_000, 'Не больше месяца за раз');
 
 type Dto = z.infer<typeof base>;
 
@@ -39,6 +49,23 @@ export class ResourcesController {
         include: { services: { select: { serviceId: true } } },
       }),
     ).then((rows) => rows.map(({ services, ...r }) => ({ ...r, serviceIds: services.map((s) => s.serviceId) })));
+  }
+
+  /** Закрытое время всех мастеров за день — для календаря. Мастер без права «все записи» видит только своё. */
+  @Get('time-off')
+  dayTimeOffs(@Auth() a: AuthCtx, @Query('date') date?: string) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new AppError('VALIDATION_ERROR', 'Нужна дата в формате ГГГГ-ММ-ДД');
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const { timezone: tz } = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { timezone: true } });
+      const from = DateTime.fromISO(date, { zone: tz }).startOf('day');
+      return tx.timeOff.findMany({
+        where: {
+          startsAt: { lt: from.plus({ days: 1 }).toJSDate() }, endsAt: { gt: from.toJSDate() },
+          ...(can(a, 'bookings.all') ? {} : { resourceId: a.resourceId ?? '00000000-0000-0000-0000-000000000000' }),
+        },
+        orderBy: { startsAt: 'asc' },
+      });
+    });
   }
 
   @Get(':id')
@@ -111,21 +138,45 @@ export class ResourcesController {
     );
   }
 
-  @Can('staff.manage')
+  /**
+   * Закрыть время вручную: перерыв, личные дела, отгул на часть дня. В это время онлайн-запись недоступна.
+   * Мастер закрывает своё время, сотрудник с правом «мастера и графики» — любое.
+   */
   @Post(':id/time-off')
   addTimeOff(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(timeOffSchema)) dto: z.infer<typeof timeOffSchema>) {
+    if (!can(a, 'staff.manage') && a.resourceId !== id) throw new AppError('FORBIDDEN', 'Закрывать можно только своё время', 403);
     return this.prisma.withTenant(a.tenantId, async (tx) => {
       if (!(await tx.resource.findFirst({ where: { id, deletedAt: null } }))) throw notFound('Мастер');
-      return tx.timeOff.create({ data: { ...dto, tenantId: a.tenantId, resourceId: id } });
+      const { timezone: tz } = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { timezone: true } });
+      // Интервалы: один или тот же отрезок каждый день до repeatUntil (не больше 92 дней)
+      const first = DateTime.fromJSDate(dto.startsAt).setZone(tz);
+      const len = +dto.endsAt - +dto.startsAt;
+      const days = dto.repeatUntil ? Math.floor(DateTime.fromISO(dto.repeatUntil, { zone: tz }).startOf('day').diff(first.startOf('day'), 'days').days) + 1 : 1;
+      if (days < 1 || days > 92) throw new AppError('VALIDATION_ERROR', 'Повтор — от 1 до 92 дней');
+      const items = Array.from({ length: days }, (_, i) => {
+        const s = first.plus({ days: i });
+        return { startsAt: s.toJSDate(), endsAt: new Date(+s.toJSDate() + len) };
+      });
+      // Не закрываем молча время, на которое уже записаны клиенты
+      const busy = await tx.booking.count({
+        where: { resourceId: id, status: { in: ['SCHEDULED', 'CONFIRMED', 'ARRIVED'] }, OR: items.map((t) => ({ startsAt: { lt: t.endsAt }, endsAt: { gt: t.startsAt } })) },
+      });
+      if (busy && !dto.force) {
+        throw new AppError('BOOKINGS_IN_TIME_OFF', `На это время уже есть записи: ${busy}. Перенесите их или закройте время всё равно`, 409, { count: busy });
+      }
+      await tx.timeOff.createMany({ data: items.map((t) => ({ ...t, reason: dto.reason ?? null, tenantId: a.tenantId, resourceId: id })) });
+      await audit(tx, a, 'timeoff.create', 'Resource', id, null, { count: items.length, from: dto.startsAt, reason: dto.reason });
+      return { created: items.length, bookingsInside: busy };
     });
   }
 
-  @Can('staff.manage')
   @Delete(':id/time-off/:timeOffId')
-  removeTimeOff(@Auth() a: AuthCtx, @Param('timeOffId', ParseUUIDPipe) timeOffId: string) {
+  removeTimeOff(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Param('timeOffId', ParseUUIDPipe) timeOffId: string) {
+    if (!can(a, 'staff.manage') && a.resourceId !== id) throw new AppError('FORBIDDEN', 'Открывать можно только своё время', 403);
     return this.prisma.withTenant(a.tenantId, async (tx) => {
-      const r = await tx.timeOff.deleteMany({ where: { id: timeOffId } });
-      if (!r.count) throw notFound('Исключение');
+      const r = await tx.timeOff.deleteMany({ where: { id: timeOffId, resourceId: id } });
+      if (!r.count) throw notFound('Закрытое время');
+      await audit(tx, a, 'timeoff.delete', 'Resource', id, null, { timeOffId });
       return { ok: true };
     });
   }

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { api, closeApp, createSalon, getApp, resetDb, system, tomorrowAt } from './helpers';
+import { DateTime } from 'luxon';
+import { api, closeApp, createSalon, getApp, resetDb, system, tomorrowAt, tomorrowDate } from './helpers';
 
 beforeAll(async () => {
   await resetDb();
@@ -135,5 +136,53 @@ describe('карточки «Сегодня»', () => {
     const inv = await s.api.post('/team', { email: `t-${Date.now()}@test.ru`, name: 'М', role: 'MASTER', resourceId: m.body.data.id });
     const login = await api().post('/auth/login', { email: inv.body.data.user.email, password: inv.body.data.tempPassword });
     expect((await api(login.body.data.accessToken).get('/analytics/today')).status).toBe(403);
+  });
+});
+
+describe('закрытое время', () => {
+  it('мастер закрывает своё время, но не чужое; записи не перекрываются молча; повтор по дням', async () => {
+    const s = await createSalon('TimeOff');
+    const m2 = await s.api.post('/resources', { name: 'Ирина', schedule: { '1': [['10:00', '20:00']], '2': [['10:00', '20:00']], '3': [['10:00', '20:00']], '4': [['10:00', '20:00']], '5': [['10:00', '20:00']], '6': [['10:00', '20:00']], '7': [['10:00', '20:00']] } });
+    const master = await invite(s, 'MASTER', m2.body.data.id);
+
+    // Своё — можно, чужое — нет
+    const own = await master.api.post(`/resources/${m2.body.data.id}/time-off`, { startsAt: tomorrowAt('13:00'), endsAt: tomorrowAt('14:00'), reason: 'Обед', repeatUntil: tomorrowDate(3) });
+    expect(own.status).toBe(201);
+    expect(own.body.data.created).toBe(3);
+    expect((await master.api.post(`/resources/${s.resourceId}/time-off`, { startsAt: tomorrowAt('13:00'), endsAt: tomorrowAt('14:00') })).status).toBe(403);
+
+    // Слоты внутри закрытого времени недоступны
+    const pub = api();
+    await system.serviceResource.createMany({ data: [{ tenantId: s.tenantId, serviceId: s.serviceId, resourceId: m2.body.data.id }], skipDuplicates: true });
+    const after = (await pub.get(`/public/${s.slug}/slots?date=${tomorrowDate(2)}&serviceIds=${s.serviceId}`)).body.data;
+    const irina = after.find((r: any) => r.resourceId === m2.body.data.id);
+    expect(irina).toBeTruthy();
+    const times: string[] = irina.slots.map((x: string) => DateTime.fromISO(x).setZone('Europe/Moscow').toFormat('HH:mm'));
+    expect(times).not.toContain('13:00');
+    expect(times).not.toContain('12:30');
+    expect(times).toContain('14:00');
+
+    // Календарь дня: мастер видит только своё, владелец — всё
+    await s.api.post(`/resources/${s.resourceId}/time-off`, { startsAt: tomorrowAt('15:00'), endsAt: tomorrowAt('16:00') });
+    expect((await master.api.get(`/resources/time-off?date=${tomorrowDate()}`)).body.data).toHaveLength(1);
+    const day = (await s.api.get(`/resources/time-off?date=${tomorrowDate()}`)).body.data;
+    expect(day).toHaveLength(2);
+
+    // Есть запись — нужно подтверждение
+    const b = await s.api.post('/bookings', { customer: { name: 'Клиент', phone: '+79991112233' }, resourceId: s.resourceId, serviceIds: [s.serviceId], startsAt: tomorrowAt('11:00') });
+    expect(b.status).toBe(201);
+    const clash = await s.api.post(`/resources/${s.resourceId}/time-off`, { startsAt: tomorrowAt('10:30'), endsAt: tomorrowAt('12:00') });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error.code).toBe('BOOKINGS_IN_TIME_OFF');
+    const forced = await s.api.post(`/resources/${s.resourceId}/time-off`, { startsAt: tomorrowAt('10:30'), endsAt: tomorrowAt('12:00'), force: true });
+    expect(forced.status).toBe(201);
+    expect(forced.body.data.bookingsInside).toBe(1);
+
+    // Открыть время обратно
+    const mine = (await master.api.get(`/resources/time-off?date=${tomorrowDate()}`)).body.data[0];
+    expect((await master.api.delete(`/resources/${m2.body.data.id}/time-off/${mine.id}`)).status).toBe(200);
+    expect((await master.api.get(`/resources/time-off?date=${tomorrowDate()}`)).body.data).toHaveLength(0);
+    const ownerBlock = day.find((t: any) => t.resourceId === s.resourceId);
+    expect((await master.api.delete(`/resources/${s.resourceId}/time-off/${ownerBlock.id}`)).status).toBe(403);
   });
 });

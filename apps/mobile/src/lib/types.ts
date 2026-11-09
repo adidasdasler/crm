@@ -123,3 +123,4 @@ export type Design = {
   service: string | null; master: string | null; customer: string | null;
   materials?: { id: string; name: string; unit: string }[]; canEdit?: boolean;
 };
+export type TimeOff = { id: string; resourceId: string; startsAt: string; endsAt: string; reason: string | null };
