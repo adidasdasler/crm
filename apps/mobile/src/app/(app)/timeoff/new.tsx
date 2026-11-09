@@ -9,7 +9,7 @@ import { can, useMe } from '../../../lib/auth';
 import { confirm } from '../../../lib/confirm';
 import { addDays, dayLabel, today, zonedToIso } from '../../../lib/format';
 import { useOnline } from '../../../lib/offline';
-import { formatTime, validTime } from '../../../lib/schedule';
+import { finishTime, formatTime, validTime } from '../../../lib/schedule';
 import type { Resource } from '../../../lib/types';
 
 const REASONS = ['Перерыв', 'Обед', 'Личное', 'Отгул', 'Учёба'];
@@ -127,6 +127,8 @@ function Time({ value, onChange, label }: { value: string; onChange: (v: string)
     <TextInput
       value={value}
       onChangeText={(v) => onChange(formatTime(v))}
+      onBlur={() => onChange(finishTime(value))}
+      placeholder="1300"
       selectTextOnFocus
       keyboardType="number-pad"
       maxLength={5}

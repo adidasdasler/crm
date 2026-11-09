@@ -39,7 +39,7 @@ export default function TabsLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Календарь', headerTitle: me.tenant.name, tabBarIcon: icon('calendar') }} />
+      <Tabs.Screen name="index" options={{ title: 'Записи', headerTitle: me.tenant.name, tabBarIcon: icon('calendar') }} />
       <Tabs.Screen name="dashboard" options={{ title: 'Обзор', headerTitle: 'Обзор салона', href: can(me, 'analytics.view') ? undefined : null, tabBarIcon: icon('stats-chart') }} />
       <Tabs.Screen name="customers" options={{ title: terms.clientPlural, tabBarIcon: icon('people') }} />
       <Tabs.Screen name="services" options={{ title: 'Услуги', href: can(me, 'catalog.manage') ? undefined : null, tabBarIcon: icon('pricetags') }} />

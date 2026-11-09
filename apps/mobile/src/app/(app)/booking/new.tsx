@@ -7,6 +7,7 @@ import { Button, C, Card, Chip, ErrorText, Field, H, Muted, Screen } from '../..
 import { ApiError, get, post } from '../../../lib/api';
 import { can, useMe } from '../../../lib/auth';
 import { useOnline } from '../../../lib/offline';
+import { finishTime, formatTime } from '../../../lib/schedule';
 import { addDays, dayLabel, minutes, phonePretty, rub, time, today, zonedToIso } from '../../../lib/format';
 import type { Customer, Resource, Service } from '../../../lib/types';
 
@@ -167,7 +168,7 @@ export default function NewBooking() {
             </View>
           )}
           {resourceId && (
-            <Field label="Или своё время (вне сетки/графика)" value={manualTime} onChangeText={(v) => { setManualTime(v); setSlot(null); }} placeholder="например 21:30" keyboardType="numbers-and-punctuation" />
+            <Field label="Или своё время (вне сетки/графика)" value={manualTime} onChangeText={(v) => { setManualTime(formatTime(v)); setSlot(null); }} onBlur={() => setManualTime(finishTime(manualTime))} placeholder="цифрами, например 2130" keyboardType="number-pad" maxLength={5} />
           )}
         </>
       )}

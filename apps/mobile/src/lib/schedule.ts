@@ -51,13 +51,22 @@ export function scheduleText(s: Schedule | null | undefined): string {
   return groups.join(', ');
 }
 
-/** «1000» → «10:00», «930» → «09:30» — время вводится одними цифрами */
+/**
+ * Время вводится одними цифрами, двоеточие ставится само: «1» → «1», «10» → «10», «100» → «10:0», «1000» → «10:00».
+ * Двоеточие, набранное вручную, тоже не мешает.
+ */
 export function formatTime(input: string): string {
-  const digits = input.replace(/\D/g, '').slice(0, 4);
-  if (input.includes(':')) return input.replace(/[^\d:]/g, '').slice(0, 5);
-  if (digits.length <= 2) return digits;
-  if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  const d = input.replace(/\D/g, '').slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+/** Довести недописанное время при выходе из поля: «9» → «09:00», «18» → «18:00», «93:0» (набрали 930) → «09:30» */
+export function finishTime(value: string): string {
+  const d = value.replace(/\D/g, '');
+  if (!d) return value;
+  if (d.length <= 2) return +d <= 23 ? `${d.padStart(2, '0')}:00` : value;
+  if (d.length === 3) return +d.slice(0, 2) <= 23 && +d[2] <= 5 ? `${d.slice(0, 2)}:${d[2]}0` : `0${d[0]}:${d.slice(1)}`;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
 }
 export const validTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 

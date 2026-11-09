@@ -1,6 +1,6 @@
 import { Pressable, Switch, TextInput, View } from 'react-native';
 import { addDays, today } from '../lib/format';
-import { CycleMode, formatTime, normalize, Ranges, rangesOn, Schedule, validTime, WeekMode } from '../lib/schedule';
+import { CycleMode, finishTime, formatTime, normalize, Ranges, rangesOn, Schedule, validTime, WeekMode } from '../lib/schedule';
 import type { Week } from '../lib/types';
 import { Text } from './Text';
 import { C, Chip, Muted, s } from './ui';
@@ -152,7 +152,7 @@ function HoursRow({ label, value, onChange, editable }: { label?: string; value:
   );
 }
 
-/** Время цифрами: «1000» превращается в «10:00» — двоеточие ставить не нужно */
+/** Время цифрами: «1000» превращается в «10:00», «9» — в «09:00». Двоеточие ставить не нужно */
 function TimeInput({ value, onChange, editable, label }: { value: string; onChange: (v: string) => void; editable: boolean; label: string }) {
   const bad = !validTime(value);
   return (
@@ -160,6 +160,8 @@ function TimeInput({ value, onChange, editable, label }: { value: string; onChan
       value={value}
       editable={editable}
       onChangeText={(v) => onChange(formatTime(v))}
+      onBlur={() => onChange(finishTime(value))}
+      placeholder="1000"
       selectTextOnFocus
       keyboardType="number-pad"
       maxLength={5}
