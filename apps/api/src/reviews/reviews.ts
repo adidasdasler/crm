@@ -80,7 +80,7 @@ export async function afterRating(system: PrismaClient, review: { tenantId: stri
     const when = b.startsAt.toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     void notifyStaff(system, review.tenantId,
       `⚠️ <b>Низкая оценка: ${review.rating} из 5</b>\n${esc(b.customer.name)}, ${esc(b.customer.phone)}\n${esc(when)} · ${esc(b.items.map((i) => i.name).join(', '))} · мастер ${esc(b.resource.name)}${review.comment ? `\n«${esc(review.comment)}»` : ''}\n\nСвяжитесь с клиентом, пока он не написал отзыв на картах.`,
-      { push: { title: `Оценка ${review.rating} из 5`, body: `${b.customer.name} · мастер ${b.resource.name}`, data: { bookingId: review.bookingId } } },
+      { push: { title: `Оценка ${review.rating} из 5`, body: `Мастер ${b.resource.name} · откройте запись, чтобы связаться с клиентом`, data: { bookingId: review.bookingId } } },
     );
   }
   if (review.rating >= 4) {

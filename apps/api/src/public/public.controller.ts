@@ -222,7 +222,8 @@ export class PublicController {
     void notifyStaff(
       this.prisma.system, t.id,
       `🆕 <b>Онлайн-запись</b>\n${esc(when)} · ${esc(booking.resource.name)}\n${esc(booking.items.map((i) => i.name).join(', '))}\n${esc(dto.name)}, ${esc(dto.phone)}`,
-      { resourceId: booking.resourceId, push: { title: 'Новая онлайн-запись', body: `${when} · ${dto.name} · ${booking.items.map((i) => i.name).join(', ')}`, data: { bookingId: booking.id } } },
+      { resourceId: booking.resourceId, // В push без имени клиента: уведомления идут через серверы Apple/Google за рубежом — передаём минимум
+        push: { title: 'Новая онлайн-запись', body: `${when} · ${booking.items.map((i) => i.name).join(', ')}`, data: { bookingId: booking.id } } },
     );
 
     return {
