@@ -4,7 +4,7 @@ export type Week = Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', [stri
 
 export type Perm =
   | 'bookings.all' | 'customers.view' | 'customers.contacts' | 'customers.export' | 'catalog.manage'
-  | 'staff.manage' | 'stock.manage' | 'team.manage' | 'settings.manage' | 'analytics.view';
+  | 'staff.manage' | 'stock.manage' | 'finance.manage' | 'team.manage' | 'settings.manage' | 'analytics.view';
 
 export type Me = {
   user: { id: string; email: string; name: string };
@@ -30,11 +30,12 @@ export type Booking = {
   resource: { id: string; name: string; color: string };
   reminders?: { id: string; type: 'BEFORE_24H' | 'BEFORE_2H' | 'AFTER_VISIT'; status: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED'; channel: 'TELEGRAM' | 'MAX' | 'VK' | 'EMAIL' | 'SMS'; scheduledAt: string; sentAt: string | null }[];
   review?: { rating: number; comment: string | null; source: string; createdAt: string } | null;
+  settlement?: { pass: { name: string; kind: string; visitsLeft: number | null; expiresAt: string } | null; fromBalance: number };
 };
 export type Tenant = {
   id: string; name: string; slug: string; phone: string | null; address: string | null; timezone: string;
   settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string;
-    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean;
+    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean; depositTiers: { amount: number; bonus: number }[]; depositAutoCharge: boolean;
   };
   industry?: { code: string; label: string; terms: Terms };
 };
@@ -53,7 +54,7 @@ export type Analytics = {
   period: { from: string; to: string; days: number };
   totals: {
     revenue: number; booked: number; bookings: number; completed: number; cancelled: number; noShow: number; noShowRate: number;
-    avgCheck: number; onlineShare: number; newCustomers: number; load: number; materialCost: number; rating: number | null; reviews: number; lowRatings: number;
+    avgCheck: number; onlineShare: number; newCustomers: number; load: number; materialCost: number; rating: number | null; reviews: number; lowRatings: number; deposits: number; passSales: number; passCount: number;
   };
   previous: { booked: number; bookings: number };
   byDay: { date: string; revenue: number; bookings: number }[];
@@ -97,4 +98,19 @@ export type Insight = {
   code: string; level: 'warn' | 'tip' | 'good'; title: string; text: string;
   action?: { label: string; route: string };
   customers?: { id: string; name: string; lastVisitAt: string }[];
+};
+
+export type TimeRule = { days?: number[]; from?: string; to?: string } | null;
+export type PassPlan = {
+  id: string; name: string; description: string | null; kind: 'VISITS' | 'UNLIMITED'; visits: number | null; validityDays: number;
+  price: number; serviceIds: string[]; timeRule: TimeRule; isPublic: boolean; isActive: boolean;
+};
+export type CustomerPass = {
+  id: string; name: string; kind: 'VISITS' | 'UNLIMITED'; visitsTotal: number | null; visitsLeft: number | null; price: number;
+  method: string | null; startsAt: string; expiresAt: string; status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'CANCELLED'; timeRule: TimeRule;
+};
+export type Account = {
+  money: number; bonus: number; total: number; tiers: { amount: number; bonus: number }[];
+  entries: { id: string; type: string; label: string; money: number; bonus: number; method: string | null; bookingId: string | null; note: string | null; createdAt: string }[];
+  passes: CustomerPass[];
 };

@@ -1,3 +1,4 @@
+import { settlementOf } from '../loyalty/loyalty';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -81,12 +82,13 @@ export class BookingsController {
 
   @Get(':id')
   async get(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
-    const [b, review] = await this.prisma.withTenant(a.tenantId, (tx) => Promise.all([
+    const [b, review, settlement] = await this.prisma.withTenant(a.tenantId, (tx) => Promise.all([
       tx.booking.findUnique({ where: { id }, include: { ...bookingInclude, reminders: true } }),
       tx.review.findUnique({ where: { bookingId: id }, select: { rating: true, comment: true, source: true, createdAt: true } }),
+      settlementOf(tx, id),
     ]));
     if (!b || (!can(a, 'bookings.all') && b.resourceId !== a.resourceId)) throw notFound('Запись');
-    return { ...maskBookings(a, [b])[0], review };
+    return { ...maskBookings(a, [b])[0], review, settlement };
   }
 
   @Post()

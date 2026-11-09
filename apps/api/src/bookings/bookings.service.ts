@@ -1,3 +1,4 @@
+import { settleBooking, unsettleBooking } from '../loyalty/loyalty';
 import { scheduleFeedback } from '../reviews/reviews';
 import { consumeForBooking, returnForBooking } from '../stock/stock';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -225,6 +226,9 @@ export class BookingsService {
     // Склад: при завершении визита списываем материалы по нормам услуг, при откате — возвращаем
     if (to === 'COMPLETED') await consumeForBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
     else if (b.status === 'COMPLETED') await returnForBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
+    // Оплата визита абонементом или с депозита (и возврат при откате)
+    if (to === 'COMPLETED') await settleBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
+    else if (b.status === 'COMPLETED') await unsettleBooking(tx, { tenantId: b.tenantId, userId: actor.userId }, id);
     // Через 2 часа после визита — просьба оценить (снимается, если завершение отменили)
     if (to === 'COMPLETED' || b.status === 'COMPLETED') await scheduleFeedback(tx, b, to === 'COMPLETED');
     if (to === 'CANCELLED' || to === 'NO_SHOW') {

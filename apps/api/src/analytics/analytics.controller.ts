@@ -44,7 +44,7 @@ export class AnalyticsController {
       const end = to.plus({ days: 1 }).startOf('day').toJSDate();
       const prevStart = from.minus({ days }).startOf('day').toJSDate();
 
-      const [bookings, prev, resources, newCustomers, used, reviews] = await Promise.all([
+      const [bookings, prev, resources, newCustomers, used, reviews, topups, passSales] = await Promise.all([
         tx.booking.findMany({
           where: { startsAt: { gte: start, lt: end } },
           select: {
@@ -58,6 +58,9 @@ export class AnalyticsController {
         // Материалы, израсходованные на визиты за период (по цене партии)
         tx.stockMovement.findMany({ where: { type: { in: ['SERVICE', 'RETURN'] }, createdAt: { gte: start, lt: end } }, select: { qty: true, costPerUnit: true } }),
         tx.review.findMany({ where: { createdAt: { gte: start, lt: end } }, select: { rating: true, resourceId: true } }),
+        // Деньги, которые клиенты внесли заранее (депозиты за вычетом возвратов) и абонементы
+        tx.accountEntry.aggregate({ where: { type: { in: ['TOPUP', 'REFUND'] }, createdAt: { gte: start, lt: end } }, _sum: { money: true } }),
+        tx.customerPass.aggregate({ where: { status: { not: 'CANCELLED' }, createdAt: { gte: start, lt: end } }, _sum: { price: true }, _count: true }),
       ]);
       const avg = (list: { rating: number }[]) => (list.length ? Math.round((list.reduce((s, r) => s + r.rating, 0) / list.length) * 10) / 10 : null);
       const materialCost = Math.max(0, -Math.round(used.reduce((s, m) => s + (m.qty / 1000) * m.costPerUnit, 0)));
@@ -129,6 +132,9 @@ export class AnalyticsController {
           onlineShare: active.length ? online / active.length : 0,
           newCustomers,
           materialCost,
+          deposits: topups._sum.money ?? 0,
+          passSales: passSales._sum.price ?? 0,
+          passCount: passSales._count,
           rating: avg(reviews),
           reviews: reviews.length,
           lowRatings: reviews.filter((r) => r.rating <= 3).length,

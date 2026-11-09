@@ -21,6 +21,10 @@ export const tenantSettingsSchema = z.object({
   cancelBeforeHours: z.number().int().min(0).max(168).default(3),
   onlineBookingEnabled: z.boolean().default(true),
   remindersEnabled: z.boolean().default(true),
+  /** Ступени депозита: «пополни на amount — получи bonus сверху», копейки */
+  depositTiers: z.array(z.object({ amount: z.number().int().min(100).max(100_000_000), bonus: z.number().int().min(0).max(100_000_000) })).max(6).default([]),
+  /** Списывать стоимость визита с депозита клиента при завершении визита */
+  depositAutoCharge: z.boolean().default(true),
   /** Просить клиента оценить визит через 2 часа после завершения */
   feedbackEnabled: z.boolean().default(true),
   /** Еженедельная сводка с советами владельцу (понедельник утром) */

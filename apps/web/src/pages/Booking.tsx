@@ -9,6 +9,10 @@ type Salon = {
   name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number;
   about?: string | null; links?: Partial<Record<'site' | 'vk' | 'telegram' | 'max' | 'instagram' | 'whatsapp' | 'yandexMaps' | 'twoGis', string>>;
   hours?: Hours; hoursText?: string; industry?: { label: string; terms: { staff: string } };
+  loyalty?: {
+    tiers: { amount: number; bonus: number }[];
+    plans: { name: string; description: string | null; kind: 'VISITS' | 'UNLIMITED'; visits: number | null; validityDays: number; price: number; timeRule: { days?: number[]; from?: string; to?: string } | null }[];
+  };
 };
 type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null; comboOf?: string[] };
 type Nearest = { resourceId: string; name: string; at: string };
@@ -368,6 +372,7 @@ function SalonHero({ salon }: { salon: Salon }) {
           {salon.phone && <a href={`tel:${salon.phone}`} className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">Позвонить</a>}
           {links.map(([k, v]) => <a key={k} href={v} target="_blank" rel="noreferrer" className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">{LINK_LABELS[k] ?? k}</a>)}
         </div>
+        <Offers salon={salon} />
         {(salon.address || salon.hoursText) && (
           <div className="space-y-1 rounded-2xl bg-white/[0.07] p-4 text-sm ring-1 ring-white/10">
             {salon.address && <p><span className="text-[#C9CCF2]">Адрес:</span> {salon.address}</p>}
@@ -445,5 +450,37 @@ function ComboBadge({ s, all }: { s: Service; all: Service[] }) {
       <span className="rounded-full bg-blush-300 px-2 py-0.5 font-semibold text-ink">Комплекс</span>
       {save > 0 && <span className="font-semibold text-[#0F7A52]">выгода {rub(save)}</span>}
     </p>
+  );
+}
+
+const WD = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+/** Витрина: депозит с бонусом и абонементы. Оформляются в салоне — деньги принимает салон. */
+function Offers({ salon }: { salon: Salon }) {
+  const l = salon.loyalty;
+  if (!l || (!l.tiers.length && !l.plans.length)) return null;
+  const rubles = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
+  return (
+    <div className="flex snap-x gap-3 overflow-x-auto pb-1" aria-label="Абонементы и бонусы">
+      {l.tiers.map((t) => (
+        <div key={t.amount} className="min-w-[200px] snap-start rounded-2xl bg-blush-300 p-4 text-ink">
+          <p className="text-xs font-semibold uppercase tracking-wide">Депозит</p>
+          <p className="mt-1 text-lg font-bold">Внесите {rubles(t.amount)}</p>
+          <p className="font-semibold">получите {rubles(t.amount + t.bonus)}</p>
+        </div>
+      ))}
+      {l.plans.map((p) => {
+        const rule = p.timeRule ? [p.timeRule.days?.length ? p.timeRule.days.map((d) => WD[d - 1]).join(', ') : '', p.timeRule.from || p.timeRule.to ? `${p.timeRule.from ?? ''}–${p.timeRule.to ?? ''}` : ''].filter(Boolean).join(' ') : '';
+        return (
+          <div key={p.name} className="min-w-[220px] snap-start rounded-2xl bg-white/[0.08] p-4 ring-1 ring-white/15">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#C9CCF2]">Абонемент</p>
+            <p className="mt-1 font-semibold">{p.name}</p>
+            <p className="text-sm text-[#C9CCF2]">{p.kind === 'VISITS' ? `${p.visits} визитов` : 'безлимит'} · {p.validityDays} дн.{rule ? ` · ${rule}` : ''}</p>
+            {p.description && <p className="mt-1 text-sm text-[#E3E5F7]">{p.description}</p>}
+            <p className="mt-2 text-lg font-bold">{rubles(p.price)}</p>
+          </div>
+        );
+      })}
+      <p className="sr-only">Оформить депозит или абонемент можно в салоне.</p>
+    </div>
   );
 }

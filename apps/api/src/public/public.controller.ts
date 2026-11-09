@@ -86,6 +86,12 @@ export class PublicController {
       // Мини-сайт
       about: t.s.about ?? null, links: t.s.links ?? {}, hours, hoursText: hoursText(hours),
       industry: { code: ind.code, label: ind.label, terms: ind.terms },
+      // Витрина: депозиты с бонусом и абонементы (оформляются в салоне)
+      loyalty: {
+        tiers: t.s.depositTiers.map((x) => ({ amount: x.amount / 100, bonus: x.bonus / 100 })),
+        plans: (await this.prisma.withTenant(t.id, (tx) => tx.passPlan.findMany({ where: { isActive: true, isPublic: true }, orderBy: { price: 'asc' } })))
+          .map((p) => ({ name: p.name, description: p.description, kind: p.kind, visits: p.visits, validityDays: p.validityDays, price: p.price / 100, timeRule: p.timeRule })),
+      },
       /** Реквизиты салона как оператора ПДн — для страницы согласия */
       legalName: t.s.legalName ?? null, inn: t.s.inn ?? null,
       telegramBot: telegram.enabled ? telegram.deepLink('')?.replace(/\?start=$/, '') ?? null : null,
@@ -245,10 +251,22 @@ export class PublicController {
       tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, include: bookingInclude }),
     );
     if (!b) throw notFound('Запись');
-    const review = await this.prisma.withTenant(t.id, (tx) => tx.review.findUnique({ where: { bookingId: b.id }, select: { rating: true, comment: true } }));
+    const [review, wallet] = await this.prisma.withTenant(t.id, (tx) => Promise.all([
+      tx.review.findUnique({ where: { bookingId: b.id }, select: { rating: true, comment: true } }),
+      // Баланс и абонементы клиента этой записи — видны только по личной ссылке
+      tx.customer.findUnique({
+        where: { id: b.customerId },
+        select: { balance: true, bonus: true },
+      }).then(async (c) => ({
+        money: (c?.balance ?? 0) / 100, bonus: (c?.bonus ?? 0) / 100,
+        passes: (await tx.customerPass.findMany({ where: { customerId: b.customerId, status: 'ACTIVE', expiresAt: { gt: new Date() } }, orderBy: { expiresAt: 'asc' } }))
+          .map((p) => ({ name: p.name, kind: p.kind, visitsLeft: p.visitsLeft, expiresAt: p.expiresAt })),
+      })),
+    ]));
     return {
       id: b.id, status: b.status, startsAt: b.startsAt, endsAt: b.endsAt, price: b.price,
       review,
+      wallet,
       canReview: b.status === 'COMPLETED' && Date.now() - +b.endsAt <= FEEDBACK_WINDOW_DAYS * 86400_000,
       mapsLinks: { yandex: t.s.links?.yandexMaps ?? null, twoGis: t.s.links?.twoGis ?? null },
       resource: b.resource.name, services: b.items.map((i) => i.name),

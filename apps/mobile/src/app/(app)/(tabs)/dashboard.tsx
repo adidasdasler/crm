@@ -73,6 +73,7 @@ export default function Dashboard() {
             <Kpi icon="calendar-outline" label="Записей" value={String(d.totals.bookings)} hint={`из них онлайн ${pct(d.totals.onlineShare)}`} wide={wide} />
             <Kpi icon="wallet-outline" label="Средний чек" value={rub(d.totals.avgCheck)} wide={wide} />
             <Kpi icon="speedometer-outline" label="Загрузка мастеров" value={pct(d.totals.load)} hint="занятое время / по графику" wide={wide} />
+            {(d.totals.deposits > 0 || d.totals.passSales > 0) && <Kpi icon="wallet-outline" label="Внесли заранее" value={rub(d.totals.deposits + d.totals.passSales)} hint={`депозиты ${rub(d.totals.deposits)} · абонементы: ${d.totals.passCount}`} wide={wide} />}
             {d.totals.reviews > 0 && <Kpi icon="star-outline" label="Оценка клиентов" value={`${d.totals.rating?.toFixed(1)} ★`} hint={`${d.totals.reviews} оценок${d.totals.lowRatings ? ` · низких: ${d.totals.lowRatings}` : ''}`} wide={wide} tone={d.totals.lowRatings ? 'bad' : undefined} />}
             <Kpi icon="person-add-outline" label="Новых клиентов" value={String(d.totals.newCustomers)} wide={wide} />
             {d.totals.materialCost > 0 && <Kpi icon="cube-outline" label="Материалы" value={rub(d.totals.materialCost)} hint={`${pct(d.totals.revenue ? d.totals.materialCost / d.totals.revenue : 0)} от оплаченного`} wide={wide} />}

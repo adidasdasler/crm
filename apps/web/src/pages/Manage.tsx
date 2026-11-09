@@ -5,6 +5,7 @@ import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
   salon: { name: string; phone: string | null; address: string | null }; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
+  wallet?: { money: number; bonus: number; passes: { name: string; kind: string; visitsLeft: number | null; expiresAt: string }[] };
   canReview?: boolean; review?: { rating: number; comment: string | null } | null; mapsLinks?: { yandex: string | null; twoGis: string | null };
 };
 const STATUS: Record<string, string> = {
@@ -48,6 +49,14 @@ export function ManagePage() {
           <p>{info.services.join(', ')} · {info.resource} · {rub(info.price)}</p>
           {info.salon.address && <p className="text-ink-muted">{info.salon.address}</p>}
           <p className="inline-block rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">{STATUS[info.status] ?? info.status}</p>
+          {info.wallet && (info.wallet.money + info.wallet.bonus > 0 || info.wallet.passes.length > 0) && (
+            <div className="space-y-1 rounded-2xl bg-blush-100 p-4 text-sm">
+              {info.wallet.money + info.wallet.bonus > 0 && <p><b>На вашем счёте: {(info.wallet.money + info.wallet.bonus).toLocaleString('ru-RU')} ₽</b>{info.wallet.bonus > 0 ? ` (из них бонусы ${info.wallet.bonus.toLocaleString('ru-RU')} ₽)` : ''}</p>}
+              {info.wallet.passes.map((p) => (
+                <p key={p.name + p.expiresAt}>Абонемент «{p.name}»: {p.kind === 'VISITS' ? `осталось ${p.visitsLeft}` : 'безлимит'} · до {new Date(p.expiresAt).toLocaleDateString('ru-RU')}</p>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col gap-2 pt-2">
             {info.status === 'SCHEDULED' && <button className="btn-primary" disabled={busy} onClick={() => act('confirm')}>Подтвердить, приду</button>}
             {info.canCancel && <button className="btn-ghost text-red-600" disabled={busy} onClick={() => act('cancel')}>Отменить запись</button>}

@@ -77,6 +77,15 @@ export default function BookingScreen() {
         </Card>
       )}
       {b.source === 'WIDGET' && <Muted>Клиент записался онлайн</Muted>}
+      {b.settlement && (b.settlement.pass || b.settlement.fromBalance > 0) && (
+        <Card style={{ backgroundColor: C.brandSoft, borderColor: 'transparent' }}>
+          <Text style={{ fontWeight: '600' }}>
+            {b.settlement.pass
+              ? `Оплачено абонементом «${b.settlement.pass.name}»${b.settlement.pass.visitsLeft !== null ? ` · осталось ${b.settlement.pass.visitsLeft}` : ''}`
+              : `Списано с депозита: ${rub(b.settlement.fromBalance)}`}
+          </Text>
+        </Card>
+      )}
       {b.review && (
         <Card style={{ backgroundColor: b.review.rating <= 3 ? '#FDECE7' : C.brandSoft, borderColor: 'transparent' }}>
           <Text style={{ fontWeight: '600' }}>Оценка клиента: {'★'.repeat(b.review.rating)}{'☆'.repeat(5 - b.review.rating)}</Text>

@@ -344,6 +344,9 @@ model Customer {
   vkUserId         String?
   /// id пользователя мессенджера MAX (запустил бота MioFlow)
   maxUserId        String?
+  /// Депозит: деньги (возвратные) и бонусы (невозвратные), копейки
+  balance          Int       @default(0)
+  bonus            Int       @default(0)
   totalVisits      Int       @default(0)
   totalSpent       Int       @default(0)
   lastVisitAt      DateTime? @db.Timestamptz(3)
@@ -546,4 +549,99 @@ model Review {
 
   @@index([tenantId, createdAt], map: "Review_tenant_idx")
   @@index([tenantId, resourceId], map: "Review_resource_idx")
+}
+
+enum AccountEntryType {
+  TOPUP
+  CHARGE
+  REFUND
+  RETURN
+  ADJUST
+}
+
+enum PassKind {
+  VISITS
+  UNLIMITED
+}
+
+enum PassStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+/// Операция по балансу клиента (журнал, только добавление)
+model AccountEntry {
+  id         String           @id @default(uuid()) @db.Uuid
+  tenantId   String           @db.Uuid
+  customerId String           @db.Uuid
+  type       AccountEntryType
+  money      Int              @default(0)
+  bonus      Int              @default(0)
+  bookingId  String?          @db.Uuid
+  method     String?
+  userId     String?          @db.Uuid
+  note       String?
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, customerId, createdAt], map: "AccountEntry_customer_idx")
+  @@index([bookingId], map: "AccountEntry_booking_idx")
+}
+
+model PassPlan {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  name         String
+  description  String?
+  kind         PassKind
+  visits       Int?
+  validityDays Int
+  price        Int
+  serviceIds   String[] @default([]) @db.Uuid
+  /// { days: [1..7], from: "HH:MM", to: "HH:MM" }
+  timeRule     Json?
+  isPublic     Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([tenantId])
+}
+
+model CustomerPass {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  customerId  String     @db.Uuid
+  planId      String?    @db.Uuid
+  name        String
+  kind        PassKind
+  visitsTotal Int?
+  visitsLeft  Int?
+  serviceIds  String[]   @default([]) @db.Uuid
+  timeRule    Json?
+  price       Int
+  method      String?
+  startsAt    DateTime   @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime   @db.Timestamptz(3)
+  status      PassStatus @default(ACTIVE)
+  userId      String?    @db.Uuid
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  uses PassUse[]
+
+  @@index([tenantId, customerId, status], map: "CustomerPass_customer_idx")
+}
+
+model PassUse {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  passId    String   @db.Uuid
+  bookingId String   @unique @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  pass CustomerPass @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  @@index([passId], map: "PassUse_pass_idx")
 }

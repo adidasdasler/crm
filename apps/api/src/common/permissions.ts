@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   'catalog.manage': 'Редактировать услуги и цены',
   'staff.manage': 'Редактировать мастеров и графики',
   'stock.manage': 'Склад: приход, списание, инвентаризация',
+  'finance.manage': 'Депозиты и абонементы: пополнение, продажа, возврат',
   'team.manage': 'Приглашать сотрудников и менять их доступ',
   'settings.manage': 'Настройки салона и онлайн-записи',
   'analytics.view': 'Отчёты: выручка, загрузка, источники',
@@ -31,7 +32,7 @@ export const DEFAULT_PERMISSIONS: Record<ConfigurableRole, Record<Perm, boolean>
   MANAGER: all(true),
   ADMIN: {
     ...all(false),
-    'bookings.all': true, 'customers.view': true, 'customers.contacts': true, 'catalog.manage': true, 'staff.manage': true, 'stock.manage': true,
+    'bookings.all': true, 'customers.view': true, 'customers.contacts': true, 'catalog.manage': true, 'staff.manage': true, 'stock.manage': true, 'finance.manage': true,
   },
   // Мастер по умолчанию видит только свои записи и клиентов из них (с контактами, чтобы позвонить).
   MASTER: { ...all(false), 'customers.contacts': true },
