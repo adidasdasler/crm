@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
+import { calendarUrl, rememberBooking } from '../lib/my';
 import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
 
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
-  salon: { name: string; phone: string | null; address: string | null }; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
+  salon: { name: string; phone: string | null; address: string | null }; resourceId?: string; serviceIds?: string[]; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
   wallet?: { money: number; bonus: number; passes: { name: string; kind: string; visitsLeft: number | null; expiresAt: string }[] };
   canReview?: boolean; review?: { rating: number; comment: string | null } | null; mapsLinks?: { yandex: string | null; twoGis: string | null };
 };
@@ -22,7 +23,7 @@ export function ManagePage() {
 
   const load = () =>
     Promise.all([api<Info>(`/public/${slug}/manage/${token}`), api<{ timezone: string }>(`/public/${slug}`)])
-      .then(([i, s]) => { setInfo(i); setTz(s.timezone); })
+      .then(([i, s]) => { setInfo(i); setTz(s.timezone); rememberBooking({ slug, token, at: i.startsAt, salon: i.salon.name }); })
       .catch((e: ApiError) => setErr(e.message));
   useEffect(() => { load(); }, [slug, token]);
 
@@ -65,6 +66,11 @@ export function ManagePage() {
             )}
             {info.salon.phone && <a className="btn-ghost" href={`tel:${info.salon.phone}`}>Позвонить в салон</a>}
             {info.canReview && <Rate slug={slug} token={token} info={info} onSaved={load} />}
+            {['SCHEDULED', 'CONFIRMED'].includes(info.status) && <a className="btn-ghost" href={calendarUrl(slug, token)}>📅 Добавить в календарь</a>}
+            {info.serviceIds?.length ? (
+              <a className="btn-ghost" href={`/b/${slug}?s=${info.serviceIds.join(',')}${info.resourceId ? `&m=${info.resourceId}` : ''}`}>Записаться снова</a>
+            ) : null}
+            <Link to="/my" className="pt-1 text-center text-sm font-semibold text-brand-600 underline underline-offset-4">Все мои записи</Link>
             {info.telegramUrl && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
               <a className="btn-ghost" href={info.telegramUrl} target="_blank" rel="noreferrer">Напоминания в Telegram</a>
             )}

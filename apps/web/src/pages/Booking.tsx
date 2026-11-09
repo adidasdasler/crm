@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { Mark } from '../Logo';
 import { tg, tgFirstName, tgInitData } from '../lib/telegram';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
+import { calendarUrl, myBookings, rememberBooking } from '../lib/my';
 
 type Hours = ({ day: string; from: string; to: string } | null)[];
 type Salon = {
@@ -19,7 +20,7 @@ type Nearest = { resourceId: string; name: string; at: string };
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
 
 /** Источник перехода: ?src=yandex, ?src=2gis, ?src=vk… — салон видит в отчёте, откуда приходят клиенты */
 function readRef(): string | undefined {
@@ -57,6 +58,18 @@ export function BookingPage() {
         setCatalog(c);
         setDate(dateInTz(s.timezone));
         document.title = `Запись — ${s.name}`;
+        // «Записаться снова» из «Моих записей»: ?s=услуги&m=мастер — сразу к выбору времени
+        const q = new URLSearchParams(location.search);
+        const again = (q.get('s') ?? '').split(',').filter((id) => c?.services.some((x) => x.id === id));
+        if (again.length) {
+          setServiceIds(again);
+          const m = q.get('m');
+          if (m) {
+            setMasterId(m);
+            setStep('time');
+            api<Master[]>(`/public/${slug}/resources?serviceIds=${again.join(',')}`).then(setMasters).catch(() => null);
+          }
+        }
         tg.ready();
       })
       .catch((e: ApiError) => setError(e.status === 404 ? 'Салон не найден' : e.message));
@@ -232,7 +245,7 @@ export function BookingPage() {
           summary={{ services: selected, time, total, master: masters.find((m) => m.id === masterId)?.name ?? 'Любой мастер' }}
           payload={{ serviceIds, resourceId: masterId, startsAt: time }}
           onBack={() => setStep('time')}
-          onDone={(b) => { setBooked(b); setStep('done'); }}
+          onDone={(b) => { rememberBooking({ slug, token: b.manageToken, at: b.startsAt, salon: salon.name }); setBooked(b); setStep('done'); }}
           onTaken={() => { setTime(null); setStep('time'); }}
         />
       )}
@@ -251,8 +264,13 @@ export function BookingPage() {
               <button className="btn-primary w-full" onClick={() => tg.close()}>Готово</button>
             </div>
           ) : <Messengers booked={booked} />}
-          <p className="text-sm text-ink-muted">По этой ссылке можно подтвердить или отменить запись:</p>
-          <a className="btn-ghost" href={booked.manageUrl}>Управлять записью</a>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <a className="btn-ghost" href={calendarUrl(slug, booked.manageToken)}>📅 Добавить в календарь</a>
+            <a className="btn-ghost" href={booked.manageUrl}>Перенести или отменить</a>
+          </div>
+          <p className="text-sm text-ink-muted">
+            Запись сохранена в <Link to="/my" className="font-semibold text-brand-600 underline">«Моих записях»</Link> на этом телефоне — там видно, где, когда и к кому вы ходили.
+          </p>
         </section>
       )}
     </Shell>
@@ -333,7 +351,10 @@ function Shell({ salon, full, children }: { salon?: Salon; full?: boolean; child
       ))}
       <div className="mx-auto max-w-xl px-4 pb-28 pt-6">
         {children}
-        <footer className="mt-12 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
+        {myBookings().length > 0 && (
+          <p className="mt-10 text-center"><Link to="/my" className="font-semibold text-brand-600 underline underline-offset-4">Мои записи</Link></p>
+        )}
+        <footer className="mt-6 flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> Онлайн-запись через <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
       </div>
     </div>
   );

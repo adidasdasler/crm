@@ -290,6 +290,7 @@ export function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <Logo size={26} />
           <span className="flex flex-wrap gap-5">
+            <a href="/my" className="font-semibold text-brand-600 hover:text-ink">Мои записи (для клиентов)</a>
             <a href="/terms" className="hover:text-ink">Оферта</a>
             <a href="/privacy" className="hover:text-ink">Политика ПДн</a>
             <span>© {new Date().getFullYear()} MioFlow</span>

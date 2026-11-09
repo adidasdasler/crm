@@ -171,7 +171,18 @@ describe('онлайн-запись', () => {
     expect((await pub.post(`/public/${s.slug}/book`, { ...payload, startsAt: tomorrowAt('15:05', 2) })).status).toBe(409);
 
     const token = booked.body.data.manageToken;
-    expect((await pub.get(`/public/${s.slug}/manage/${token}`)).body.data.canCancel).toBe(true);
+    const info = (await pub.get(`/public/${s.slug}/manage/${token}`)).body.data;
+    expect(info.canCancel).toBe(true);
+    // «Записаться снова» и «Мои записи»: тот же мастер и услуги, часовой пояс салона
+    expect(info).toMatchObject({ serviceIds: [s.serviceId], resourceId: s.resourceId, salon: { slug: s.slug, timezone: 'Europe/Moscow' } });
+    // Файл для календаря телефона
+    const ics = await pub.get(`/public/${s.slug}/manage/${token}/calendar.ics`);
+    expect(ics.status).toBe(200);
+    expect(ics.headers['content-type']).toContain('text/calendar');
+    expect(ics.text).toContain('BEGIN:VEVENT');
+    expect(ics.text).toContain(`DTSTART:${slot.replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`);
+    expect(ics.text).toContain('SUMMARY:Стрижка');
+    expect((await pub.get(`/public/${s.slug}/manage/bad-token/calendar.ics`)).status).toBe(404);
     // Токен чужого салона не работает.
     const other = await createSalon('Other');
     expect((await pub.get(`/public/${other.slug}/manage/${token}`)).status).toBe(404);

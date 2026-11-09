@@ -1,8 +1,9 @@
 import { afterRating, FEEDBACK_WINDOW_DAYS, submitReview } from '../reviews/reviews';
 import { industry } from '../common/industries';
 import { hoursText, salonHours } from './minisite';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { bookingIcs } from './ics';
 import { Throttle } from '@nestjs/throttler';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
@@ -19,6 +20,7 @@ import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
 import { phone, uuid } from '../common/schemas';
+import { env } from '../config';
 import { readSettings } from '../common/tenant-settings';
 
 /** Сколько будущих онлайн-записей может быть у одного номера в одном салоне */
@@ -271,12 +273,31 @@ export class PublicController {
       canReview: b.status === 'COMPLETED' && Date.now() - +b.endsAt <= FEEDBACK_WINDOW_DAYS * 86400_000,
       mapsLinks: { yandex: t.s.links?.yandexMaps ?? null, twoGis: t.s.links?.twoGis ?? null },
       resource: b.resource.name, services: b.items.map((i) => i.name),
-      salon: { name: t.name, phone: t.phone, address: t.address },
+      salon: { name: t.name, phone: t.phone, address: t.address, slug: t.slug, timezone: t.timezone },
+      /** «Записаться снова» — к тому же мастеру на те же услуги */
+      resourceId: b.resourceId, serviceIds: b.items.map((i) => i.serviceId),
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
       cancelBeforeHours: t.s.cancelBeforeHours,
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
       messengers: messengerLinks(token),
     };
+  }
+
+  /** Визит в календарь телефона: файл .ics открывается системным календарём iPhone и Android */
+  @Get('manage/:token/calendar.ics')
+  async calendar(@Param('slug') slug: string, @Param('token') token: string, @Res() res: Response) {
+    const t = await this.tenant(slug);
+    const b = await this.prisma.withTenant(t.id, (tx) => tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, include: bookingInclude }));
+    if (!b) throw notFound('Запись');
+    const ics = bookingIcs({
+      id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, cancelled: b.status === 'CANCELLED',
+      salon: t.name, address: t.address, phone: t.phone, master: b.resource.name, services: b.items.map((i) => i.name),
+      url: `${env.PUBLIC_WEB_URL}/b/${t.slug}/manage/${token}`,
+    });
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="mioflow-visit.ics"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(ics);
   }
 
   /** Оценка визита со страницы записи (ссылка из письма или напоминания) */
