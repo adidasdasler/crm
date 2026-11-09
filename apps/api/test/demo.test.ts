@@ -66,3 +66,28 @@ describe('демо-салон с общим входом', () => {
     expect(await resetDemo(system)).toBe(true);
   });
 });
+
+describe('демо не видит чужих данных', () => {
+  it('ни один раздел демо не показывает клиентов, мастеров и услуги настоящего салона', async () => {
+    const { createSalon, tomorrowAt, tomorrowDate } = await import('./helpers');
+    const real = await createSalon('Настоящий салон Секрет');
+    await real.api.patch(`/resources/${real.resourceId}`, { name: 'МастерСекрет' });
+    const c = await real.api.post('/customers', { name: 'КлиентСекрет', phone: '+79161230000' });
+    await real.api.post('/bookings', { customerId: c.body.data.id, resourceId: real.resourceId, serviceIds: [real.serviceId], startsAt: tomorrowAt('12:00') });
+    await real.api.post('/services', { name: 'УслугаСекрет', price: 100000, duration: 30 });
+
+    const d = await login();
+    const day = tomorrowDate();
+    const paths = [
+      '/analytics/insights', '/analytics/summary', '/analytics/today', '/auth/me', '/billing/payments', '/billing/subscription',
+      `/bookings?date=${day}`, `/bookings/slots?date=${day}`, '/customers', '/designs', '/designs/tags', '/passes/plans', '/resources', '/resources?all=1',
+      `/resources/time-off?date=${day}`, '/service-categories', '/services', '/stock/alerts', '/stock/materials', '/team', '/tenant', '/tenant/booking-links',
+      '/tenant/permissions', '/tenant/export/customers.csv', '/reviews', '/loyalty/accounts', '/passes',
+    ];
+    for (const p of paths) {
+      const r = await d.get(p);
+      const text = typeof r.text === 'string' ? r.text : JSON.stringify(r.body);
+      expect(text, p).not.toMatch(/Секрет|\+79161230000/);
+    }
+  });
+});
