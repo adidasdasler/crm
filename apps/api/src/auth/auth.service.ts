@@ -32,15 +32,35 @@ export class AuthService {
     return !(await this.prisma.system.tenant.findUnique({ where: { slug } }));
   }
 
+  /** Свободный адрес страницы из названия: «Анна Иванова» → anna-ivanova, занят — anna-ivanova-2 … */
+  private async freeSlug(name: string) {
+    const map: Record<string, string> = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+    let base = name.toLowerCase().split('').map((c) => map[c] ?? c).join('').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 26);
+    if (base.length < 3) base = `master-${base}`.replace(/-+$/, '');
+    for (let i = 1; i < 50; i++) {
+      const candidate = i === 1 ? base : `${base}-${i}`;
+      if (await this.isSlugAvailable(candidate)) return candidate;
+    }
+    return `${base}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
   /** Регистрация владельца: пользователь + салон + подписка TRIAL + первый мастер. */
   async register(
-    dto: { email: string; password: string; name: string; phone?: string; salonName: string; slug: string; timezone: string; industry?: string },
+    dto: { email: string; password: string; name: string; phone?: string; kind?: 'solo' | 'salon'; salonName?: string; slug?: string; timezone: string; industry?: string },
     meta: Meta,
   ) {
-    if (!(await this.isSlugAvailable(dto.slug))) {
-      throw conflict('SLUG_TAKEN', 'Этот адрес уже занят');
+    const solo = dto.kind === 'solo';
+    const salonName = dto.salonName?.trim() || dto.name;
+    let slugValue = dto.slug;
+    if (slugValue && !(await this.isSlugAvailable(slugValue))) {
+      // Частному мастеру не мешаем: подберём свободный адрес сами
+      if (!solo) throw conflict('SLUG_TAKEN', 'Этот адрес уже занят');
+      slugValue = undefined;
     }
-    const plan = await this.prisma.system.plan.findFirst({ where: { code: 'START' } });
+    slugValue ??= await this.freeSlug(salonName);
+    // Пробный период — на тарифе под размер бизнеса: частному мастеру «Соло», салону «Старт»
+    const plan = await this.prisma.system.plan.findFirst({ where: { code: solo ? 'SOLO' : 'START' } })
+      ?? await this.prisma.system.plan.findFirst({ where: { code: 'START' } });
     if (!plan) throw new AppError('NO_PLANS', 'Тарифы не настроены (запустите seed)', 500);
 
     const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
@@ -50,7 +70,7 @@ export class AuthService {
           data: { email: dto.email, passwordHash, name: dto.name, phone: dto.phone },
         });
         const tenant = await tx.tenant.create({
-          data: { name: dto.salonName, slug: dto.slug, timezone: dto.timezone, phone: dto.phone, settings: dto.industry ? { industry: dto.industry } : {} },
+          data: { name: salonName, slug: slugValue, timezone: dto.timezone, phone: dto.phone, settings: { ...(dto.industry ? { industry: dto.industry } : {}), ...(solo ? { solo: true } : {}) } },
         });
         const resource = await tx.resource.create({
           data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE, color: '#2F3BFF' },
@@ -209,6 +229,7 @@ export class AuthService {
       tenant: current && { id: current.tenant.id, name: current.tenant.name, slug: current.tenant.slug, timezone: current.tenant.timezone },
       // Слова интерфейса по сфере бизнеса: «мастер» / «тренер» / «преподаватель»
       industry: current && (({ code, label, terms }) => ({ code, label, terms }))(industry(readSettings(current.tenant.settings).industry)),
+      solo: current ? readSettings(current.tenant.settings).solo : false,
       tenants: memberships.map(({ tenant: { settings: _s, ...t }, role }) => ({ ...t, role })),
     };
   }

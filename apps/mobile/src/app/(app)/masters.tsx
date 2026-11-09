@@ -4,11 +4,10 @@ import { View } from 'react-native';
 import { Text } from '../../components/Text';
 import { Button, Card, Muted, Screen } from '../../components/ui';
 import { get } from '../../lib/api';
+import { scheduleText, type Schedule } from '../../lib/schedule';
 import type { Resource } from '../../lib/types';
 
-const WD = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-export const scheduleSummary = (r: Resource) =>
-  (['1', '2', '3', '4', '5', '6', '7'] as const).filter((d) => r.schedule[d]?.length).map((d) => WD[+d]).join(', ') || 'Нет рабочих дней';
+export const scheduleSummary = (r: Resource) => scheduleText(r.schedule as Schedule);
 
 export default function Masters() {
   const list = useQuery({ queryKey: ['resources', 'all'], queryFn: () => get<Resource[]>('/resources?all=1') });

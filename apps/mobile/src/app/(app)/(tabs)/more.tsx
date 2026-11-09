@@ -83,12 +83,12 @@ export default function More() {
       </Card>
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
-        {can(me, 'staff.manage') && <Row icon="cut-outline" title={`${terms.staffPlural} и графики`} onPress={() => router.push('/masters')} />}
+        {can(me, 'staff.manage') && <Row icon="cut-outline" title={me.solo ? 'Мой график' : `${terms.staffPlural} и графики`} onPress={() => router.push(me.solo && me.resourceId ? `/master/${me.resourceId}` : '/masters')} />}
         <Row icon="images-outline" title="Библиотека дизайнов" subtitle="Фото работ, теги, портфолио на сайте" onPress={() => router.push('/designs')} />
         {can(me, 'finance.manage') && <Row icon="wallet-outline" title="Депозиты и абонементы" subtitle="Бонус за пополнение, абонементы на визиты и непиковые часы" onPress={() => router.push('/loyalty')} />}
         {can(me, 'stock.manage') && <Row icon="cube-outline" title="Склад" subtitle={stockAlerts.data ? stockHint(stockAlerts.data) : 'Материалы, приход, остатки'} onPress={() => router.push('/stock')} />}
-        {can(me, 'team.manage') && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
-        {isOwner && <Row icon="shield-checkmark-outline" title="Роли и доступы" subtitle="Кто что видит: записи, клиенты, отчёты" onPress={() => router.push('/roles')} />}
+        {can(me, 'team.manage') && !me.solo && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
+        {isOwner && !me.solo && <Row icon="shield-checkmark-outline" title="Роли и доступы" subtitle="Кто что видит: записи, клиенты, отчёты" onPress={() => router.push('/roles')} />}
         {can(me, 'settings.manage') && <Row icon="settings-outline" title="Настройки салона" onPress={() => router.push('/salon')} />}
         <Row
           icon="card-outline"

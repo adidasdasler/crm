@@ -265,3 +265,42 @@ describe('комплексы и ближайшее время', () => {
     expect(new Date(r.body.data[0].at).getTime() - Date.now()).toBeLessThan(2 * 86400_000);
   });
 });
+
+describe('график 2/2 через API', () => {
+  it('сохраняется, отдаёт свободное время только в рабочие смены, особый день закрывает запись', async () => {
+    const { DateTime } = await import('luxon');
+    const s = await createSalon('Cycle');
+    const d = (n: number) => DateTime.now().setZone('Europe/Moscow').plus({ days: n }).toISODate()!;
+    const schedule = { mode: 'cycle', start: d(1), on: 2, off: 2, hours: [['10:00', '20:00']], overrides: { [d(2)]: [] } };
+    expect((await s.api.patch(`/resources/${s.resourceId}`, { schedule })).status).toBe(200);
+    expect((await s.api.patch(`/resources/${s.resourceId}`, { schedule: { mode: 'cycle', start: d(1), on: 2, off: 2, hours: [] } })).status).toBe(400);
+    const slots = async (n: number) => ((await api().get(`/public/${s.slug}/slots?date=${d(n)}&serviceIds=${s.serviceId}`)).body.data as any[]).flatMap((r) => r.slots).length;
+    expect(await slots(1)).toBeGreaterThan(0); // рабочая смена
+    expect(await slots(2)).toBe(0); // особый день — выходной
+    expect(await slots(3)).toBe(0); // выходные по графику
+    expect(await slots(4)).toBe(0);
+    expect(await slots(5)).toBeGreaterThan(0); // снова смена
+    expect((await api().get(`/public/${s.slug}`)).body.data.hoursText).toContain('10:00–20:00');
+  });
+});
+
+describe('регистрация частного мастера', () => {
+  it('достаточно имени: тариф «Соло», адрес страницы из имени, повтор имени — свободный адрес', async () => {
+    const reg = async (email: string) => api().post('/auth/register', {
+      kind: 'solo', name: 'Анна Смирнова', email, password: 'password123', industry: 'nails', acceptTerms: true, acceptPrivacy: true,
+    });
+    const r1 = await reg(`solo1-${Date.now()}@test.ru`);
+    expect(r1.status).toBe(201);
+    expect(r1.body.data.tenant).toMatchObject({ name: 'Анна Смирнова', slug: expect.stringMatching(/^anna-smirnova/) });
+    const a = api(r1.body.data.accessToken);
+    expect((await a.get('/billing/subscription')).body.data.plan.code).toBe('SOLO');
+    expect((await a.get('/auth/me')).body.data.solo).toBe(true);
+    const r2 = await reg(`solo2-${Date.now()}@test.ru`);
+    expect(r2.status).toBe(201);
+    expect(r2.body.data.tenant.slug).not.toBe(r1.body.data.tenant.slug);
+
+    // Салону название и адрес по-прежнему обязательны
+    const bad = await api().post('/auth/register', { kind: 'salon', name: 'Ольга', email: `s-${Date.now()}@test.ru`, password: 'password123', acceptTerms: true, acceptPrivacy: true });
+    expect(bad.status).toBe(400);
+  });
+});

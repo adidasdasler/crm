@@ -15,8 +15,10 @@ export type Me = {
   tenant: { id: string; name: string; slug: string; timezone: string };
   tenants: { id: string; name: string; slug: string; role: Role }[];
   industry?: { code: string; label: string; terms: Terms };
+  /** Частный мастер: без команды и ролей */
+  solo?: boolean;
 };
-export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; schedule: Week; isActive: boolean; serviceIds: string[] };
+export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; schedule: Week | { mode: 'week' | 'cycle'; [k: string]: unknown }; isActive: boolean; serviceIds: string[] };
 export type Service = { id: string; name: string; description: string | null; price: number; duration: number; bufferTime: number; isActive: boolean; isPublic: boolean; categoryId: string | null; resourceIds: string[]; comboOf?: string[] };
 export type Customer = {
   id: string; name: string; phone: string; email: string | null; notes: string | null; tags: string[];
@@ -35,7 +37,7 @@ export type Booking = {
 export type Tenant = {
   id: string; name: string; slug: string; phone: string | null; address: string | null; timezone: string;
   settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string;
-    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean; depositTiers: { amount: number; bonus: number }[]; depositAutoCharge: boolean;
+    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean; solo?: boolean; depositTiers: { amount: number; bonus: number }[]; depositAutoCharge: boolean;
   };
   industry?: { code: string; label: string; terms: Terms };
 };

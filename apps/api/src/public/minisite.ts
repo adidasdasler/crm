@@ -1,4 +1,5 @@
-import type { WeekSchedule } from '../bookings/slots';
+import { DateTime } from 'luxon';
+import { rangesOn, type Schedule } from '../bookings/slots';
 
 const DAYS = ['1', '2', '3', '4', '5', '6', '7'] as const;
 const SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -6,10 +7,19 @@ const SCHEMA_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Sa
 
 export type DayHours = { day: (typeof DAYS)[number]; from: string; to: string } | null;
 
-/** Часы работы салона: по каждому дню — самое раннее начало и самый поздний конец среди мастеров */
-export function salonHours(schedules: unknown[]): DayHours[] {
-  return DAYS.map((day) => {
-    const ranges = schedules.flatMap((s) => (s as WeekSchedule)?.[day] ?? []);
+/**
+ * Часы работы салона по дням недели: самое раннее начало и самый поздний конец среди мастеров
+ * на ближайшие 2 недели — так учитываются и сменные графики (2/2), и особые дни.
+ */
+export function salonHours(schedules: unknown[], tz: string, from = new Date()): DayHours[] {
+  const start = DateTime.fromJSDate(from).setZone(tz).startOf('day');
+  return DAYS.map((day, idx) => {
+    const ranges: [string, string][] = [];
+    for (let i = 0; i < 14; i++) {
+      const d = start.plus({ days: i });
+      if (d.weekday !== idx + 1) continue;
+      for (const s of schedules) if (s) ranges.push(...rangesOn(s as Schedule, d.toISODate()!, d.weekday));
+    }
     if (!ranges.length) return null;
     return { day, from: ranges.map((r) => r[0]).sort()[0], to: ranges.map((r) => r[1]).sort().at(-1)! };
   });

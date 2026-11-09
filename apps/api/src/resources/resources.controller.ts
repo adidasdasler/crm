@@ -5,14 +5,14 @@ import { audit } from '../common/audit';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService, Tx } from '../common/prisma.service';
-import { DEFAULT_SCHEDULE, uuid, weekSchedule } from '../common/schemas';
+import { DEFAULT_SCHEDULE, uuid, scheduleSchema } from '../common/schemas';
 
 const base = z.object({
   name: z.string().trim().min(1).max(100),
   phone: z.string().trim().max(20).nullish(),
   position: z.string().trim().max(100).nullish(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  schedule: weekSchedule.optional(),
+  schedule: scheduleSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   serviceIds: z.array(uuid).optional(),

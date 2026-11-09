@@ -2,15 +2,49 @@ import { DateTime } from 'luxon';
 
 /** Полуинтервал [start, end) в миллисекундах UTC. */
 export type Interval = { start: number; end: number };
-export type WeekSchedule = Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', [string, string][]>>;
+export type Ranges = [string, string][];
+/** Дни недели: 1 = понедельник … 7 = воскресенье */
+export type WeekDays = Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', Ranges>>;
+/** Особые дни: дата → часы (пустой список — выходной). Важнее основного графика. */
+export type Overrides = Record<string, Ranges>;
+/**
+ * График мастера:
+ *  - старый формат — просто дни недели { "1": [["10:00","20:00"]], … };
+ *  - { mode: "week", week, overrides } — по дням недели с особыми днями;
+ *  - { mode: "cycle", start, on, off, hours, overrides } — сменный: on рабочих, off выходных подряд
+ *    начиная с даты start (2/2, 1/1, 3/3, 5/2 и т. п.).
+ */
+export type Schedule =
+  | WeekDays
+  | { mode: 'week'; week: WeekDays; overrides?: Overrides }
+  | { mode: 'cycle'; start: string; on: number; off: number; hours: Ranges; overrides?: Overrides };
+/** @deprecated оставлено для совместимости импорта */
+export type WeekSchedule = Schedule;
+
+/** Часы работы по графику на дату (без перевода во время) */
+export function rangesOn(schedule: Schedule, date: string, weekday: number): Ranges {
+  const s = schedule as Record<string, unknown>;
+  const overrides = s.overrides as Overrides | undefined;
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, date)) return overrides[date] ?? [];
+  if (s.mode === 'cycle') {
+    const c = schedule as Extract<Schedule, { mode: 'cycle' }>;
+    const period = c.on + c.off;
+    if (period <= 0) return [];
+    // Разница в днях по календарю (без часовых поясов и перехода на летнее время)
+    const diff = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${c.start}T00:00:00Z`)) / 86_400_000);
+    return ((diff % period) + period) % period < c.on ? c.hours : [];
+  }
+  const week = (s.mode === 'week' ? (s.week as WeekDays) : (schedule as WeekDays)) ?? {};
+  return week[String(weekday) as keyof WeekDays] ?? [];
+}
 
 const MIN = 60_000;
 
 /** Рабочие интервалы мастера на дату (YYYY-MM-DD) в часовом поясе салона. */
-export function workIntervals(schedule: WeekSchedule, date: string, tz: string): Interval[] {
+export function workIntervals(schedule: Schedule, date: string, tz: string): Interval[] {
   const day = DateTime.fromISO(date, { zone: tz });
-  if (!day.isValid) return [];
-  const ranges = schedule[String(day.weekday) as keyof WeekSchedule] ?? [];
+  if (!day.isValid || !schedule) return [];
+  const ranges = rangesOn(schedule, date, day.weekday);
   return ranges.map(([from, to]) => {
     const [fh, fm] = from.split(':').map(Number);
     const [th, tm] = to.split(':').map(Number);

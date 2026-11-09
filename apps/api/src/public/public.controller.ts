@@ -79,7 +79,7 @@ export class PublicController {
     const t = await this.tenant(slug);
     const ind = industry(t.s.industry);
     const schedules = await this.prisma.withTenant(t.id, (tx) => tx.resource.findMany({ where: { deletedAt: null, isActive: true }, select: { schedule: true } }));
-    const hours = salonHours(schedules.map((r) => r.schedule));
+    const hours = salonHours(schedules.map((r) => r.schedule), t.timezone);
     return {
       name: t.name, slug: t.slug, phone: t.phone, address: t.address, timezone: t.timezone,
       available: t.available, maxDaysAhead: t.s.maxDaysAhead,

@@ -38,6 +38,8 @@ export default function SalonSettings() {
       <Field label="Адрес" value={f.address ?? ''} onChangeText={(address) => setF({ ...f, address })} />
       <Muted>Часовой пояс: {f.timezone}</Muted>
 
+      <Toggle label="Я работаю один (частный мастер)" hint="Скрывает команду и роли; в онлайн-записи нет выбора мастера. Выключите, когда появятся сотрудники" value={!!f.settings.solo} onChange={(solo) => setF({ ...f, settings: { ...f.settings, solo } })} />
+
       <H>Сфера</H>
       <Muted>Меняет слова в приложении («мастер», «тренер», «преподаватель») и разметку для поисковиков.</Muted>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

@@ -90,6 +90,7 @@ export function Landing() {
               <a href={register} className="btn-primary whitespace-nowrap px-7 py-4 text-lg shadow-[0_12px_30px_-10px_rgba(47,59,255,.7)]">Попробовать 14 дней бесплатно</a>
               <a href="/b/demo" className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Записаться как клиент</a>
             </div>
+            <p className="text-ink-muted">Работаете одна или один? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Регистрация для частного мастера — 290 ₽/мес</a></p>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
               {['Без карты и автосписаний', 'Все функции в любом тарифе', 'Перенос базы бесплатно', 'Данные в России'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5"><span className="text-brand-600"><Svg d={I.check} size={16} /></span>{t}</li>
@@ -241,7 +242,7 @@ export function Landing() {
                         <li key={t} className="flex gap-2"><Svg d={I.check} size={18} />{t}</li>
                       ))}
                     </ul>
-                    <a href={register} className={`btn mt-auto ${featured ? 'bg-white text-brand-700 hover:bg-brand-50' : 'bg-ink text-white hover:bg-brand-700'}`}>Начать бесплатно</a>
+                    <a href={`${register}?kind=${p.code === 'SOLO' ? 'solo' : 'salon'}`} className={`btn mt-auto ${featured ? 'bg-white text-brand-700 hover:bg-brand-50' : 'bg-ink text-white hover:bg-brand-700'}`}>Начать бесплатно</a>
                   </div>
                 );
               })}

@@ -80,6 +80,16 @@ export function BookingPage() {
     api<SlotsByMaster>(`/public/${slug}/slots?${q}`).then(setSlots).catch(() => setSlots([]));
   }, [step, date, masterId, slug, serviceIds]);
 
+  /** Один мастер (частный мастер или так выбраны услуги) — шаг «К кому?» пропускаем */
+  async function goNext() {
+    const list = await api<Master[]>(`/public/${slug}/resources?serviceIds=${serviceIds.join(',')}`).catch(() => [] as Master[]);
+    setMasters(list);
+    if (list.length === 1) {
+      setMasterId(list[0].id);
+      setStep('time');
+    } else setStep('master');
+  }
+
   const nearestOf = (id: string) => nearest.find((n) => n.resourceId === id);
 
   /** «Любой мастер» — объединяем свободные времена всех мастеров. */
@@ -139,7 +149,7 @@ export function BookingPage() {
             );
           })}
           <Portfolio slug={slug} />
-          <BottomBar disabled={!serviceIds.length} onNext={() => setStep('master')} label={serviceIds.length ? `Далее · ${rub(total.price)} · ${minutes(total.duration)}` : 'Выберите услугу'} />
+          <BottomBar disabled={!serviceIds.length} onNext={goNext} label={serviceIds.length ? `Далее · ${rub(total.price)} · ${minutes(total.duration)}` : 'Выберите услугу'} />
         </section>
       )}
 
@@ -178,7 +188,7 @@ export function BookingPage() {
 
       {step === 'time' && (
         <section className="space-y-4">
-          <Back onClick={() => setStep('master')} />
+          <Back onClick={() => setStep(masters.length === 1 ? 'services' : 'master')} />
           <h2 className="display text-2xl">Когда удобно?</h2>
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2">
             {days.map((d) => {

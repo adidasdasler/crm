@@ -46,7 +46,7 @@ export class MiniSiteController {
       name: t.name, slug: t.slug, phone: t.phone, address: t.address, about: s.about,
       url: `${env.PUBLIC_WEB_URL}/b/${t.slug}`, ogImage: `${env.PUBLIC_WEB_URL}/og.png`,
       schemaType: ind.schemaType, industryLabel: ind.label,
-      hours: salonHours(masters.map((m) => m.schedule)), services, masters: masters.map(({ name, position }) => ({ name, position })), links: s.links ?? {},
+      hours: salonHours(masters.map((m) => m.schedule), t.timezone), services, masters: masters.map(({ name, position }) => ({ name, position })), links: s.links ?? {},
     });
     res.set('Cache-Control', 'public, max-age=600').type('text/html; charset=utf-8').send(html);
   }

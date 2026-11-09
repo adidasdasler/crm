@@ -31,6 +31,8 @@ export const tenantSettingsSchema = z.object({
   insightsDigest: z.boolean().default(true),
   /** Юридическое лицо/ИП салона — оператор ПДн своих клиентов (страница согласия) */
   legalName: z.string().trim().max(200).optional(),
+  /** Частный мастер: в приложении скрыты команда и роли, в онлайн-записи нет выбора мастера */
+  solo: z.boolean().default(false),
   /** Сфера бизнеса (src/common/industries.ts) */
   industry: z.enum(INDUSTRY_CODES).default('beauty'),
   /** Мини-сайт: описание салона и ссылки на соцсети/мессенджеры */
