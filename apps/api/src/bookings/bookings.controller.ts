@@ -81,11 +81,12 @@ export class BookingsController {
 
   @Get(':id')
   async get(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
-    const b = await this.prisma.withTenant(a.tenantId, (tx) =>
+    const [b, review] = await this.prisma.withTenant(a.tenantId, (tx) => Promise.all([
       tx.booking.findUnique({ where: { id }, include: { ...bookingInclude, reminders: true } }),
-    );
+      tx.review.findUnique({ where: { bookingId: id }, select: { rating: true, comment: true, source: true, createdAt: true } }),
+    ]));
     if (!b || (!can(a, 'bookings.all') && b.resourceId !== a.resourceId)) throw notFound('Запись');
-    return maskBookings(a, [b])[0];
+    return { ...maskBookings(a, [b])[0], review };
   }
 
   @Post()

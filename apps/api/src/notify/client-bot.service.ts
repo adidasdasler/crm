@@ -1,3 +1,4 @@
+import { afterRating, attachComment, submitReview } from '../reviews/reviews';
 import { Injectable } from '@nestjs/common';
 import { env } from '../config';
 import { BookingsService } from '../bookings/bookings.service';
@@ -65,11 +66,38 @@ export class ClientBotService {
     };
   }
 
+  /** Оценка визита кнопкой «1⭐…5⭐»: data = r:<оценка>:<id записи> */
+  private async rate(channel: ChannelName, externalId: string, data: string): Promise<{ note: string; reply?: BotReply }> {
+    const [, n, bookingId] = data.split(':');
+    const rating = Number(n);
+    if (!/^[0-9a-f-]{36}$/.test(bookingId ?? '') || !(rating >= 1 && rating <= 5)) return { note: '' };
+    const field = CUSTOMER_FIELD[channel];
+    const b = await this.prisma.system.booking.findFirst({ where: { id: bookingId, customer: { [field]: externalId } }, select: { id: true } });
+    if (!b) return { note: 'Запись не найдена' };
+    const r = await submitReview(this.prisma.system, { bookingId: b.id, rating, source: channel });
+    if (!r.ok) return { note: r.error };
+    const reply = await afterRating(this.prisma.system, r.review, r.prev?.rating !== rating);
+    return { note: `Спасибо! Ваша оценка: ${rating}⭐`, reply };
+  }
+
+  /**
+   * Обычное сообщение клиента (не команда и не кнопка). Если недавно он поставил оценку без комментария —
+   * это комментарий к ней. Иначе — подсказка, что умеет бот.
+   */
+  async message(channel: ChannelName, externalId: string, text: string): Promise<BotReply> {
+    const field = CUSTOMER_FIELD[channel];
+    const customers = await this.prisma.system.customer.findMany({ where: { [field]: externalId, deletedAt: null }, select: { id: true } });
+    const r = await attachComment(this.prisma.system, customers.map((c) => c.id), text);
+    if (r) return { text: r.rating <= 3 ? 'Спасибо, передали владельцу салона. С вами свяжутся.' : 'Спасибо за тёплые слова! Передали мастеру.' };
+    return this.linkCustomer(channel, externalId, '');
+  }
+
   /**
    * Нажатие кнопки под напоминанием: data = «c:<id>» (подтвердить) или «x:<id>» (отменить).
    * Управлять записью может только тот, кто привязан к клиенту этой записи в этом канале.
    */
   async action(channel: ChannelName, externalId: string, data: string): Promise<{ note: string; reply?: BotReply }> {
+    if ((data ?? '').startsWith('r:')) return this.rate(channel, externalId, data);
     const [act, bookingId] = (data ?? '').split(':');
     if (!bookingId || !['c', 'x'].includes(act) || !/^[0-9a-f-]{36}$/.test(bookingId)) return { note: '' };
     const field = CUSTOMER_FIELD[channel];

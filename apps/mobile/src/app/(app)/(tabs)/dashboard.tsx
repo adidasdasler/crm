@@ -8,7 +8,7 @@ import { C, Card, Chip, ErrorText, Loading, Muted, webMax } from '../../../compo
 import { get } from '../../../lib/api';
 import { useMe } from '../../../lib/auth';
 import { addDays, minutes, rub, time, today } from '../../../lib/format';
-import type { Analytics, Today } from '../../../lib/types';
+import type { Analytics, Insight, Today } from '../../../lib/types';
 
 const PERIODS = [
   { days: 7, label: '7 дней' },
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const to = today(me.tenant.timezone);
   const from = addDays(to, -(days - 1));
   const q = useQuery({ queryKey: ['analytics', from, to], queryFn: () => get<Analytics>(`/analytics/summary?from=${from}&to=${to}`) });
+  const ins = useQuery({ queryKey: ['analytics', 'insights'], queryFn: () => get<Insight[]>('/analytics/insights'), staleTime: 10 * 60_000 });
   const t = useQuery({ queryKey: ['analytics', 'today'], queryFn: () => get<Today>('/analytics/today'), refetchInterval: 60_000 });
   if (q.isLoading) return <Loading />;
   const d = q.data;
@@ -41,6 +42,7 @@ export default function Dashboard() {
       refreshControl={<RefreshControl refreshing={q.isRefetching || t.isRefetching} onRefresh={() => { void q.refetch(); void t.refetch(); }} />}
     >
       {t.data && <TodayCards d={t.data} tz={me.tenant.timezone} wide={wide} />}
+      {(ins.data?.length ?? 0) > 0 && <Insights list={ins.data!} />}
       <Text style={{ fontFamily: F.display, fontSize: 22, marginTop: 8 }}>Отчёт за период</Text>
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         {PERIODS.map((p) => <Chip key={p.days} label={p.label} active={days === p.days} onPress={() => setDays(p.days)} />)}
@@ -71,6 +73,7 @@ export default function Dashboard() {
             <Kpi icon="calendar-outline" label="Записей" value={String(d.totals.bookings)} hint={`из них онлайн ${pct(d.totals.onlineShare)}`} wide={wide} />
             <Kpi icon="wallet-outline" label="Средний чек" value={rub(d.totals.avgCheck)} wide={wide} />
             <Kpi icon="speedometer-outline" label="Загрузка мастеров" value={pct(d.totals.load)} hint="занятое время / по графику" wide={wide} />
+            {d.totals.reviews > 0 && <Kpi icon="star-outline" label="Оценка клиентов" value={`${d.totals.rating?.toFixed(1)} ★`} hint={`${d.totals.reviews} оценок${d.totals.lowRatings ? ` · низких: ${d.totals.lowRatings}` : ''}`} wide={wide} tone={d.totals.lowRatings ? 'bad' : undefined} />}
             <Kpi icon="person-add-outline" label="Новых клиентов" value={String(d.totals.newCustomers)} wide={wide} />
             {d.totals.materialCost > 0 && <Kpi icon="cube-outline" label="Материалы" value={rub(d.totals.materialCost)} hint={`${pct(d.totals.revenue ? d.totals.materialCost / d.totals.revenue : 0)} от оплаченного`} wide={wide} />}
             <Kpi icon="close-circle-outline" label="Не пришли" value={pct(d.totals.noShowRate)} hint={`отмен: ${d.totals.cancelled}`} wide={wide} tone={d.totals.noShowRate > 0.1 ? 'bad' : undefined} />
@@ -87,7 +90,7 @@ export default function Dashboard() {
             <Card style={{ flex: 1 }}>
               <Title>Мастера</Title>
               {d.masters.map((m) => (
-                <Bar key={m.id} label={m.name} value={`${m.bookings} зап. · ${rub(m.amount)} · ${pct(m.load)}`} share={m.load} color={m.color} onPress={() => router.push(`/master/${m.id}`)} />
+                <Bar key={m.id} label={m.name} value={`${m.bookings} зап. · ${rub(m.amount)} · ${pct(m.load)}${m.rating ? ` · ${m.rating.toFixed(1)}★` : ''}`} share={m.load} color={m.color} onPress={() => router.push(`/master/${m.id}`)} />
               ))}
             </Card>
           </View>
@@ -224,6 +227,52 @@ function Meter({ share, color }: { share: number; color: string }) {
   return (
     <View style={{ height: 6, backgroundColor: C.brandSoft, borderRadius: 3, overflow: 'hidden' }}>
       <View style={{ width: `${Math.max(2, Math.min(1, share) * 100)}%`, height: '100%', backgroundColor: color, borderRadius: 3 }} />
+    </View>
+  );
+}
+
+const LEVEL: Record<Insight['level'], { icon: ComponentProps<typeof Ionicons>['name']; color: string; bg: string }> = {
+  warn: { icon: 'alert-circle', color: '#9A2A08', bg: '#FDECE7' },
+  tip: { icon: 'bulb', color: C.brandDark, bg: C.brandSoft },
+  good: { icon: 'trophy', color: '#0F7A52', bg: '#E6F6EC' },
+};
+
+/** Советы: что можно улучшить — на основе данных салона (те же правила, что в еженедельной сводке) */
+function Insights({ list }: { list: Insight[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? list : list.slice(0, 3);
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={{ fontFamily: F.display, fontSize: 22, marginTop: 8 }}>Советы</Text>
+      {shown.map((i) => {
+        const l = LEVEL[i.level];
+        return (
+          <View key={i.code} style={{ backgroundColor: l.bg, borderRadius: 20, padding: 14, gap: 6 }}>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+              <Ionicons name={l.icon} size={20} color={l.color} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontWeight: '700', color: l.color }}>{i.title}</Text>
+            </View>
+            <Text style={{ color: C.text }}>{i.text}</Text>
+            {i.customers && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {i.customers.map((c) => (
+                  <Pressable key={c.id} onPress={() => router.push(`/customer/${c.id}`)} style={{ backgroundColor: C.card, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ fontSize: 13 }}>{c.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {i.action && (
+              <Pressable onPress={() => router.push(i.action!.route as never)} accessibilityRole="button">
+                <Text style={{ color: l.color, fontWeight: '700' }}>{i.action.label} →</Text>
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+      {list.length > 3 && (
+        <Pressable onPress={() => setAll(!all)}><Text style={{ color: C.brand, fontWeight: '600' }}>{all ? 'Свернуть' : `Ещё советы: ${list.length - 3}`}</Text></Pressable>
+      )}
     </View>
   );
 }

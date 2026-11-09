@@ -77,12 +77,18 @@ export default function BookingScreen() {
         </Card>
       )}
       {b.source === 'WIDGET' && <Muted>Клиент записался онлайн</Muted>}
+      {b.review && (
+        <Card style={{ backgroundColor: b.review.rating <= 3 ? '#FDECE7' : C.brandSoft, borderColor: 'transparent' }}>
+          <Text style={{ fontWeight: '600' }}>Оценка клиента: {'★'.repeat(b.review.rating)}{'☆'.repeat(5 - b.review.rating)}</Text>
+          {b.review.comment ? <Text>«{b.review.comment}»</Text> : null}
+        </Card>
+      )}
       {(b.reminders?.length ?? 0) > 0 && (
         <Card>
           <Text style={{ fontWeight: '600' }}>Напоминания клиенту</Text>
           {b.reminders!.map((r) => (
             <Muted key={r.id}>
-              {r.type === 'BEFORE_24H' ? 'За сутки' : r.type === 'BEFORE_2H' ? 'За 2 часа' : 'После визита'}:{' '}
+              {r.type === 'BEFORE_24H' ? 'За сутки' : r.type === 'BEFORE_2H' ? 'За 2 часа' : 'Просьба оценить'}:{' '}
               {r.status === 'SENT' ? `отправлено (${CHANNEL_LABEL[r.channel] ?? r.channel})` : r.status === 'PENDING' ? `в ${time(r.scheduledAt, tz)}${isoDay(new Date(r.scheduledAt), tz) !== isoDay(new Date(b.startsAt), tz) ? ' накануне' : ''}` : r.status === 'CANCELLED' ? 'не нужно' : 'не доставлено'}
             </Muted>
           ))}

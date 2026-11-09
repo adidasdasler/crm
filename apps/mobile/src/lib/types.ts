@@ -29,11 +29,12 @@ export type Booking = {
   customer: { id: string; name: string; phone: string; notes: string | null; totalVisits: number };
   resource: { id: string; name: string; color: string };
   reminders?: { id: string; type: 'BEFORE_24H' | 'BEFORE_2H' | 'AFTER_VISIT'; status: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED'; channel: 'TELEGRAM' | 'MAX' | 'VK' | 'EMAIL' | 'SMS'; scheduledAt: string; sentAt: string | null }[];
+  review?: { rating: number; comment: string | null; source: string; createdAt: string } | null;
 };
 export type Tenant = {
   id: string; name: string; slug: string; phone: string | null; address: string | null; timezone: string;
   settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string;
-    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>;
+    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean;
   };
   industry?: { code: string; label: string; terms: Terms };
 };
@@ -52,12 +53,12 @@ export type Analytics = {
   period: { from: string; to: string; days: number };
   totals: {
     revenue: number; booked: number; bookings: number; completed: number; cancelled: number; noShow: number; noShowRate: number;
-    avgCheck: number; onlineShare: number; newCustomers: number; load: number; materialCost: number;
+    avgCheck: number; onlineShare: number; newCustomers: number; load: number; materialCost: number; rating: number | null; reviews: number; lowRatings: number;
   };
   previous: { booked: number; bookings: number };
   byDay: { date: string; revenue: number; bookings: number }[];
   sources: { key: string; label: string; count: number; amount: number }[];
-  masters: { id: string; name: string; color: string; bookings: number; amount: number; bookedMin: number; capacityMin: number; load: number }[];
+  masters: { id: string; name: string; color: string; bookings: number; amount: number; bookedMin: number; capacityMin: number; load: number; rating: number | null; reviews: number }[];
   services: { name: string; count: number; amount: number }[];
 };
 
@@ -90,4 +91,10 @@ export type MaterialDetail = Material & {
 export type StockAlerts = {
   low: { materialId: string; name: string; unit: string; stock: number; minStock: number }[];
   expiring: { batchId: string; materialId: string; name: string; unit: string; remaining: number; expiresAt: string; expired: boolean; daysLeft: number }[];
+};
+
+export type Insight = {
+  code: string; level: 'warn' | 'tip' | 'good'; title: string; text: string;
+  action?: { label: string; route: string };
+  customers?: { id: string; name: string; lastVisitAt: string }[];
 };

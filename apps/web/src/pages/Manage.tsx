@@ -5,6 +5,7 @@ import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
   salon: { name: string; phone: string | null; address: string | null }; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
+  canReview?: boolean; review?: { rating: number; comment: string | null } | null; mapsLinks?: { yandex: string | null; twoGis: string | null };
 };
 const STATUS: Record<string, string> = {
   SCHEDULED: 'Ожидает подтверждения', CONFIRMED: 'Подтверждена', ARRIVED: 'Вы в салоне',
@@ -54,11 +55,58 @@ export function ManagePage() {
               <p className="text-sm text-ink-muted">Онлайн-отмена доступна не позднее чем за {info.cancelBeforeHours} ч. Позвоните в салон.</p>
             )}
             {info.salon.phone && <a className="btn-ghost" href={`tel:${info.salon.phone}`}>Позвонить в салон</a>}
+            {info.canReview && <Rate slug={slug} token={token} info={info} onSaved={load} />}
             {info.telegramUrl && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
               <a className="btn-ghost" href={info.telegramUrl} target="_blank" rel="noreferrer">Напоминания в Telegram</a>
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Оценка визита: звёзды 1–5, комментарий; после 4–5 — ссылки на отзыв в картах */
+function Rate({ slug, token, info, onSaved }: { slug: string; token: string; info: Info; onSaved: () => void }) {
+  const [rating, setRating] = useState(info.review?.rating ?? 0);
+  const [comment, setComment] = useState(info.review?.comment ?? '');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save(r = rating) {
+    setBusy(true);
+    try {
+      const res = await api<{ message: string }>(`/public/${slug}/manage/${token}/review`, { method: 'POST', body: JSON.stringify({ rating: r, comment: comment.trim() || undefined }) });
+      setMsg(res.message);
+      onSaved();
+    } catch (e) {
+      setMsg((e as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const good = (info.review?.rating ?? rating) >= 4;
+  const maps = [info.mapsLinks?.yandex && { href: info.mapsLinks.yandex, label: 'Отзыв на Яндекс Картах' }, info.mapsLinks?.twoGis && { href: info.mapsLinks.twoGis, label: 'Отзыв в 2ГИС' }].filter(Boolean) as { href: string; label: string }[];
+  return (
+    <div className="space-y-3 rounded-3xl bg-brand-50 p-5 text-left">
+      <p className="font-semibold">{info.review ? 'Ваша оценка' : 'Как прошёл визит?'}</p>
+      <div className="flex gap-2" role="radiogroup" aria-label="Оценка от 1 до 5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} role="radio" aria-checked={rating === n} aria-label={`${n} из 5`} disabled={busy}
+            onClick={() => { setRating(n); if (!info.review) void save(n); }}
+            className={`grid h-12 w-12 place-items-center rounded-2xl text-2xl transition ${n <= rating ? 'bg-blush-300' : 'bg-white ring-1 ring-brand-100'}`}>
+            {n <= rating ? '★' : '☆'}
+          </button>
+        ))}
+      </div>
+      {(info.review || rating > 0) && (
+        <>
+          <textarea className="input" rows={3} maxLength={1000} placeholder={rating && rating <= 3 ? 'Что пошло не так? Владелец салона прочитает' : 'Пара слов мастеру (необязательно)'} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <button className="btn-primary w-full" disabled={busy || !rating} onClick={() => save()}>Сохранить</button>
+        </>
+      )}
+      {msg && <p className="text-sm text-ink-muted">{msg}</p>}
+      {good && maps.length > 0 && info.review && (
+        <div className="grid gap-2">{maps.map((m) => <a key={m.href} className="btn-ghost" href={m.href} target="_blank" rel="noreferrer">⭐ {m.label}</a>)}</div>
       )}
     </div>
   );

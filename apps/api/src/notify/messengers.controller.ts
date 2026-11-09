@@ -34,7 +34,8 @@ export class MessengersController {
         // Ссылка vk.me/<сообщество>?ref=b_<токен> передаёт токен в поле ref первого сообщения
         const payload = typeof m.ref === 'string' ? m.ref : '';
         if (userId) {
-          const reply = await this.clientBot.linkCustomer('VK', userId, payload);
+          const text = typeof m.text === 'string' ? m.text : '';
+          const reply = payload || !text ? await this.clientBot.linkCustomer('VK', userId, payload) : await this.clientBot.message('VK', userId, text);
           await vk.send(userId, reply.text, reply.buttons);
         }
       } else if (body.type === 'message_event') {
@@ -64,6 +65,15 @@ export class MessengersController {
         const userId = String(u.user?.user_id ?? '');
         if (userId) {
           const reply = await this.clientBot.linkCustomer('MAX', userId, u.payload ?? '');
+          await max.send(userId, reply.text, reply.buttons);
+        }
+      } else if (u.update_type === 'message_created') {
+        // Комментарий к оценке или любое сообщение боту
+        const userId = String(u.message?.sender?.user_id ?? '');
+        const text = String(u.message?.body?.text ?? '');
+        // Свои же сообщения бота тоже приходят как message_created — на них не отвечаем, иначе зациклимся
+        if (userId && text && !u.message?.sender?.is_bot) {
+          const reply = await this.clientBot.message('MAX', userId, text);
           await max.send(userId, reply.text, reply.buttons);
         }
       } else if (u.update_type === 'message_callback') {

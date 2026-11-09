@@ -227,3 +227,80 @@ describe('запись через мессенджеры', () => {
     expect(r3.body.data.telegramLinked).toBe(false);
   });
 });
+
+describe('оценки после визита', () => {
+  it('через 2 часа после визита — просьба оценить; 5⭐ → ссылка на отзыв в Яндекс Картах', async () => {
+    const s = await createSalon('Rate');
+    await s.api.patch('/tenant', { settings: { links: { yandexMaps: 'https://yandex.ru/maps/org/rate/1' } } });
+    const b = await bookOnline(s.slug, s.serviceId, '12:00', '+79996660001');
+    await tgUpdate({ message: { chat: { id: 3101 }, text: `/start b_${b.manageToken}` } });
+    await s.api.post(`/bookings/${b.id}/status`, { status: 'COMPLETED' });
+    const rem = await system.reminder.findFirstOrThrow({ where: { bookingId: b.id, type: 'AFTER_VISIT' } });
+    const row = await system.booking.findUniqueOrThrow({ where: { id: b.id } });
+    expect(+rem.scheduledAt - +row.endsAt).toBe(120 * 60_000);
+
+    clearOutbox();
+    await processDueReminders(system, new Date(+rem.scheduledAt + 1000));
+    const msg = outbox.telegram.find((m) => m.method === 'sendMessage')!;
+    expect(msg.body.text).toContain('Как прошёл визит');
+    expect(msg.body.reply_markup.inline_keyboard[0].map((x: any) => x.callback_data)).toEqual([1, 2, 3, 4, 5].map((n) => `r:${n}:${b.id}`));
+
+    // Чужой чат оценить не может
+    await tgUpdate({ callback_query: { id: 'r0', data: `r:1:${b.id}`, message: { chat: { id: 9999 }, message_id: 1 } } });
+    expect(await system.review.count({ where: { bookingId: b.id } })).toBe(0);
+
+    clearOutbox();
+    await tgUpdate({ callback_query: { id: 'r1', data: `r:5:${b.id}`, message: { chat: { id: 3101 }, message_id: 7 } } });
+    expect(await system.review.findUniqueOrThrow({ where: { bookingId: b.id } })).toMatchObject({ rating: 5, source: 'TELEGRAM', resourceId: s.resourceId });
+    const edit = outbox.telegram.find((m) => m.method === 'editMessageText')!;
+    expect(edit.body.text).toContain('Спасибо за 5⭐');
+    expect(edit.body.reply_markup.inline_keyboard[0][0].url).toBe('https://yandex.ru/maps/org/rate/1');
+
+    // Тёплый комментарий следующим сообщением
+    await tgUpdate({ message: { chat: { id: 3101 }, text: 'Анна — лучший мастер!' } });
+    expect((await system.review.findUniqueOrThrow({ where: { bookingId: b.id } })).comment).toBe('Анна — лучший мастер!');
+  });
+
+  it('низкая оценка: владелец узнаёт сразу и получает комментарий клиента', async () => {
+    const s = await createSalon('LowRate');
+    const link = await s.api.post('/me/telegram');
+    await tgUpdate({ message: { chat: { id: 3201 }, text: `/start ${new URL(link.body.data.url).searchParams.get('start')}` } });
+    const b = await bookOnline(s.slug, s.serviceId, '14:00', '+79996660002');
+    await tgUpdate({ message: { chat: { id: 3202 }, text: `/start b_${b.manageToken}` } });
+    await s.api.post(`/bookings/${b.id}/status`, { status: 'COMPLETED' });
+
+    clearOutbox();
+    await tgUpdate({ callback_query: { id: 'r2', data: `r:2:${b.id}`, message: { chat: { id: 3202 }, message_id: 3 } } });
+    await new Promise((r) => setTimeout(r, 200));
+    const alert = outbox.telegram.find((m) => m.body.chat_id === '3201' && m.body.text?.includes('Низкая оценка'));
+    expect(alert?.body.text).toContain('2 из 5');
+    expect(outbox.telegram.find((m) => m.method === 'editMessageText')!.body.text).toContain('что пошло не так');
+
+    clearOutbox();
+    await tgUpdate({ message: { chat: { id: 3202 }, text: 'Долго ждала, мастер опоздал' } });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(outbox.telegram.some((m) => m.body.chat_id === '3201' && m.body.text?.includes('мастер опоздал'))).toBe(true);
+    expect(outbox.telegram.some((m) => m.body.chat_id === '3202' && m.body.text?.includes('передали владельцу'))).toBe(true);
+  });
+
+  it('оценка со страницы записи; до завершения нельзя; откат завершения снимает просьбу', async () => {
+    const s = await createSalon('WebRate');
+    const b = await bookOnline(s.slug, s.serviceId, '16:00', '+79996660003', 'web@test.ru');
+    expect((await api().post(`/public/${s.slug}/manage/${b.manageToken}/review`, { rating: 4 })).status).toBe(422);
+    await s.api.post(`/bookings/${b.id}/status`, { status: 'COMPLETED' });
+    let m = (await api().get(`/public/${s.slug}/manage/${b.manageToken}`)).body.data;
+    expect(m).toMatchObject({ canReview: true, review: null });
+
+    const r = await api().post(`/public/${s.slug}/manage/${b.manageToken}/review`, { rating: 4, comment: 'Всё отлично' });
+    expect(r.status).toBe(200);
+    m = (await api().get(`/public/${s.slug}/manage/${b.manageToken}`)).body.data;
+    expect(m.review).toEqual({ rating: 4, comment: 'Всё отлично' });
+    expect((await system.reminder.findFirstOrThrow({ where: { bookingId: b.id, type: 'AFTER_VISIT' } })).status).toBe('CANCELLED');
+
+    const b2 = await bookOnline(s.slug, s.serviceId, '18:00', '+79996660004');
+    expect((await api().post(`/public/${s.slug}/manage/${b2.manageToken}/confirm`)).status).toBe(200);
+    await s.api.post(`/bookings/${b2.id}/status`, { status: 'COMPLETED' });
+    await s.api.post(`/bookings/${b2.id}/status`, { status: 'ARRIVED' });
+    expect((await system.reminder.findFirstOrThrow({ where: { bookingId: b2.id, type: 'AFTER_VISIT' } })).status).toBe('CANCELLED');
+  });
+});

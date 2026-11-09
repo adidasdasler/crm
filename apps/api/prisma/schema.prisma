@@ -92,6 +92,8 @@ model Tenant {
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt DateTime? @db.Timestamptz(3)
+  /// Последняя еженедельная сводка с советами владельцу
+  insightsSentAt DateTime? @db.Timestamptz(3)
 
   memberships  Membership[]
   subscription Subscription?
@@ -526,4 +528,22 @@ model ServiceMaterial {
 
   @@id([serviceId, materialId])
   @@index([tenantId])
+}
+
+/// Оценка визита клиентом (1–5)
+model Review {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  bookingId  String   @unique @db.Uuid
+  customerId String   @db.Uuid
+  resourceId String   @db.Uuid
+  rating     Int      @db.SmallInt
+  comment    String?
+  /// TELEGRAM | MAX | VK | WEB
+  source     String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt], map: "Review_tenant_idx")
+  @@index([tenantId, resourceId], map: "Review_resource_idx")
 }

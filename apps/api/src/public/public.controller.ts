@@ -1,3 +1,4 @@
+import { afterRating, FEEDBACK_WINDOW_DAYS, submitReview } from '../reviews/reviews';
 import { industry } from '../common/industries';
 import { hoursText, salonHours } from './minisite';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
@@ -28,6 +29,7 @@ const slotsQuery = z.object({
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
   resourceId: uuid.optional(),
 });
+const reviewSchema = z.object({ rating: z.number().int().min(1).max(5), comment: z.string().trim().max(1000).optional() });
 const nearestQuery = z.object({
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
 });
@@ -243,8 +245,12 @@ export class PublicController {
       tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, include: bookingInclude }),
     );
     if (!b) throw notFound('Запись');
+    const review = await this.prisma.withTenant(t.id, (tx) => tx.review.findUnique({ where: { bookingId: b.id }, select: { rating: true, comment: true } }));
     return {
       id: b.id, status: b.status, startsAt: b.startsAt, endsAt: b.endsAt, price: b.price,
+      review,
+      canReview: b.status === 'COMPLETED' && Date.now() - +b.endsAt <= FEEDBACK_WINDOW_DAYS * 86400_000,
+      mapsLinks: { yandex: t.s.links?.yandexMaps ?? null, twoGis: t.s.links?.twoGis ?? null },
       resource: b.resource.name, services: b.items.map((i) => i.name),
       salon: { name: t.name, phone: t.phone, address: t.address },
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
@@ -252,6 +258,26 @@ export class PublicController {
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
       messengers: messengerLinks(token),
     };
+  }
+
+  /** Оценка визита со страницы записи (ссылка из письма или напоминания) */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('manage/:token/review')
+  async review(@Param('slug') slug: string, @Param('token') token: string, @Body(new Zod(reviewSchema)) dto: z.infer<typeof reviewSchema>) {
+    const t = await this.tenant(slug);
+    const r = await this.prisma.withTenant(t.id, async (tx) => {
+      const b = await tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, select: { id: true } });
+      if (!b) throw notFound('Запись');
+      return submitReview(tx, { bookingId: b.id, rating: dto.rating, comment: dto.comment, source: 'WEB' });
+    });
+    if (!r.ok) throw new AppError('REVIEW_UNAVAILABLE', r.error, 422);
+    const reply = await afterRating(this.prisma.system, r.review, r.prev?.rating !== dto.rating || (!!dto.comment && dto.comment !== r.prev?.comment));
+    // На странице есть поле для комментария — подсказываем про него, а не «напишите сообщением»
+    const message = r.review.rating >= 4 ? reply.text.replace(/<[^>]+>/g, '')
+      : r.review.comment ? 'Спасибо, передали владельцу салона. С вами свяжутся.'
+        : 'Спасибо, что честно оценили визит. Напишите в поле выше, что пошло не так, — владелец салона прочитает.';
+    return { rating: r.review.rating, comment: r.review.comment, message };
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

@@ -10,6 +10,7 @@ import { billingTick } from './billing/billing.service';
 import { env } from './config';
 import { max } from './notify/channels';
 import { telegram } from './notify/telegram';
+import { insightsDigestTick } from './insights/digest';
 import { processDueReminders } from './reminders/process';
 
 const db = new PrismaClient({ datasourceUrl: env.SYSTEM_DATABASE_URL });
@@ -32,7 +33,7 @@ async function main() {
   log('worker started', { telegram: telegram.enabled, max: max.enabled, vk: !!env.VK_GROUP_TOKEN, email: !!env.SMTP_URL });
   if (max.enabled && env.API_PUBLIC_URL && env.MAX_WEBHOOK_SECRET) {
     const r = await max.transport('POST', '/subscriptions', {
-      url: `${env.API_PUBLIC_URL}/webhooks/max`, update_types: ['bot_started', 'message_callback'], secret: env.MAX_WEBHOOK_SECRET,
+      url: `${env.API_PUBLIC_URL}/webhooks/max`, update_types: ['bot_started', 'message_callback', 'message_created'], secret: env.MAX_WEBHOOK_SECRET,
     });
     log('max subscription', r.ok ? 'ok' : r.json);
   }
@@ -44,6 +45,7 @@ async function main() {
     loop('reminders', 30_000, () => processDueReminders(db)),
     loop('billing', 60 * 60_000, () => billingTick(db)),
     loop('purge', 6 * 60 * 60_000, () => purgeDeletedTenants(db)),
+    loop('insights', 60 * 60_000, () => insightsDigestTick(db)),
   ]);
 }
 

@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
 import { workIntervals, WeekSchedule } from '../bookings/slots';
+import { computeInsights } from '../insights/insights';
 import { Auth, AuthCtx, Can } from '../common/auth';
 import { AppError } from '../common/errors';
 import { Zod } from '../common/http';
@@ -43,7 +44,7 @@ export class AnalyticsController {
       const end = to.plus({ days: 1 }).startOf('day').toJSDate();
       const prevStart = from.minus({ days }).startOf('day').toJSDate();
 
-      const [bookings, prev, resources, newCustomers, used] = await Promise.all([
+      const [bookings, prev, resources, newCustomers, used, reviews] = await Promise.all([
         tx.booking.findMany({
           where: { startsAt: { gte: start, lt: end } },
           select: {
@@ -56,7 +57,9 @@ export class AnalyticsController {
         tx.customer.count({ where: { deletedAt: null, createdAt: { gte: start, lt: end } } }),
         // Материалы, израсходованные на визиты за период (по цене партии)
         tx.stockMovement.findMany({ where: { type: { in: ['SERVICE', 'RETURN'] }, createdAt: { gte: start, lt: end } }, select: { qty: true, costPerUnit: true } }),
+        tx.review.findMany({ where: { createdAt: { gte: start, lt: end } }, select: { rating: true, resourceId: true } }),
       ]);
+      const avg = (list: { rating: number }[]) => (list.length ? Math.round((list.reduce((s, r) => s + r.rating, 0) / list.length) * 10) / 10 : null);
       const materialCost = Math.max(0, -Math.round(used.reduce((s, m) => s + (m.qty / 1000) * m.costPerUnit, 0)));
 
       const active = bookings.filter((b) => ACTIVE.includes(b.status));
@@ -95,8 +98,9 @@ export class AnalyticsController {
         }
         const mine = active.filter((b) => b.resourceId === r.id);
         const booked = mine.reduce((s, b) => s + (+b.endsAt - +b.startsAt) / 60_000, 0);
+        const rv = reviews.filter((x) => x.resourceId === r.id);
         return {
-          id: r.id, name: r.name, color: r.color, bookings: mine.length, amount: sum(mine),
+          id: r.id, name: r.name, color: r.color, bookings: mine.length, amount: sum(mine), rating: avg(rv), reviews: rv.length,
           bookedMin: Math.round(booked), capacityMin: Math.round(capacity), load: capacity ? Math.min(1, booked / capacity) : 0,
         };
       });
@@ -125,6 +129,9 @@ export class AnalyticsController {
           onlineShare: active.length ? online / active.length : 0,
           newCustomers,
           materialCost,
+          rating: avg(reviews),
+          reviews: reviews.length,
+          lowRatings: reviews.filter((r) => r.rating <= 3).length,
           load: masters.reduce((s, m) => s + m.capacityMin, 0) ? masters.reduce((s, m) => s + m.bookedMin, 0) / masters.reduce((s, m) => s + m.capacityMin, 0) : 0,
         },
         previous: {
@@ -223,6 +230,13 @@ export class AnalyticsController {
         topMaster: { period: '7d', top: ranking[0] && ranking[0].amount > 0 ? ranking[0] : null, ranking },
       };
     });
+  }
+
+  /** Советы владельцу: что можно улучшить (те же правила, что в еженедельной сводке) */
+  @Can('analytics.view')
+  @Get('insights')
+  insights(@Auth() a: AuthCtx) {
+    return this.prisma.withTenant(a.tenantId, (tx) => computeInsights(tx, a.tenantId));
   }
 }
 

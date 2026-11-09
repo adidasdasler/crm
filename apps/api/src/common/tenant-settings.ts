@@ -21,6 +21,10 @@ export const tenantSettingsSchema = z.object({
   cancelBeforeHours: z.number().int().min(0).max(168).default(3),
   onlineBookingEnabled: z.boolean().default(true),
   remindersEnabled: z.boolean().default(true),
+  /** Просить клиента оценить визит через 2 часа после завершения */
+  feedbackEnabled: z.boolean().default(true),
+  /** Еженедельная сводка с советами владельцу (понедельник утром) */
+  insightsDigest: z.boolean().default(true),
   /** Юридическое лицо/ИП салона — оператор ПДн своих клиентов (страница согласия) */
   legalName: z.string().trim().max(200).optional(),
   /** Сфера бизнеса (src/common/industries.ts) */

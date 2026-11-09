@@ -2,6 +2,7 @@ import { Prisma, PrismaClient, ReminderChannel } from '@prisma/client';
 import { manageToken, manageTokenHash, manageUrl } from '../common/manage-token';
 import { readSettings } from '../common/tenant-settings';
 import { Button, CHANNELS, ChannelName } from '../notify/channels';
+import { feedbackButtons, feedbackText } from '../reviews/reviews';
 import { telegramText } from './messages';
 
 const MAX_ATTEMPTS = 3;
@@ -73,22 +74,32 @@ async function processOne(db: PrismaClient, id: string, now: Date): Promise<Outc
     },
   });
   const b = r.booking;
-  if (!['SCHEDULED', 'CONFIRMED'].includes(b.status)) return { status: 'CANCELLED', error: `booking ${b.status}` };
-  if (b.startsAt <= now) return { status: 'CANCELLED', error: 'too late' };
-
   const tenant = await db.tenant.findUniqueOrThrow({ where: { id: b.tenantId } });
-  if (!readSettings(tenant.settings).remindersEnabled) return { status: 'CANCELLED', error: 'reminders disabled' };
+  const feedback = r.type === 'AFTER_VISIT';
+  if (feedback) {
+    if (b.status !== 'COMPLETED') return { status: 'CANCELLED', error: `booking ${b.status}` };
+    if (!readSettings(tenant.settings).feedbackEnabled) return { status: 'CANCELLED', error: 'feedback disabled' };
+    if (await db.review.findUnique({ where: { bookingId: b.id }, select: { id: true } })) return { status: 'CANCELLED', error: 'already rated' };
+    if (+now - +b.endsAt > 2 * 86400_000) return { status: 'CANCELLED', error: 'too late' };
+  } else {
+    if (!['SCHEDULED', 'CONFIRMED'].includes(b.status)) return { status: 'CANCELLED', error: `booking ${b.status}` };
+    if (b.startsAt <= now) return { status: 'CANCELLED', error: 'too late' };
+    if (!readSettings(tenant.settings).remindersEnabled) return { status: 'CANCELLED', error: 'reminders disabled' };
+  }
 
   // Записи, созданные до появления HMAC-токенов, получают хэш при первой отправке.
   if (!b.manageTokenHash) await db.booking.update({ where: { id: b.id }, data: { manageTokenHash: manageTokenHash(b.id) } });
 
   const url = manageUrl(tenant.slug, b.id);
-  const html = telegramText({
-    type: r.type, startsAt: b.startsAt, tz: tenant.timezone, url,
-    salon: { name: tenant.name, address: tenant.address, phone: tenant.phone },
-    services: b.items.map((i) => i.name), master: b.resource.name, customerName: b.customer.name,
-  }, now);
-  const buttons = bookingButtons(b.id, b.status, url);
+  const services = b.items.map((i) => i.name);
+  const html = feedback
+    ? feedbackText({ salon: tenant.name, services, master: b.resource.name })
+    : telegramText({
+      type: r.type, startsAt: b.startsAt, tz: tenant.timezone, url,
+      salon: { name: tenant.name, address: tenant.address, phone: tenant.phone },
+      services, master: b.resource.name, customerName: b.customer.name,
+    }, now);
+  const buttons = feedback ? feedbackButtons(b.id, url) : bookingButtons(b.id, b.status, url);
 
   // Telegram → MAX → ВКонтакте → Email: первый канал, который подключил клиент и который настроен у нас.
   const errors: string[] = [];
@@ -98,7 +109,7 @@ async function processOne(db: PrismaClient, id: string, now: Date): Promise<Outc
     const to = b.customer[field];
     if (!to || !ch.enabled()) continue;
     tried = true;
-    const res = await ch.send(to, html, buttons, `Напоминание: ${tenant.name}`);
+    const res = await ch.send(to, html, buttons, feedback ? `Как прошёл визит в «${tenant.name}»?` : `Напоминание: ${tenant.name}`);
     if (res.ok) return { status: 'SENT', channel: ch.name as ReminderChannel };
     errors.push(`${ch.name}: ${res.error}`);
     // Клиент заблокировал бота/запретил сообщения — отвязываем канал и пробуем следующий

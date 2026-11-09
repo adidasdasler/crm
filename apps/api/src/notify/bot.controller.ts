@@ -70,7 +70,7 @@ export class BotController {
       return;
     }
 
-    const reply = await this.clientBot.linkCustomer('TELEGRAM', chatId, payload);
+    const reply = text.startsWith('/') ? await this.clientBot.linkCustomer('TELEGRAM', chatId, payload) : await this.clientBot.message('TELEGRAM', chatId, text);
     await telegram.send(chatId, reply.text, toTg(reply.buttons));
     // Кнопка «Записаться» в меню чата — клиент вернётся к записи в этот салон в одно касание
     if (reply.bookingUrl) await telegram.setMenuButton(chatId, 'Записаться', reply.bookingUrl);

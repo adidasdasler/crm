@@ -75,6 +75,8 @@ export default function SalonSettings() {
 
       <H>Напоминания</H>
       <Toggle label="Напоминать клиентам" hint="За 24 часа и за 2 часа до визита" value={f.settings.remindersEnabled} onChange={set('remindersEnabled')} />
+      <Toggle label="Просить оценить визит" hint="Через 2 часа после визита: оценка 1–5. Довольных попросим оставить отзыв на картах, о недовольных сразу сообщим вам" value={f.settings.feedbackEnabled} onChange={set('feedbackEnabled')} />
+      <Toggle label="Советы раз в неделю" hint="В понедельник утром: итоги недели и что можно улучшить — в Telegram и push" value={f.settings.insightsDigest} onChange={set('insightsDigest')} />
 
       <ErrorText error={save.error} />
       <Button title="Сохранить" onPress={() => save.mutate()} loading={save.isPending} />
