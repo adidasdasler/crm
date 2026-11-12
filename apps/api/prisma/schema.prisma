@@ -749,3 +749,16 @@ enum BookingPaymentStatus {
   SUCCEEDED
   CANCELED
 }
+
+/// Журнал ошибок API и воркера для админ-панели (0017_error_log)
+model ErrorLog {
+  id        BigInt   @id @default(autoincrement())
+  at        DateTime @default(now()) @db.Timestamptz(3)
+  source    String
+  path      String?
+  message   String
+  stack     String?
+  requestId String?
+
+  @@index([at(sort: Desc)], map: "ErrorLog_at_idx")
+}

@@ -7,6 +7,7 @@ import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
 import { demoResetTick } from './demo/demo';
 import { waitlistTick } from './waitlist/waitlist';
+import { reportError } from './common/error-log';
 import { winbackTick } from './marketing/winback';
 import { prepaymentTick } from './prepayment/prepayment';
 import { purgeDeletedTenants } from './auth/account.controller';
@@ -30,6 +31,7 @@ async function loop(name: string, everyMs: number, fn: () => Promise<unknown>) {
       if (r && Object.values(r as object).some((v) => typeof v === 'number' && v > 0)) log(name, r);
     } catch (e) {
       log(`${name}: error`, (e as Error).message);
+      void reportError({ source: 'worker', path: name, err: e });
     }
     await new Promise((r) => setTimeout(r, everyMs));
   }
@@ -56,6 +58,8 @@ async function main() {
     loop('waitlist', 3 * 60_000, () => waitlistTick(appDb, db)),
     loop('winback', 30 * 60_000, () => winbackTick(db)),
     loop('prepayment', 2 * 60_000, () => prepaymentTick(db)),
+    // Журнал ошибок храним 30 дней
+    loop('errorlog', 24 * 60 * 60_000, () => db.errorLog.deleteMany({ where: { at: { lt: new Date(Date.now() - 30 * 86400_000) } } })),
     // Пульс для мониторинга (/v1/health → worker: ok)
     loop('heartbeat', 60_000, () => db.heartbeat.upsert({ where: { name: 'worker' }, update: { at: new Date() }, create: { name: 'worker' } }).then(() => null)),
   ]);

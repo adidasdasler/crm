@@ -1,3 +1,4 @@
+import { reportError } from './error-log';
 import {
   ArgumentsHost, CallHandler, Catch, ExceptionFilter, ExecutionContext,
   HttpException, Injectable, Logger, NestInterceptor, PipeTransform,
@@ -48,6 +49,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Токены из ссылок (управление записью, сброс пароля) в логи не пишем
     const path = req.url.replace(/(manage|reset|token)([/=])[^/?&]+/gi, '$1$2***');
     this.log.error({ err: exception, path, requestId: req.headers['x-request-id'] });
+    void reportError({ source: 'api', path: `${req.method} ${path}`, err: exception, requestId: req.headers['x-request-id'] as string | undefined });
     return res.status(500).json({
       success: false,
       error: { code: 'INTERNAL', message: 'Внутренняя ошибка сервера' },

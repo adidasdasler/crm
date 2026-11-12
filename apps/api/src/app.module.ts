@@ -11,6 +11,7 @@ import { ImportController } from './customers/import.controller';
 import { PayrollController } from './payroll/payroll.controller';
 import { MarketingController } from './marketing/marketing.controller';
 import { PrepaymentController } from './prepayment/prepayment.controller';
+import { AdminController } from './admin/admin.controller';
 import { MiniSiteController } from './public/minisite.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -51,7 +52,7 @@ class HealthController {
       skipIf: () => process.env.NODE_ENV === 'test',
     }),
   ],
-  controllers: [PrepaymentController, MarketingController, PayrollController, ImportController, WaitlistController, AnalyticsController, DesignsController, LoyaltyController, StockController, MiniSiteController, 
+  controllers: [AdminController, PrepaymentController, MarketingController, PayrollController, ImportController, WaitlistController, AnalyticsController, DesignsController, LoyaltyController, StockController, MiniSiteController, 
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
     CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController, MessengersController,
   ],
