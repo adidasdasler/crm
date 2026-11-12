@@ -350,6 +350,7 @@ function Contacts(props: {
   const [email, setEmail] = useState('');
   const [comment, setComment] = useState('');
   const [consent, setConsent] = useState(false);
+  const [marketing, setMarketing] = useState(false);
   const [website, setWebsite] = useState(''); // honeypot
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -361,7 +362,7 @@ function Contacts(props: {
     try {
       const b = await api<Booked>(`/public/${props.slug}/book`, {
         method: 'POST',
-        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef() ?? (tgInitData() ? 'telegram' : undefined), tgInitData: tgInitData() ?? undefined, comment: comment || undefined, consent, website: website || undefined }),
+        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef() ?? (tgInitData() ? 'telegram' : undefined), tgInitData: tgInitData() ?? undefined, comment: comment || undefined, consent, marketingConsent: marketing || undefined, website: website || undefined }),
       });
       props.onDone(b);
     } catch (e) {
@@ -392,6 +393,10 @@ function Contacts(props: {
       <label className="flex items-start gap-3 text-sm text-ink-muted">
         <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
         <span>Даю <Link className="text-brand-600 underline" to={`/b/${props.slug}/consent`} target="_blank">согласие на обработку персональных данных</Link></span>
+      </label>
+      <label className="flex items-start gap-3 text-sm text-ink-muted">
+        <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+        <span>Хочу получать от салона поздравления и специальные предложения (можно отписаться в любой момент)</span>
       </label>
       {err && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</p>}
       <button className="btn-primary w-full" disabled={busy || !consent || name.trim().length < 1}>{busy ? 'Записываем…' : 'Записаться'}</button>

@@ -28,4 +28,4 @@ export const OPERATOR = {
 };
 
 /** Даты редакций. При изменении текстов обновите и CONSENT_VERSION в apps/api/src/common/legal.ts */
-export const EDITION = '12.11.2026';
+export const EDITION = '13.11.2026';

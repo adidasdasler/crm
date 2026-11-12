@@ -29,6 +29,15 @@ export const tenantSettingsSchema = z.object({
   feedbackEnabled: z.boolean().default(true),
   /** Еженедельная сводка с советами владельцу (понедельник утром) */
   insightsDigest: z.boolean().default(true),
+  /**
+   * Возврат клиентов (только клиентам с согласием на рассылку — 38-ФЗ):
+   * «давно не были» через N дней после последнего визита и поздравление с днём рождения.
+   */
+  winbackEnabled: z.boolean().default(false),
+  winbackDays: z.number().int().min(14).max(365).default(45),
+  winbackText: z.string().trim().max(500).optional(),
+  birthdayEnabled: z.boolean().default(false),
+  birthdayText: z.string().trim().max(500).optional(),
   /** Юридическое лицо/ИП салона — оператор ПДн своих клиентов (страница согласия) */
   legalName: z.string().trim().max(200).optional(),
   /** Частный мастер: в приложении скрыты команда и роли, в онлайн-записи нет выбора мастера */

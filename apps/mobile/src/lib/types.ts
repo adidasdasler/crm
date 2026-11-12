@@ -38,7 +38,7 @@ export type Booking = {
 export type Tenant = {
   id: string; name: string; slug: string; phone: string | null; address: string | null; timezone: string;
   settings: { slotStepMin: number; minLeadMin: number; maxDaysAhead: number; cancelBeforeHours: number; onlineBookingEnabled: boolean; remindersEnabled: boolean; legalName?: string; inn?: string;
-    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean; solo?: boolean; depositTiers: { amount: number; bonus: number }[]; depositAutoCharge: boolean;
+    industry: string; about?: string; links?: Partial<Record<LinkKey, string>>; feedbackEnabled: boolean; insightsDigest: boolean; winbackEnabled?: boolean; winbackDays?: number; winbackText?: string; birthdayEnabled?: boolean; birthdayText?: string; solo?: boolean; depositTiers: { amount: number; bonus: number }[]; depositAutoCharge: boolean;
   };
   industry?: { code: string; label: string; terms: Terms };
 };

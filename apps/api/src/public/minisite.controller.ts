@@ -9,6 +9,8 @@ import { readSettings } from '../common/tenant-settings';
 import { env } from '../config';
 import { storage } from '../media/storage';
 import { renderMiniSite, salonHours } from './minisite';
+import { timingSafeEqual } from 'node:crypto';
+import { unsubscribeSig } from '../marketing/winback';
 
 /** Метки источника для ссылок записи: салон видит в «Обзоре», откуда пришёл клиент */
 export const SOURCES = ['yandex', '2gis', 'vk', 'telegram', 'max', 'instagram', 'whatsapp', 'avito', 'site', 'qr'] as const;
@@ -18,6 +20,20 @@ const SRC_RE = /^[a-z0-9_-]{1,32}$/;
 @Controller()
 export class MiniSiteController {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Отписка от рассылок салона по ссылке из сообщения (подпись HMAC — чужой id не подобрать) */
+  @Get('unsubscribe/:id/:sig')
+  async unsubscribe(@Param('id', ParseUUIDPipe) id: string, @Param('sig') sig: string, @Res() res: Response) {
+    const page = (title: string, text: string) =>
+      res.type('html').send(`<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:480px;margin:15vh auto;padding:0 20px;text-align:center"><h1 style="font-size:24px">${title}</h1><p style="color:#555">${text}</p></body></html>`);
+    if (sig.length !== unsubscribeSig(id).length || !timingSafeEqual(Buffer.from(sig), Buffer.from(unsubscribeSig(id)))) return page('Ссылка недействительна', 'Попросите салон отключить сообщения для вас.');
+    const c = await this.prisma.system.customer.findUnique({ where: { id }, select: { id: true, tenantId: true } });
+    if (c) {
+      await this.prisma.system.customer.update({ where: { id }, data: { marketingConsent: false } });
+      await this.prisma.system.auditLog.create({ data: { tenantId: c.tenantId, action: 'customer.unsubscribe', entityType: 'Customer', entityId: id } });
+    }
+    return page('Вы отписались', 'Больше не будем присылать предложения и поздравления. Напоминания о ваших записях будут приходить как обычно.');
+  }
 
   /** Справочник отраслей для регистрации */
   @Get('public-meta/industries')

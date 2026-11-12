@@ -358,6 +358,9 @@ model Customer {
   totalVisits      Int       @default(0)
   totalSpent       Int       @default(0)
   lastVisitAt      DateTime? @db.Timestamptz(3)
+  /// Возврат клиентов: последнее «давно не были» и поздравление с днём рождения
+  lastWinbackAt    DateTime? @db.Timestamptz(3)
+  lastBirthdayAt   DateTime? @db.Timestamptz(3)
   source           BookingSource @default(MANUAL)
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)

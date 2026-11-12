@@ -29,6 +29,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="booking/new" options={{ title: 'Новая запись', presentation: 'modal' }} />
       <Stack.Screen name="booking/[id]" options={{ title: 'Запись' }} />
+      <Stack.Screen name="winback" options={{ title: 'Возврат клиентов' }} />
       <Stack.Screen name="payroll" options={{ title: 'Зарплата' }} />
       <Stack.Screen name="import" options={{ title: 'Перенос из другой программы' }} />
       <Stack.Screen name="two-factor" options={{ title: 'Вход с кодом' }} />
