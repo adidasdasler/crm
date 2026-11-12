@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { calendarUrl, rememberBooking } from '../lib/my';
-import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
+import { api, ApiError, dateInTz, fmtDate, fmtTime, rub } from '../lib/api';
 
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
-  salon: { name: string; phone: string | null; address: string | null }; resourceId?: string; serviceIds?: string[]; canCancel: boolean; cancelBeforeHours: number; telegramUrl: string | null;
+  salon: { name: string; phone: string | null; address: string | null }; resourceId?: string; serviceIds?: string[]; canCancel: boolean; canReschedule?: boolean; maxDaysAhead?: number; cancelBeforeHours: number; telegramUrl: string | null;
   wallet?: { money: number; bonus: number; passes: { name: string; kind: string; visitsLeft: number | null; expiresAt: string }[] };
   canReview?: boolean; review?: { rating: number; comment: string | null } | null; mapsLinks?: { yandex: string | null; twoGis: string | null };
 };
@@ -20,6 +20,7 @@ export function ManagePage() {
   const [tz, setTz] = useState('Europe/Moscow');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   const load = () =>
     Promise.all([api<Info>(`/public/${slug}/manage/${token}`), api<{ timezone: string }>(`/public/${slug}`)])
@@ -60,6 +61,10 @@ export function ManagePage() {
           )}
           <div className="flex flex-col gap-2 pt-2">
             {info.status === 'SCHEDULED' && <button className="btn-primary" disabled={busy} onClick={() => act('confirm')}>Подтвердить, приду</button>}
+            {info.canReschedule && !moving && <button className="btn-ghost" disabled={busy} onClick={() => setMoving(true)}>Перенести на другое время</button>}
+            {moving && info.serviceIds && info.resourceId && (
+              <Reschedule slug={slug} token={token} tz={tz} info={info} onClose={() => setMoving(false)} onDone={() => { setMoving(false); void load(); }} />
+            )}
             {info.canCancel && <button className="btn-ghost text-red-600" disabled={busy} onClick={() => act('cancel')}>Отменить запись</button>}
             {!info.canCancel && ['SCHEDULED', 'CONFIRMED'].includes(info.status) && (
               <p className="text-sm text-ink-muted">Онлайн-отмена доступна не позднее чем за {info.cancelBeforeHours} ч. Позвоните в салон.</p>
@@ -77,6 +82,64 @@ export function ManagePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Перенос: тот же мастер и услуги, выбираем день и свободное время */
+function Reschedule({ slug, token, tz, info, onClose, onDone }: { slug: string; token: string; tz: string; info: Info; onClose: () => void; onDone: () => void }) {
+  const days = Array.from({ length: Math.min(info.maxDaysAhead ?? 30, 21) }, (_, i) => dateInTz(tz, i));
+  const [date, setDate] = useState(days[0]);
+  const [slots, setSlots] = useState<string[] | null>(null);
+  const [time, setTime] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setSlots(null);
+    setTime(null);
+    const q = new URLSearchParams({ date, serviceIds: info.serviceIds!.join(','), resourceId: info.resourceId! });
+    api<{ slots: string[] }[]>(`/public/${slug}/slots?${q}`).then((r) => setSlots(r[0]?.slots ?? [])).catch(() => setSlots([]));
+  }, [date, slug, info.serviceIds, info.resourceId]);
+  const wd = (d: string) => new Intl.DateTimeFormat('ru-RU', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+  async function save() {
+    if (!time) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/public/${slug}/manage/${token}/reschedule`, { method: 'POST', body: JSON.stringify({ startsAt: time }) });
+      onDone();
+    } catch (e) {
+      setErr((e as ApiError).message);
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="space-y-3 rounded-3xl bg-brand-50 p-4 text-left">
+      <div className="flex items-center justify-between">
+        <p className="font-semibold">Новое время · мастер {info.resource}</p>
+        <button className="text-sm font-medium text-brand-600" onClick={onClose}>Отмена</button>
+      </div>
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {days.map((d) => (
+          <button key={d} onClick={() => setDate(d)} className={`w-12 shrink-0 rounded-2xl py-2 text-center ${d === date ? 'bg-brand-600 text-white' : 'bg-white'}`}>
+            <span className="block text-xs">{wd(d)}</span>
+            <span className="block font-bold">{+d.slice(8)}</span>
+          </button>
+        ))}
+      </div>
+      {slots === null ? <p className="text-sm text-ink-muted">Ищем свободное время…</p> : slots.length === 0 ? (
+        <p className="text-sm text-ink-muted">В этот день свободного времени нет — выберите другой.</p>
+      ) : (
+        <div className="grid grid-cols-4 gap-2">
+          {slots.map((s) => (
+            <button key={s} onClick={() => setTime(s)} className={`rounded-xl py-2 font-semibold ${time === s ? 'bg-brand-600 text-white' : 'bg-white'}`}>{fmtTime(s, tz)}</button>
+          ))}
+        </div>
+      )}
+      {err && <p className="text-sm text-red-700">{err}</p>}
+      <button className="btn-primary w-full" disabled={!time || busy} onClick={save}>
+        {time ? `Перенести на ${fmtDate(time, tz)}, ${fmtTime(time, tz)}` : 'Выберите время'}
+      </button>
     </div>
   );
 }

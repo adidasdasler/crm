@@ -183,6 +183,16 @@ describe('онлайн-запись', () => {
     expect(ics.text).toContain(`DTSTART:${slot.replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`);
     expect(ics.text).toContain('SUMMARY:Стрижка');
     expect((await pub.get(`/public/${s.slug}/manage/bad-token/calendar.ics`)).status).toBe(404);
+
+    // Перенос самим клиентом: занятое и вне сетки — нельзя, свободное — можно
+    expect((await pub.post(`/public/${s.slug}/manage/${token}/reschedule`, { startsAt: tomorrowAt('15:05', 2) })).status).toBe(409);
+    const moved = await pub.post(`/public/${s.slug}/manage/${token}/reschedule`, { startsAt: tomorrowAt('14:00', 2) });
+    expect(moved.status).toBe(200);
+    expect(moved.body.data.startsAt).toBe(tomorrowAt('14:00', 2));
+    expect((await pub.get(`/public/${s.slug}/manage/${token}`)).body.data.startsAt).toBe(tomorrowAt('14:00', 2));
+    // Старое время освободилось
+    const again = await pub.get(`/public/${s.slug}/slots?date=${tomorrowDate(2)}&serviceIds=${s.serviceId}`);
+    expect(again.body.data[0].slots).toContain(tomorrowAt('10:00', 2));
     // Токен чужого салона не работает.
     const other = await createSalon('Other');
     expect((await pub.get(`/public/${other.slug}/manage/${token}`)).status).toBe(404);

@@ -280,6 +280,8 @@ export class PublicController {
       /** «Записаться снова» — к тому же мастеру на те же услуги */
       resourceId: b.resourceId, serviceIds: b.items.map((i) => i.serviceId),
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
+      canReschedule: t.available && this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
+      maxDaysAhead: t.s.maxDaysAhead,
       cancelBeforeHours: t.s.cancelBeforeHours,
       telegramUrl: telegram.enabled ? telegram.deepLink(`b_${token}`) : null,
       messengers: messengerLinks(token),
@@ -321,6 +323,38 @@ export class PublicController {
       : r.review.comment ? 'Спасибо, передали владельцу салона. С вами свяжутся.'
         : 'Спасибо, что честно оценили визит. Напишите в поле выше, что пошло не так, — владелец салона прочитает.';
     return { rating: r.review.rating, comment: r.review.comment, message };
+  }
+
+  /**
+   * Перенос записи самим клиентом: к тому же мастеру, на те же услуги, в свободное время.
+   * Правило то же, что у отмены: не позже чем за N часов до визита.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('manage/:token/reschedule')
+  async reschedule(@Param('slug') slug: string, @Param('token') token: string, @Body(new Zod(z.object({ startsAt: z.coerce.date() }))) dto: { startsAt: Date }) {
+    const t = await this.tenant(slug);
+    if (!t.available) throw new AppError('BOOKING_UNAVAILABLE', 'Онлайн-запись в этот салон сейчас недоступна', 403);
+    const r = await this.prisma.withTenant(t.id, async (tx) => {
+      const b = await tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, include: { items: true } });
+      if (!b) throw notFound('Запись');
+      if (!this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours)) {
+        throw new AppError('RESCHEDULE_TOO_LATE', `Перенести онлайн можно не позднее чем за ${t.s.cancelBeforeHours} ч. Позвоните в салон`, 422);
+      }
+      const date = DateTime.fromJSDate(dto.startsAt, { zone: t.timezone }).toISODate()!;
+      const free = await this.bookings.slots(tx, t, { date, serviceIds: b.items.map((i) => i.serviceId), resourceId: b.resourceId, onlyPublic: true });
+      if (!free.some((x) => x.slots.includes(dto.startsAt.toISOString()))) throw new AppError('SLOT_TAKEN', 'Это время уже занято, выберите другое', 409);
+      const from = b.startsAt;
+      const updated = await this.bookings.update(tx, t, { tenantId: t.id }, b.id, { version: b.version, startsAt: dto.startsAt });
+      // Перенесённую запись клиент подтвердил выбором времени
+      await audit(tx, { tenantId: t.id }, 'booking.client_reschedule', 'Booking', b.id, { startsAt: from }, { startsAt: dto.startsAt });
+      return { from, b: updated };
+    });
+    const fmt = (d: Date) => d.toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    void notifyStaff(this.prisma.system, t.id, `🔁 Клиент перенёс запись: ${esc(fmt(r.from))} → <b>${esc(fmt(r.b.startsAt))}</b>\n${esc(r.b.resource.name)} · ${esc(r.b.items.map((i) => i.name).join(', '))}`, {
+      resourceId: r.b.resourceId, push: { title: 'Клиент перенёс запись', body: `${fmt(r.from)} → ${fmt(r.b.startsAt)}`, data: { bookingId: r.b.id } },
+    });
+    return { startsAt: r.b.startsAt, endsAt: r.b.endsAt, status: r.b.status };
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
