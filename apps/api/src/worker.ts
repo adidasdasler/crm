@@ -6,6 +6,7 @@
 import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
 import { demoResetTick } from './demo/demo';
+import { waitlistTick } from './waitlist/waitlist';
 import { purgeDeletedTenants } from './auth/account.controller';
 import { billingTick } from './billing/billing.service';
 import { env } from './config';
@@ -15,6 +16,8 @@ import { insightsDigestTick } from './insights/digest';
 import { processDueReminders } from './reminders/process';
 
 const db = new PrismaClient({ datasourceUrl: env.SYSTEM_DATABASE_URL });
+/** Роль приложения (RLS) — для расчёта свободного времени строго внутри салона */
+const appDb = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
 const log = (msg: string, extra?: unknown) => console.log(JSON.stringify({ time: new Date().toISOString(), msg, ...(extra ? { extra } : {}) }));
 
 let stopping = false;
@@ -48,13 +51,14 @@ async function main() {
     loop('purge', 6 * 60 * 60_000, () => purgeDeletedTenants(db)),
     loop('insights', 60 * 60_000, () => insightsDigestTick(db)),
     loop('demo', 30 * 60_000, () => demoResetTick(db)),
+    loop('waitlist', 3 * 60_000, () => waitlistTick(appDb, db)),
   ]);
 }
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
     stopping = true;
-    db.$disconnect().finally(() => process.exit(0));
+    Promise.all([db.$disconnect(), appDb.$disconnect()]).finally(() => process.exit(0));
   });
 }
 main();

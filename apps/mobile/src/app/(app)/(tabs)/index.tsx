@@ -10,7 +10,7 @@ import { del, get } from '../../../lib/api';
 import { confirm } from '../../../lib/confirm';
 import { can, useMe } from '../../../lib/auth';
 import { addDays, dayLabel, dayTitle, isoDay, rub, STATUS, time, today } from '../../../lib/format';
-import type { Booking, Resource, TimeOff } from '../../../lib/types';
+import type { Booking, Resource, TimeOff, WaitlistItem } from '../../../lib/types';
 
 type Item = { kind: 'b'; b: Booking; at: string } | { kind: 't'; t: TimeOff; at: string };
 
@@ -34,6 +34,7 @@ export default function Calendar() {
     queryFn: () => get<Booking[]>(`/bookings?date=${day}`),
     refetchInterval: 30_000, // вместо WebSocket на старте — обновление раз в 30 секунд
   });
+  const waiting = useQuery({ queryKey: ['waitlist', day], queryFn: () => get<WaitlistItem[]>(`/waitlist?date=${day}`), refetchInterval: 60_000 });
   const timeOff = useQuery({ queryKey: ['timeoff', day], queryFn: () => get<TimeOff[]>(`/resources/time-off?date=${day}`), refetchInterval: 60_000 });
   const canClose = can(me, 'staff.manage') || !!me.resourceId;
   const openTime = async (t: TimeOff) => {
@@ -101,9 +102,19 @@ export default function Calendar() {
         contentContainerStyle={[webMax, { padding: 16, gap: 10, paddingBottom: 100 }]}
         refreshControl={<RefreshControl refreshing={bookings.isRefetching} onRefresh={() => void bookings.refetch()} />}
         ListHeaderComponent={
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-            <Text style={{ fontSize: 24, fontFamily: F.display, color: C.text }}>{dayTitle(day, tz)}</Text>
-            {active.length > 0 && <Text style={{ color: C.muted }}>{active.length} зап. · {rub(revenue)}</Text>}
+          <View style={{ gap: 10, marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Text style={{ fontSize: 24, fontFamily: F.display, color: C.text }}>{dayTitle(day, tz)}</Text>
+              {active.length > 0 && <Text style={{ color: C.muted }}>{active.length} зап. · {rub(revenue)}</Text>}
+            </View>
+            {(waiting.data?.length ?? 0) > 0 && (
+              <Pressable onPress={() => router.push({ pathname: '/waitlist', params: { day } })} accessibilityRole="button"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF4D6', borderRadius: 16, padding: 12 }}>
+                <Ionicons name="hourglass-outline" size={20} color="#7A4B00" />
+                <Text style={{ flex: 1, color: '#7A4B00', fontWeight: '600' }}>Лист ожидания: {waiting.data!.length} {waiting.data!.length === 1 ? 'клиент ждёт' : 'ждут'} окно</Text>
+                <Ionicons name="chevron-forward" size={18} color="#7A4B00" />
+              </Pressable>
+            )}
           </View>
         }
         ListEmptyComponent={

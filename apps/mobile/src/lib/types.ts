@@ -124,3 +124,4 @@ export type Design = {
   materials?: { id: string; name: string; unit: string }[]; canEdit?: boolean;
 };
 export type TimeOff = { id: string; resourceId: string; startsAt: string; endsAt: string; reason: string | null };
+export type WaitlistItem = { id: string; name: string; phone: string; status: 'ACTIVE' | 'NOTIFIED'; resourceId: string | null; services: string[]; createdAt: string };

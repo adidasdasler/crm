@@ -4,6 +4,7 @@ import { hoursText, salonHours } from './minisite';
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { bookingIcs } from './ics';
+import { MAX_WAITLIST_PER_PHONE } from '../waitlist/waitlist';
 import { Throttle } from '@nestjs/throttler';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
@@ -35,6 +36,17 @@ const reviewSchema = z.object({ rating: z.number().int().min(1).max(5), comment:
 const nearestQuery = z.object({
   serviceIds: z.string().transform((s) => s.split(',').filter(Boolean)).pipe(z.array(uuid).min(1).max(5)),
 });
+const waitlistSchema = z.object({
+  serviceIds: z.array(uuid).min(1).max(5),
+  resourceId: uuid.nullish(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().trim().min(1).max(100),
+  phone,
+  email: z.string().trim().toLowerCase().email('Некорректный email').max(200).optional().or(z.literal('').transform(() => undefined)),
+  consent: z.literal(true, { error: 'Необходимо согласие на обработку персональных данных' }),
+  website: z.string().max(0).optional(),
+});
+
 const bookSchema = z.object({
   serviceIds: z.array(uuid).min(1).max(5),
   resourceId: uuid.nullable(),
@@ -137,6 +149,29 @@ export class PublicController {
     const t = await this.tenant(slug);
     if (!t.available) return [];
     return this.prisma.withTenant(t.id, (tx) => this.bookings.slots(tx, t, { ...q, onlyPublic: true }));
+  }
+
+  /** Лист ожидания: «сообщите, если освободится» — когда в выбранный день нет свободного времени */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('waitlist')
+  async waitlist(@Param('slug') slug: string, @Body(new Zod(waitlistSchema)) dto: z.infer<typeof waitlistSchema>, @Req() req: Request) {
+    const t = await this.tenant(slug);
+    if (!t.available) throw new AppError('BOOKING_UNAVAILABLE', 'Онлайн-запись в этот салон сейчас недоступна', 403);
+    const today = DateTime.now().setZone(t.timezone).startOf('day');
+    const day = DateTime.fromISO(dto.date, { zone: t.timezone });
+    if (!day.isValid || day < today || day > today.plus({ days: t.s.maxDaysAhead })) throw new AppError('VALIDATION_ERROR', 'Выберите другой день');
+    return this.prisma.withTenant(t.id, async (tx) => {
+      await this.bookings.loadServices(tx, dto.serviceIds, true);
+      const active = await tx.waitlistEntry.count({ where: { phone: dto.phone, status: 'ACTIVE' } });
+      if (active >= MAX_WAITLIST_PER_PHONE) throw new AppError('TOO_MANY_WAITLIST', 'Вы уже ждёте окно в нескольких днях. Дождитесь письма или позвоните в салон', 429);
+      const e = await tx.waitlistEntry.create({
+        data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email ?? null, serviceIds: dto.serviceIds, resourceId: dto.resourceId ?? null, date: new Date(`${dto.date}T00:00:00Z`) },
+      });
+      await tx.auditLog.create({
+        data: { tenantId: t.id, action: 'consent.waitlist', entityType: 'WaitlistEntry', entityId: e.id, after: { version: CONSENT_VERSION, userAgent: String(req.headers['user-agent'] ?? '').slice(0, 200) }, ip: req.ip },
+      });
+      return { id: e.id, date: dto.date };
+    });
   }
 
   /**

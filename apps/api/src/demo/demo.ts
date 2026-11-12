@@ -57,6 +57,7 @@ export async function resetDemo(db: PrismaClient, now = new Date()) {
     db.service.deleteMany({ where: { tenantId } }),
     db.serviceCategory.deleteMany({ where: { tenantId } }),
     db.timeOff.deleteMany({ where: { tenantId } }),
+    db.waitlistEntry.deleteMany({ where: { tenantId } }),
     db.payment.deleteMany({ where: { tenantId } }),
     db.auditLog.deleteMany({ where: { tenantId } }),
     db.membership.deleteMany({ where: { tenantId, id: { not: owner.id } } }),

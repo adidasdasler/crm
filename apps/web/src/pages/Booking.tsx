@@ -63,6 +63,9 @@ export function BookingPage() {
         const again = (q.get('s') ?? '').split(',').filter((id) => c?.services.some((x) => x.id === id));
         if (again.length) {
           setServiceIds(again);
+          // Письмо из листа ожидания ведёт сразу на нужный день
+          const d = q.get('d');
+          if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= dateInTz(s.timezone)) setDate(d);
           const m = q.get('m');
           if (m) {
             setMasterId(m);
@@ -231,7 +234,10 @@ export function BookingPage() {
           {slots === null ? (
             <Skeleton />
           ) : times.length === 0 ? (
-            <div className="card py-8 text-center text-ink-muted">На этот день свободного времени нет — выберите другой</div>
+            <div className="space-y-3">
+              <div className="card py-6 text-center text-ink-muted">На этот день свободного времени нет — выберите другой</div>
+              <Waitlist slug={slug} date={date} serviceIds={serviceIds} resourceId={masterId} />
+            </div>
           ) : (
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
               {times.map((t) => (
@@ -281,6 +287,52 @@ export function BookingPage() {
         </section>
       )}
     </Shell>
+  );
+}
+
+/** «Сообщите, если освободится»: заявка в лист ожидания на выбранный день */
+function Waitlist({ slug, date, serviceIds, resourceId }: { slug: string; date: string; serviceIds: string[]; resourceId: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(() => tgFirstName() ?? '');
+  const [phone, setPhone] = useState('+7 ');
+  const [email, setEmail] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setDone(null); setErr(null); }, [date]);
+  const dayText = fmtDate(`${date}T12:00:00Z`, 'UTC');
+
+  if (done) return <div className="card space-y-1 bg-brand-50 py-5 text-center"><p className="font-semibold">Вы в листе ожидания на {done}</p><p className="text-sm text-ink-muted">{email ? 'Как только освободится время, придёт письмо со ссылкой для записи. ' : ''}Салон тоже увидит вашу заявку и сможет позвонить.</p></div>;
+  if (!open) return <button className="btn-ghost w-full" onClick={() => setOpen(true)}>Сообщить, если освободится время</button>;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/public/${slug}/waitlist`, { method: 'POST', body: JSON.stringify({ serviceIds, resourceId, date, name, phone, email: email.trim() || undefined, consent }) });
+      setDone(dayText);
+    } catch (x) {
+      setErr((x as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form onSubmit={submit} className="card space-y-3">
+      <p className="font-semibold">Лист ожидания на {dayText}</p>
+      <p className="text-sm text-ink-muted">Если кто-то отменит запись, мы сразу сообщим. Оставьте email — пришлём ссылку, чтобы успеть записаться.</p>
+      <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+      <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+      <input className="input" type="email" placeholder="Email для уведомления" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+        <span className="text-ink-muted">Даю <Link className="text-brand-600 underline" to={`/b/${slug}/consent`} target="_blank">согласие на обработку персональных данных</Link></span>
+      </label>
+      {err && <p className="text-sm text-red-700">{err}</p>}
+      <button className="btn-primary w-full" disabled={!consent || busy || !name.trim() || phone.replace(/\D/g, '').length < 11}>Встать в лист ожидания</button>
+    </form>
   );
 }
 

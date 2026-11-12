@@ -670,3 +670,29 @@ model Design {
   @@index([tenantId, createdAt], map: "Design_tenant_idx")
   @@index([tenantId, customerId], map: "Design_customer_idx")
 }
+
+/// Лист ожидания: «сообщите, если освободится время» (0012_waitlist)
+model WaitlistEntry {
+  id         String         @id @default(uuid()) @db.Uuid
+  tenantId   String         @db.Uuid
+  name       String
+  phone      String
+  email      String?
+  serviceIds String[]       @db.Uuid
+  resourceId String?        @db.Uuid
+  date       DateTime       @db.Date
+  status     WaitlistStatus @default(ACTIVE)
+  notifiedAt DateTime?      @db.Timestamptz(3)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, date, status], map: "WaitlistEntry_tenant_date_idx")
+  @@index([status, date], map: "WaitlistEntry_active_idx")
+}
+
+enum WaitlistStatus {
+  ACTIVE
+  NOTIFIED
+  DONE
+  CANCELLED
+  EXPIRED
+}
