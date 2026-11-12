@@ -190,6 +190,11 @@ function BookingCard({ b, tz }: { b: Booking; tz: string }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: st.color, backgroundColor: st.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{st.label}</Text>
             <Text style={{ fontSize: 13, color: C.muted }}>{b.resource.name} · {rub(b.price)}</Text>
+            {b.payments?.[0] && (
+              <Text style={{ fontSize: 12, fontWeight: '600', color: b.payments[0].status === 'SUCCEEDED' ? '#0F6B48' : '#8A4500' }}>
+                {b.payments[0].status === 'SUCCEEDED' ? `✓ предоплата ${rub(b.payments[0].amount)}` : 'ждём предоплату'}
+              </Text>
+            )}
           </View>
         </View>
       </View>

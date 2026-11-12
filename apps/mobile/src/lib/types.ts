@@ -31,6 +31,8 @@ export type Booking = {
   items: { id: string; serviceId: string; name: string; price: number; duration: number }[];
   customer: { id: string; name: string; phone: string; notes: string | null; totalVisits: number };
   resource: { id: string; name: string; color: string };
+  /** Предоплата клиента через ЮKassa салона */
+  payments?: { amount: number; status: 'PENDING' | 'SUCCEEDED' }[];
   reminders?: { id: string; type: 'BEFORE_24H' | 'BEFORE_2H' | 'AFTER_VISIT'; status: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED'; channel: 'TELEGRAM' | 'MAX' | 'VK' | 'EMAIL' | 'SMS'; scheduledAt: string; sentAt: string | null }[];
   review?: { rating: number; comment: string | null; source: string; createdAt: string } | null;
   settlement?: { pass: { name: string; kind: string; visitsLeft: number | null; expiresAt: string } | null; fromBalance: number };

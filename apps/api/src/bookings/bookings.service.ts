@@ -29,6 +29,8 @@ export const bookingInclude = {
   items: { orderBy: { sortOrder: 'asc' } },
   customer: { select: { id: true, name: true, phone: true, notes: true, totalVisits: true } },
   resource: { select: { id: true, name: true, color: true } },
+  // Предоплата клиента (если салон её включил)
+  payments: { where: { status: { not: 'CANCELED' } }, select: { amount: true, status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
 } satisfies Prisma.BookingInclude;
 
 type Actor = { tenantId: string; userId?: string | null };

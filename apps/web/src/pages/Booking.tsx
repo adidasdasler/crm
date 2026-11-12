@@ -10,6 +10,7 @@ type Salon = {
   name: string; slug: string; phone: string | null; address: string | null; timezone: string; available: boolean; maxDaysAhead: number;
   about?: string | null; links?: Partial<Record<'site' | 'vk' | 'telegram' | 'max' | 'instagram' | 'whatsapp' | 'yandexMaps' | 'twoGis', string>>;
   hours?: Hours; hoursText?: string; industry?: { label: string; terms: { staff: string } };
+  prepayment?: { mode: 'percent' | 'fixed'; value: number } | null;
   loyalty?: {
     tiers: { amount: number; bonus: number }[];
     plans: { name: string; description: string | null; kind: 'VISITS' | 'UNLIMITED'; visits: number | null; validityDays: number; price: number; timeRule: { days?: number[]; from?: string; to?: string } | null }[];
@@ -20,7 +21,7 @@ type Nearest = { resourceId: string; name: string; at: string };
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; payUrl?: string | null; prepaid?: number; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
 
 /** Источник перехода: ?src=yandex, ?src=2gis, ?src=vk… — салон видит в отчёте, откуда приходят клиенты */
 function readRef(): string | undefined {
@@ -255,10 +256,15 @@ export function BookingPage() {
         <Contacts
           slug={slug}
           tz={tz}
-          summary={{ services: selected, time, total, master: masters.find((m) => m.id === masterId)?.name ?? 'Любой мастер' }}
+          summary={{ services: selected, time, total, master: masters.find((m) => m.id === masterId)?.name ?? 'Любой мастер', prepay: prepayOf(salon, total.price) }}
           payload={{ serviceIds, resourceId: masterId, startsAt: time }}
           onBack={() => setStep('time')}
-          onDone={(b) => { rememberBooking({ slug, token: b.manageToken, at: b.startsAt, salon: salon.name }); setBooked(b); setStep('done'); }}
+          onDone={(b) => {
+            rememberBooking({ slug, token: b.manageToken, at: b.startsAt, salon: salon.name });
+            // Предоплата: сразу на страницу оплаты ЮKassa салона, оттуда вернёмся на страницу записи
+            if (b.payUrl) { window.location.href = b.payUrl; return; }
+            setBooked(b); setStep('done');
+          }}
           onTaken={() => { setTime(null); setStep('time'); }}
         />
       )}
@@ -339,7 +345,7 @@ function Waitlist({ slug, date, serviceIds, resourceId }: { slug: string; date: 
 function Contacts(props: {
   slug: string;
   tz: string;
-  summary: { services: Service[]; time: string; total: { price: number; duration: number }; master: string };
+  summary: { services: Service[]; time: string; total: { price: number; duration: number }; master: string; prepay: number };
   payload: { serviceIds: string[]; resourceId: string | null; startsAt: string };
   onBack: () => void;
   onDone: (b: Booked) => void;
@@ -383,6 +389,11 @@ function Contacts(props: {
         <p className="font-semibold first-letter:uppercase">{fmtDate(props.summary.time, props.tz)}, {fmtTime(props.summary.time, props.tz)}</p>
         <p className="text-sm text-ink-muted">{props.summary.services.map((s) => s.name).join(', ')}</p>
         <p className="text-sm text-ink-muted">{props.summary.master} · {minutes(props.summary.total.duration)} · <b>{rub(props.summary.total.price)}</b></p>
+        {props.summary.prepay > 0 && (
+          <p className="mt-2 rounded-xl bg-blush-100 px-3 py-2 text-sm">
+            Предоплата <b>{rub(props.summary.prepay)}</b> — картой или через СБП, сразу после записи. Деньги поступают салону и засчитываются в стоимость визита. Без оплаты запись отменится через 20 минут.
+          </p>
+        )}
       </div>
       <h2 className="display text-2xl">Как с вами связаться</h2>
       <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
@@ -399,7 +410,7 @@ function Contacts(props: {
         <span>Хочу получать от салона поздравления и специальные предложения (можно отписаться в любой момент)</span>
       </label>
       {err && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</p>}
-      <button className="btn-primary w-full" disabled={busy || !consent || name.trim().length < 1}>{busy ? 'Записываем…' : 'Записаться'}</button>
+      <button className="btn-primary w-full" disabled={busy || !consent || name.trim().length < 1}>{busy ? 'Записываем…' : props.summary.prepay > 0 ? `Записаться и оплатить ${rub(props.summary.prepay)}` : 'Записаться'}</button>
     </form>
   );
 }
@@ -622,4 +633,12 @@ function Portfolio({ slug }: { slug: string }) {
       )}
     </section>
   );
+}
+
+/** Сумма предоплаты, как её посчитает сервер (целые рубли, не меньше 1 ₽) */
+function prepayOf(salon: Salon, price: number) {
+  const p = salon.prepayment;
+  if (!p || price <= 0) return 0;
+  const raw = p.mode === 'fixed' ? Math.min(p.value, price) : Math.round((price * p.value) / 100);
+  return Math.max(100, Math.round(raw / 100) * 100);
 }

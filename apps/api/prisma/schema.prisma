@@ -404,6 +404,7 @@ model Booking {
   resource  Resource      @relation(fields: [resourceId], references: [id])
   items     BookingItem[]
   reminders Reminder[]
+  payments  BookingPayment[]
 
   @@index([tenantId, startsAt])
   @@index([tenantId, resourceId, startsAt])
@@ -713,4 +714,38 @@ model Heartbeat {
   name String   @id
   at   DateTime @default(now()) @db.Timestamptz(3)
   info Json?
+}
+
+/// Предоплата: настройки и ключи магазина ЮKassa салона (0016_prepayment)
+model TenantPaymentSettings {
+  tenantId  String   @id @db.Uuid
+  enabled   Boolean  @default(false)
+  mode      String   @default("percent")
+  value     Int      @default(30)
+  shopId    String?
+  secretEnc String?
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+}
+
+model BookingPayment {
+  id              String               @id @default(uuid()) @db.Uuid
+  tenantId        String               @db.Uuid
+  bookingId       String               @db.Uuid
+  amount          Int
+  status          BookingPaymentStatus @default(PENDING)
+  externalId      String?              @unique
+  confirmationUrl String?
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+  paidAt          DateTime?            @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bookingId], map: "BookingPayment_booking_idx")
+  @@index([status, createdAt], map: "BookingPayment_pending_idx")
+}
+
+enum BookingPaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
 }

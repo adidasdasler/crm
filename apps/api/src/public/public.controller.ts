@@ -5,6 +5,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@
 import type { Request, Response } from 'express';
 import { bookingIcs } from './ics';
 import { MAX_WAITLIST_PER_PHONE } from '../waitlist/waitlist';
+import { credsOf, prepayAmount, salonPay, syncPayment } from '../prepayment/prepayment';
 import { Throttle } from '@nestjs/throttler';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
@@ -109,7 +110,14 @@ export class PublicController {
       /** Реквизиты салона как оператора ПДн — для страницы согласия */
       legalName: t.s.legalName ?? null, inn: t.s.inn ?? null,
       telegramBot: telegram.enabled ? telegram.deepLink('')?.replace(/\?start=$/, '') ?? null : null,
+      prepayment: await this.prepaySettings(t.id).then((p) => (p ? { mode: p.mode, value: p.value } : null)),
     };
+  }
+
+  /** Включённая предоплата с ключами магазина салона, иначе null */
+  private async prepaySettings(tenantId: string) {
+    const s = await this.prisma.withTenant(tenantId, (tx) => tx.tenantPaymentSettings.findUnique({ where: { tenantId } }));
+    return s?.enabled && s.shopId && s.secretEnc ? s : null;
   }
 
   @Get('services')
@@ -255,10 +263,33 @@ export class PublicController {
     });
 
     const token = manageToken(booking.id);
+    // Предоплата: платёж в магазине ЮKassa салона; без оплаты запись держится 20 минут
+    let payUrl: string | null = null, prepaid = 0;
+    const pay = await this.prepaySettings(t.id);
+    const amount = pay ? prepayAmount(pay, booking.price) : 0;
+    if (pay && amount > 0) {
+      const p = await this.prisma.withTenant(t.id, (tx) => tx.bookingPayment.create({ data: { tenantId: t.id, bookingId: booking.id, amount } }));
+      try {
+        const r = await salonPay.create(credsOf(pay)!, {
+          idempotenceKey: p.id, amount, description: `Предоплата: ${booking.items.map((i) => i.name).join(', ')} — ${t.name}`,
+          returnUrl: `${env.PUBLIC_WEB_URL}/b/${t.slug}/manage/${token}?paid=1`, metadata: { bookingPaymentId: p.id, tenantId: t.id },
+        });
+        await this.prisma.withTenant(t.id, (tx) => tx.bookingPayment.update({ where: { id: p.id }, data: { externalId: r.externalId, confirmationUrl: r.confirmationUrl } }));
+        payUrl = r.confirmationUrl;
+        prepaid = amount;
+      } catch {
+        // Не получилось создать платёж (ключи, связь) — отменяем запись, чтобы не держать время
+        await this.prisma.withTenant(t.id, async (tx) => {
+          await tx.bookingPayment.update({ where: { id: p.id }, data: { status: 'CANCELED' } });
+          await this.bookings.transition(tx, { tenantId: t.id }, booking.id, 'CANCELLED');
+        });
+        throw new AppError('PAYMENT_UNAVAILABLE', 'Не удалось перейти к оплате предоплаты. Попробуйте ещё раз или позвоните в салон', 502);
+      }
+    }
     const when = new Date(booking.startsAt).toLocaleString('ru-RU', { timeZone: t.timezone, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     void notifyStaff(
       this.prisma.system, t.id,
-      `🆕 <b>Онлайн-запись</b>\n${esc(when)} · ${esc(booking.resource.name)}\n${esc(booking.items.map((i) => i.name).join(', '))}\n${esc(dto.name)}, ${esc(dto.phone)}`,
+      `🆕 <b>Онлайн-запись</b>${prepaid ? ` (ждём предоплату ${prepaid / 100} ₽)` : ''}\n${esc(when)} · ${esc(booking.resource.name)}\n${esc(booking.items.map((i) => i.name).join(', '))}\n${esc(dto.name)}, ${esc(dto.phone)}`,
       { resourceId: booking.resourceId, // В push без имени клиента: уведомления идут через серверы Apple/Google за рубежом — передаём минимум
         push: { title: 'Новая онлайн-запись', body: `${when} · ${booking.items.map((i) => i.name).join(', ')}`, data: { bookingId: booking.id } } },
     );
@@ -279,6 +310,8 @@ export class PublicController {
       messengers: messengerLinks(token),
       /** Запись из мини-приложения Telegram — напоминания уже подключены */
       telegramLinked: !!tgUser,
+      /** Предоплата: перейти по ссылке и оплатить (иначе запись отменится через 20 минут) */
+      payUrl, prepaid,
     };
   }
 
@@ -314,6 +347,8 @@ export class PublicController {
       salon: { name: t.name, phone: t.phone, address: t.address, slug: t.slug, timezone: t.timezone },
       /** «Записаться снова» — к тому же мастеру на те же услуги */
       resourceId: b.resourceId, serviceIds: b.items.map((i) => i.serviceId),
+      payment: await this.prisma.withTenant(t.id, (tx) => tx.bookingPayment.findFirst({ where: { bookingId: b.id, status: { not: 'CANCELED' } }, orderBy: { createdAt: 'desc' } }))
+        .then((p) => (p ? { amount: p.amount, status: p.status, payUrl: p.status === 'PENDING' ? p.confirmationUrl : null } : null)),
       canCancel: this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
       canReschedule: t.available && this.canCancel(b.status, b.startsAt, t.s.cancelBeforeHours),
       maxDaysAhead: t.s.maxDaysAhead,
@@ -390,6 +425,21 @@ export class PublicController {
       resourceId: r.b.resourceId, push: { title: 'Клиент перенёс запись', body: `${fmt(r.from)} → ${fmt(r.b.startsAt)}`, data: { bookingId: r.b.id } },
     });
     return { startsAt: r.b.startsAt, endsAt: r.b.endsAt, status: r.b.status };
+  }
+
+  /** Клиент вернулся со страницы оплаты — проверяем статус у ЮKassa салона */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('manage/:token/pay-check')
+  async payCheck(@Param('slug') slug: string, @Param('token') token: string) {
+    const t = await this.tenant(slug);
+    const p = await this.prisma.withTenant(t.id, async (tx) => {
+      const b = await tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, select: { id: true } });
+      if (!b) throw notFound('Запись');
+      return tx.bookingPayment.findFirst({ where: { bookingId: b.id }, orderBy: { createdAt: 'desc' } });
+    });
+    if (!p) return { status: null };
+    return { status: await syncPayment(this.prisma.system, p.id).catch(() => p.status) };
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

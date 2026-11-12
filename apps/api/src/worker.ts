@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { demoResetTick } from './demo/demo';
 import { waitlistTick } from './waitlist/waitlist';
 import { winbackTick } from './marketing/winback';
+import { prepaymentTick } from './prepayment/prepayment';
 import { purgeDeletedTenants } from './auth/account.controller';
 import { billingTick } from './billing/billing.service';
 import { env } from './config';
@@ -54,6 +55,7 @@ async function main() {
     loop('demo', 30 * 60_000, () => demoResetTick(db)),
     loop('waitlist', 3 * 60_000, () => waitlistTick(appDb, db)),
     loop('winback', 30 * 60_000, () => winbackTick(db)),
+    loop('prepayment', 2 * 60_000, () => prepaymentTick(db)),
     // Пульс для мониторинга (/v1/health → worker: ok)
     loop('heartbeat', 60_000, () => db.heartbeat.upsert({ where: { name: 'worker' }, update: { at: new Date() }, create: { name: 'worker' } }).then(() => null)),
   ]);

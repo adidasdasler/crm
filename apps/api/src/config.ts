@@ -60,6 +60,8 @@ const schema = z.object({
   PAYMENT_PROVIDER: z.enum(['yookassa', 'mock']).optional(),
   YOOKASSA_SHOP_ID: z.string().optional(),
   YOOKASSA_SECRET_KEY: z.string().optional(),
+  /** Ключ шифрования секретов салонов в базе (ключи ЮKassa для предоплаты). 32+ символа */
+  SECRETS_KEY: z.string().min(32).optional(),
 });
 
 // Пустые переменные (например, `FOO=` в .env или docker-compose) считаем незаданными — тогда работают значения по умолчанию.

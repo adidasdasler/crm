@@ -5,7 +5,7 @@ import { api, ApiError, dateInTz, fmtDate, fmtTime, rub } from '../lib/api';
 
 type Info = {
   status: string; startsAt: string; price: number; resource: string; services: string[];
-  salon: { name: string; phone: string | null; address: string | null }; resourceId?: string; serviceIds?: string[]; canCancel: boolean; canReschedule?: boolean; maxDaysAhead?: number; cancelBeforeHours: number; telegramUrl: string | null;
+  salon: { name: string; phone: string | null; address: string | null }; resourceId?: string; serviceIds?: string[]; canCancel: boolean; canReschedule?: boolean; payment?: { amount: number; status: 'PENDING' | 'SUCCEEDED'; payUrl: string | null } | null; maxDaysAhead?: number; cancelBeforeHours: number; telegramUrl: string | null;
   wallet?: { money: number; bonus: number; passes: { name: string; kind: string; visitsLeft: number | null; expiresAt: string }[] };
   canReview?: boolean; review?: { rating: number; comment: string | null } | null; mapsLinks?: { yandex: string | null; twoGis: string | null };
 };
@@ -26,7 +26,12 @@ export function ManagePage() {
     Promise.all([api<Info>(`/public/${slug}/manage/${token}`), api<{ timezone: string }>(`/public/${slug}`)])
       .then(([i, s]) => { setInfo(i); setTz(s.timezone); rememberBooking({ slug, token, at: i.startsAt, salon: i.salon.name }); })
       .catch((e: ApiError) => setErr(e.message));
-  useEffect(() => { load(); }, [slug, token]);
+  useEffect(() => {
+    // Вернулись со страницы оплаты: спрашиваем ЮKassa салона, потом показываем запись
+    if (new URLSearchParams(location.search).get('paid')) {
+      void api(`/public/${slug}/manage/${token}/pay-check`, { method: 'POST' }).catch(() => null).finally(load);
+    } else load();
+  }, [slug, token]);
 
   async function act(kind: 'confirm' | 'cancel') {
     if (kind === 'cancel' && !confirm('Отменить запись?')) return;
@@ -51,6 +56,13 @@ export function ManagePage() {
           <p>{info.services.join(', ')} · {info.resource} · {rub(info.price)}</p>
           {info.salon.address && <p className="text-ink-muted">{info.salon.address}</p>}
           <p className="inline-block rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">{STATUS[info.status] ?? info.status}</p>
+          {info.payment?.status === 'SUCCEEDED' && <p className="rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-800">✓ Предоплата {rub(info.payment.amount)} внесена — засчитается в стоимость визита</p>}
+          {info.payment?.status === 'PENDING' && info.status !== 'CANCELLED' && (
+            <div className="space-y-2 rounded-2xl bg-blush-100 p-3 text-sm">
+              <p>Ждём предоплату <b>{rub(info.payment.amount)}</b>. Без оплаты запись отменится через 20 минут после записи.</p>
+              {info.payment.payUrl && <a className="btn-primary w-full" href={info.payment.payUrl}>Оплатить {rub(info.payment.amount)}</a>}
+            </div>
+          )}
           {info.wallet && (info.wallet.money + info.wallet.bonus > 0 || info.wallet.passes.length > 0) && (
             <div className="space-y-1 rounded-2xl bg-blush-100 p-4 text-sm">
               {info.wallet.money + info.wallet.bonus > 0 && <p><b>На вашем счёте: {(info.wallet.money + info.wallet.bonus).toLocaleString('ru-RU')} ₽</b>{info.wallet.bonus > 0 ? ` (из них бонусы ${info.wallet.bonus.toLocaleString('ru-RU')} ₽)` : ''}</p>}

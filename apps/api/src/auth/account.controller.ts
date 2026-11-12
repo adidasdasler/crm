@@ -177,6 +177,8 @@ export async function purgeDeletedTenants(db: import('@prisma/client').PrismaCli
       db.serviceCategory.deleteMany({ where: { tenantId } }),
       db.timeOff.deleteMany({ where: { tenantId } }),
       db.waitlistEntry.deleteMany({ where: { tenantId } }),
+      db.bookingPayment.deleteMany({ where: { tenantId } }),
+      db.tenantPaymentSettings.deleteMany({ where: { tenantId } }),
       db.membership.deleteMany({ where: { tenantId } }),
       db.resource.deleteMany({ where: { tenantId } }),
       // Платежи и подписку оставляем (учёт доходов), салон обезличиваем.
