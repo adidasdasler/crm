@@ -29,6 +29,7 @@
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "qrcode": "^1.5.4",
+    "read-excel-file": "^5.8.8",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.6.7"

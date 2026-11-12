@@ -122,6 +122,7 @@ export default function More() {
       )}
 
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
+        {(can(me, 'customers.view') || can(me, 'catalog.manage')) && <Row icon="cloud-upload-outline" title="Перенос из YCLIENTS, DIKIDI, Excel" subtitle="Клиенты и услуги из файла" onPress={() => router.push('/import')} />}
         {can(me, 'customers.export') && <Row icon="download-outline" title="Выгрузить клиентов (Excel)" onPress={exportCustomers} />}
         <Row icon="trash-outline" title="Удалить аккаунт" onPress={() => router.push('/delete-account')} />
       </View>

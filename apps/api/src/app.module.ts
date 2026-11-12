@@ -7,6 +7,7 @@ import { DesignsController } from './media/designs.controller';
 import { LoyaltyController } from './loyalty/loyalty.controller';
 import { StockController } from './stock/stock.controller';
 import { WaitlistController } from './waitlist/waitlist.controller';
+import { ImportController } from './customers/import.controller';
 import { MiniSiteController } from './public/minisite.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -47,7 +48,7 @@ class HealthController {
       skipIf: () => process.env.NODE_ENV === 'test',
     }),
   ],
-  controllers: [WaitlistController, AnalyticsController, DesignsController, LoyaltyController, StockController, MiniSiteController, 
+  controllers: [ImportController, WaitlistController, AnalyticsController, DesignsController, LoyaltyController, StockController, MiniSiteController, 
     HealthController, AuthController, TenantsController, ResourcesController, CatalogController,
     CustomersController, BookingsController, PublicController, BillingController, BotController, AccountController, MessengersController,
   ],

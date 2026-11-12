@@ -39,6 +39,8 @@ export function api(token?: string) {
   return {
     get: (url: string) => wrap(request(srv).get(`/v1${url}`)),
     post: (url: string, body?: object) => wrap(request(srv).post(`/v1${url}`)).send(body ?? {}),
+    /** multipart: файл в поле file */
+    upload: (url: string, file: string | Buffer, name?: string) => wrap(request(srv).post(`/v1${url}`)).attach('file', file, name),
     patch: (url: string, body?: object) => wrap(request(srv).patch(`/v1${url}`)).send(body ?? {}),
     put: (url: string, body?: object) => wrap(request(srv).put(`/v1${url}`)).send(body ?? {}),
     delete: (url: string) => wrap(request(srv).delete(`/v1${url}`)),
