@@ -251,6 +251,8 @@ model Resource {
   color     String    @default("#8B5CF6")
   /// Недельный график: { "1": [["10:00","19:00"]], ..., "7": [] } (ISO-день недели)
   schedule  Json
+  /// Правило оплаты: { percent, perShift, monthly, deductMaterials } — см. src/payroll
+  payRule   Json?
   isActive  Boolean   @default(true)
   sortOrder Int       @default(0)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)

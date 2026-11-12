@@ -85,6 +85,9 @@ export default function More() {
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
         {can(me, 'staff.manage') && <Row icon="cut-outline" title={me.solo ? 'Мой график' : `${terms.staffPlural} и графики`} onPress={() => router.push(me.solo && me.resourceId ? `/master/${me.resourceId}` : '/masters')} />}
         <Row icon="images-outline" title="Библиотека дизайнов" subtitle="Фото работ, теги, портфолио на сайте" onPress={() => router.push('/designs')} />
+        {!me.solo && (can(me, 'finance.manage') || me.resourceId) && (
+          <Row icon="cash-outline" title={can(me, 'finance.manage') ? 'Зарплата мастеров' : 'Мой заработок'} subtitle={can(me, 'finance.manage') ? 'Процент, смены и оклад — расчёт за месяц' : 'Сколько начислено за период'} onPress={() => router.push('/payroll')} />
+        )}
         {can(me, 'finance.manage') && <Row icon="wallet-outline" title="Депозиты и абонементы" subtitle="Бонус за пополнение, абонементы на визиты и непиковые часы" onPress={() => router.push('/loyalty')} />}
         {can(me, 'stock.manage') && <Row icon="cube-outline" title="Склад" subtitle={stockAlerts.data ? stockHint(stockAlerts.data) : 'Материалы, приход, остатки'} onPress={() => router.push('/stock')} />}
         {can(me, 'team.manage') && !me.solo && <Row icon="people-circle-outline" title="Команда" onPress={() => router.push('/team')} />}
