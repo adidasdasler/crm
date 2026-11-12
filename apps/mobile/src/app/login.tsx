@@ -58,16 +58,15 @@ export default function Login() {
       <Screen>
         <View style={{ height: 64 }} />
         <Logo size={48} />
-        <Text style={{ fontSize: 17, color: C.muted, marginBottom: 20, marginTop: 4 }}>Онлайн-запись, клиенты и напоминания для вашего салона</Text>
+        <Text style={{ fontSize: 17, color: C.muted, marginBottom: 20, marginTop: 4 }}>Записи, клиенты и напоминания — для салона и частного мастера</Text>
         <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" placeholder="you@example.ru" />
         <Field label="Пароль" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" placeholder="••••••••" onSubmitEditing={submit} />
         <ErrorText error={error} />
         <Button title="Войти" onPress={submit} loading={busy} disabled={!email || !password} />
         <Button title="Посмотреть демо без регистрации" variant="ghost" onPress={demo} disabled={busy} />
-        <Text style={{ textAlign: 'center', color: C.muted, fontSize: 13 }}>Демо-салон: {DEMO.email} / {DEMO.password}</Text>
         <Link href="/forgot" style={{ textAlign: 'center', color: C.muted, padding: 6 }}>Забыли пароль?</Link>
         <Link href="/register" style={{ textAlign: 'center', color: C.brand, fontWeight: '600', padding: 12 }}>
-          Создать салон — 14 дней бесплатно
+          Зарегистрироваться — 14 дней бесплатно
         </Link>
       </Screen>
     </KeyboardAvoidingView>

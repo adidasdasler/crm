@@ -107,7 +107,17 @@ export default function Calendar() {
           </View>
         }
         ListEmptyComponent={
-          bookings.isLoading ? undefined : bookings.error ? <ErrorText error={bookings.error} /> : <Empty text="На этот день записей нет" />
+          bookings.isLoading ? undefined : bookings.error ? <ErrorText error={bookings.error} /> : (
+            <Empty
+              text={day < today(tz) ? 'В этот день записей не было' : 'На этот день записей пока нет'}
+              action={day >= today(tz) ? (
+                <View style={{ alignItems: 'center', gap: 10, paddingHorizontal: 24 }}>
+                  <Text style={{ color: C.muted, textAlign: 'center' }}>Нажмите «+», чтобы записать клиента самому</Text>
+                  <Text style={{ color: C.brand, fontWeight: '600', textAlign: 'center' }} onPress={() => router.push('/more')}>Или отправьте клиентам ссылку для записи →</Text>
+                </View>
+              ) : undefined}
+            />
+          )
         }
         renderItem={({ item: x }) =>
           x.kind === 'b' ? <BookingCard b={x.b} tz={tz} /> : (

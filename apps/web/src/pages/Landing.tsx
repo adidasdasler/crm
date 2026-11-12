@@ -17,6 +17,9 @@ const I = {
   key: <path d="M14 10a4 4 0 1 0-3.5 3.97L9 15.5V18H6.5v2.5H4V18l6.03-6.03A4 4 0 0 0 14 10Zm1-1h.01" />,
   move: <path d="M4 7h11l-3-3M20 17H9l3 3" />,
   check: <path d="m5 12 4.5 4.5L19 7" />,
+  box: <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9ZM3.5 7.5 12 12l8.5-4.5M12 12v9" />,
+  star: <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z" />,
+  wallet: <path d="M4 7a2 2 0 0 1 2-2h11v4M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2Zm12 7h.01" />,
 };
 const Svg = ({ d, size = 22 }: { d: ReactNode; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
@@ -89,13 +92,13 @@ export function Landing() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a href={register} className="btn-primary whitespace-nowrap px-7 py-4 text-lg shadow-[0_12px_30px_-10px_rgba(47,59,255,.7)]">Попробовать 14 дней бесплатно</a>
-              <a href="/b/demo" className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Пример страницы записи</a>
+              <a href={`${APP_URL}/login?demo=1`} className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Посмотреть демо</a>
             </div>
             <p className="text-ink-muted">
-              Хотите посмотреть изнутри? <a href={`${APP_URL}/login?demo=1`} className="font-semibold text-brand-600 underline underline-offset-4">Войти в демо без регистрации</a>
-              <span className="text-sm"> — demo@salon.local / demo12345</span>
+              Работаете без команды? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Тариф для частного мастера — 290 ₽/мес</a>
+              {' · '}
+              <a href="/b/demo" className="underline underline-offset-4 hover:text-ink">Как запись видит клиент</a>
             </p>
-            <p className="text-ink-muted">Работаете одна или один? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Регистрация для частного мастера — 290 ₽/мес</a></p>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
               {['Без карты и автосписаний', 'Все функции в любом тарифе', 'Перенос базы бесплатно', 'Данные в России'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5"><span className="text-brand-600"><Svg d={I.check} size={16} /></span>{t}</li>
@@ -153,6 +156,9 @@ export function Landing() {
             <Tile className="md:col-span-2" icon={I.shield} title="Данные под защитой" text="Серверы в России, шифрование, изоляция данных каждого салона, журнал действий. Документы по 152-ФЗ готовы." />
             <Tile className="md:col-span-3" icon={I.users} title="База клиентов" text="История визитов, заметки, метки, сумма покупок. Импорт из Excel и выгрузка в один клик." />
             <Tile className="md:col-span-3" icon={I.calendar} title="Запись без накладок" text="Несколько услуг в визите, перерыв после процедуры, «любой мастер». Двойная запись невозможна технически — даже если двое нажмут одновременно." />
+            <Tile className="md:col-span-2" icon={I.box} title="Склад материалов" text="Расходники списываются сами после визита. Приложение предупредит, когда материал заканчивается или подходит срок годности." />
+            <Tile className="md:col-span-2" icon={I.wallet} title="Депозиты и абонементы" text="Клиент вносит деньги вперёд и получает бонус, абонемент считает визиты сам. Оплату принимаете вы — сервис ведёт учёт." />
+            <Tile className="md:col-span-2" icon={I.star} title="Оценки и советы" text="После визита клиент ставит оценку. Раз в неделю приходит сводка: что выросло, где теряете деньги и что с этим сделать." />
           </div>
         </div>
       </section>

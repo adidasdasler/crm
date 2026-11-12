@@ -136,7 +136,7 @@ export function BookingPage() {
 
       {step === 'services' && (
         <section className="space-y-6">
-          <h2 className="display text-2xl">Что делаем?</h2>
+          <h2 className="display text-2xl">Выберите услугу</h2>
           {[...catalog.categories, { id: null as unknown as string, name: catalog.categories.length ? 'Другое' : '' }].map((cat) => {
             const items = catalog.services.filter((s) => s.categoryId === (cat.id ?? null));
             if (!items.length) return null;
@@ -167,6 +167,13 @@ export function BookingPage() {
               </div>
             );
           })}
+          {(salon.loyalty?.tiers.length || salon.loyalty?.plans.length) ? (
+            <div className="space-y-3 rounded-3xl bg-ink p-4 text-white">
+              <p className="font-semibold">Выгоднее с депозитом и абонементом</p>
+              <Offers salon={salon} />
+              <p className="text-sm text-[#C9CCF2]">Оформить можно в салоне.</p>
+            </div>
+          ) : null}
           <Portfolio slug={slug} />
           <BottomBar disabled={!serviceIds.length} onNext={goNext} label={serviceIds.length ? `Далее · ${rub(total.price)} · ${minutes(total.duration)}` : 'Выберите услугу'} />
         </section>
@@ -410,7 +417,6 @@ function SalonHero({ salon }: { salon: Salon }) {
           {salon.phone && <a href={`tel:${salon.phone}`} className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">Позвонить</a>}
           {links.map(([k, v]) => <a key={k} href={v} target="_blank" rel="noreferrer" className="rounded-full bg-white/10 px-4 py-2 ring-1 ring-white/20">{LINK_LABELS[k] ?? k}</a>)}
         </div>
-        <Offers salon={salon} />
         {(salon.address || salon.hoursText) && (
           <div className="space-y-1 rounded-2xl bg-white/[0.07] p-4 text-sm ring-1 ring-white/10">
             {salon.address && <p><span className="text-[#C9CCF2]">Адрес:</span> {salon.address}</p>}
@@ -543,7 +549,7 @@ function Portfolio({ slug }: { slug: string }) {
       <div className="grid grid-cols-3 gap-1.5">
         {works.slice(0, 12).map((w) => (
           <button key={w.id} onClick={() => setOpen(w)} className="aspect-square overflow-hidden rounded-2xl bg-brand-50" aria-label={w.title ?? 'Фото работы'}>
-            <img src={src(w, 'thumb')} alt={w.title ?? ''} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
+            <img src={src(w, 'thumb')} alt={w.title ?? ''} loading="lazy" onError={(e) => { (e.currentTarget.closest('button') ?? e.currentTarget).style.display = 'none'; }} className="h-full w-full object-cover transition hover:scale-105" />
           </button>
         ))}
       </div>

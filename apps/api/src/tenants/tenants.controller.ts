@@ -106,7 +106,8 @@ export class TenantsController {
       ? await db.membership.update({ where: { id: exists.id }, data: { deletedAt: null, role: dto.role, resourceId: dto.resourceId ?? null } })
       : await db.membership.create({ data: { tenantId: a.tenantId, userId: user.id, role: dto.role, resourceId: dto.resourceId ?? null } });
     await db.auditLog.create({ data: { tenantId: a.tenantId, userId: a.userId, action: 'team.invite', entityType: 'Membership', entityId: m.id } });
-    return { id: m.id, role: m.role, user: { id: user.id, email: user.email, name: user.name }, tempPassword };
+    // Имя уже зарегистрированного человека не раскрываем — показываем то, что ввёл приглашающий
+    return { id: m.id, role: m.role, user: { id: user.id, email: user.email, name: tempPassword ? user.name : dto.name }, tempPassword };
   }
 
   /** Сменить роль сотрудника или привязку к мастеру */
