@@ -1,33 +1,109 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import * as argon2 from 'argon2';
+import { Throttle } from '@nestjs/throttler';
 import { statfs } from 'node:fs/promises';
 import { z } from 'zod';
-import { Auth, AuthCtx } from '../common/auth';
+import { Public } from '../common/auth';
+import { cookieSecure } from '../config';
+import { open } from '../common/secret-box';
+import { ADMIN_COOKIE, ADMIN_TTL_H, AdminCtx, AdminGuard, ipOf, signAdmin } from './admin-auth';
+import { verifyTotp } from './totp';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
 import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
 import { DEMO_SLUG, resetDemo } from '../demo/demo';
 
-export const adminEmails = () => env.ADMIN_EMAILS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 const DAY = 86400_000;
 
+/** Задачи для сервера, которые умеет выполнять deploy/scripts/admin-agent.sh — и только они */
+export const TASK_KINDS = {
+  status: 'Состояние контейнеров и диска',
+  logs_api: 'Последние логи API',
+  logs_worker: 'Последние логи воркера',
+  restart: 'Перезапустить API и воркер',
+  backup: 'Сделать бэкап сейчас',
+  test_restore: 'Проверить, что бэкап восстанавливается',
+  deploy: 'Обновить до последней версии',
+} as const;
+type Admin = Request & { admin: AdminCtx };
+const MAX_FAILED = 5;
+
+/** Вход в панель владельца сервиса (mioflow.ru/admin) */
+@Public()
+@Controller('admin/auth')
+export class AdminAuthController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('login')
+  async login(@Body(new Zod(z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(200), code: z.string().max(12) }))) dto: { email: string; password: string; code: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const db = this.prisma.system;
+    const invalid = new AppError('ADMIN_INVALID', 'Неверный email, пароль или код', 401);
+    const a = await db.adminUser.findUnique({ where: { email: dto.email } });
+    if (!a) { await argon2.hash(dto.password).catch(() => null); throw invalid; }
+    if (a.lockedUntil && a.lockedUntil > new Date()) throw new AppError('ACCOUNT_LOCKED', 'Слишком много попыток. Попробуйте через 30 минут', 423);
+    const ok = (await argon2.verify(a.passwordHash, dto.password)) && verifyTotp(open(a.totpSecretEnc), dto.code);
+    if (!ok) {
+      const n = a.failedAttempts + 1;
+      await db.adminUser.update({ where: { id: a.id }, data: { failedAttempts: n >= MAX_FAILED ? 0 : n, lockedUntil: n >= MAX_FAILED ? new Date(Date.now() + 30 * 60_000) : null } });
+      throw invalid;
+    }
+    await db.adminUser.update({ where: { id: a.id }, data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date(), lastLoginIp: ipOf(req) } });
+    res.cookie(ADMIN_COOKIE, await signAdmin({ id: a.id, email: a.email }), { httpOnly: true, secure: cookieSecure, sameSite: 'strict', path: '/v1/admin', maxAge: ADMIN_TTL_H * 3600_000 });
+    return { email: a.email };
+  }
+
+  @HttpCode(200)
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie(ADMIN_COOKIE, { path: '/v1/admin' });
+    return { ok: true };
+  }
+}
+
 /**
- * Админ-панель владельца сервиса: здоровье, салоны, ошибки, поддержка.
- * Доступ — только пользователям с email из ADMIN_EMAILS. Данные клиентов салонов здесь не показываются:
- * только количество, без имён и телефонов.
+ * Панель владельца сервиса: здоровье, бизнес, салоны, ошибки, управление сервером.
+ * Данные клиентов салонов здесь не показываются — только количество.
  */
+@Public()
+@UseGuards(AdminGuard)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async assertAdmin(a: AuthCtx) {
-    const u = await this.prisma.system.user.findUnique({ where: { id: a.userId }, select: { email: true } });
-    if (!u || !adminEmails().includes(u.email.toLowerCase())) throw new AppError('FORBIDDEN', 'Только для администратора сервиса', 403);
+  @Get('me')
+  me(@Req() req: Admin) {
+    return { email: req.admin.email };
+  }
+
+  @Get('tasks')
+  async tasks() {
+    const rows = await this.prisma.system.adminTask.findMany({ orderBy: { id: 'desc' }, take: 30 });
+    const hb = await this.prisma.system.heartbeat.findUnique({ where: { name: 'admin-agent' } });
+    return {
+      kinds: TASK_KINDS,
+      // Скрипт на сервере отмечается раз в минуту; если давно не отмечался — кнопки не сработают
+      agentAgeSec: hb ? Math.round((Date.now() - +hb.at) / 1000) : null,
+      tasks: rows.map((r) => ({ ...r, id: String(r.id), title: TASK_KINDS[r.kind as keyof typeof TASK_KINDS] ?? r.kind })),
+    };
+  }
+
+  @HttpCode(200)
+  @Post('tasks')
+  async addTask(@Req() req: Admin, @Body(new Zod(z.object({ kind: z.enum(Object.keys(TASK_KINDS) as [keyof typeof TASK_KINDS]) }))) dto: { kind: keyof typeof TASK_KINDS }) {
+    const db = this.prisma.system;
+    // Одна и та же задача не встаёт в очередь дважды
+    const dup = await db.adminTask.findFirst({ where: { kind: dto.kind, status: { in: ['PENDING', 'RUNNING'] } } });
+    if (dup) return { ...dup, id: String(dup.id) };
+    const t = await db.adminTask.create({ data: { kind: dto.kind, requestedBy: req.admin.email } });
+    return { ...t, id: String(t.id) };
   }
 
   @Get('overview')
-  async overview(@Auth() a: AuthCtx) {
-    await this.assertAdmin(a);
+  async overview() {
     const db = this.prisma.system;
     const now = Date.now();
     const [byStatus, tenants7, tenants30, users, bookingsToday, bookings30, online30, hb, errors24, dbSize, active] = await Promise.all([
@@ -61,8 +137,7 @@ export class AdminController {
   }
 
   @Get('tenants')
-  async tenants(@Auth() a: AuthCtx, @Query('q') q?: string) {
-    await this.assertAdmin(a);
+  async tenants(@Query('q') q?: string) {
     const db = this.prisma.system;
     const rows = await db.tenant.findMany({
       where: {
@@ -93,8 +168,7 @@ export class AdminController {
   /** Продлить пробный период или оплаченный срок (поддержка, компенсация за сбой) */
   @HttpCode(200)
   @Post('tenants/:id/extend')
-  async extend(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(z.object({ days: z.number().int().min(1).max(365) }))) dto: { days: number }) {
-    await this.assertAdmin(a);
+  async extend(@Req() req: Admin, @Param('id', ParseUUIDPipe) id: string, @Body(new Zod(z.object({ days: z.number().int().min(1).max(365) }))) dto: { days: number }) {
     const db = this.prisma.system;
     const sub = await db.subscription.findUnique({ where: { tenantId: id } });
     if (!sub) throw notFound('Подписка');
@@ -103,21 +177,19 @@ export class AdminController {
       ? { status: 'TRIAL' as const, trialEndsAt: add(sub.trialEndsAt) }
       : { status: 'ACTIVE' as const, currentPeriodEnd: add(sub.currentPeriodEnd) };
     const r = await db.subscription.update({ where: { tenantId: id }, data });
-    await db.auditLog.create({ data: { tenantId: id, userId: a.userId, action: 'admin.extend', entityType: 'Subscription', entityId: sub.id, after: { days: dto.days } } });
+    await db.auditLog.create({ data: { tenantId: id, action: 'admin.extend', entityType: 'Subscription', entityId: sub.id, after: { days: dto.days, by: req.admin.email } } });
     return { status: r.status, trialEndsAt: r.trialEndsAt, currentPeriodEnd: r.currentPeriodEnd };
   }
 
   @Get('errors')
-  async errors(@Auth() a: AuthCtx, @Query('limit') limit?: string) {
-    await this.assertAdmin(a);
+  async errors(@Query('limit') limit?: string) {
     const rows = await this.prisma.system.errorLog.findMany({ orderBy: { at: 'desc' }, take: Math.min(200, Number(limit) || 50) });
     return rows.map((r) => ({ ...r, id: String(r.id) }));
   }
 
   @HttpCode(200)
   @Post('demo/reset')
-  async demoReset(@Auth() a: AuthCtx) {
-    await this.assertAdmin(a);
+  async demoReset() {
     return { reset: await resetDemo(this.prisma.system) };
   }
 }

@@ -7,7 +7,6 @@ import type { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomInt, randomUUID } from 'node:crypto';
 import { mailer } from '../notify/mailer';
-import { adminEmails } from '../admin/admin.controller';
 import { telegram } from '../notify/telegram';
 import { env, isProd } from '../config';
 import { AuthCtx, signAccessToken } from '../common/auth';
@@ -303,8 +302,6 @@ export class AuthService {
     return {
       user: u,
       twoFactor: { enabled: twoFactorEnabled, channels: codeChannels({ ...u, telegramChatId }) },
-      /** Владелец сервиса — видит админ-панель */
-      isAdmin: adminEmails().includes(u.email.toLowerCase()),
       telegramLinked: !!telegramChatId,
       role: auth.role,
       resourceId: auth.resourceId,

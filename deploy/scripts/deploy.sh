@@ -37,6 +37,12 @@ for _ in $(seq 1 40); do
       chmod 644 /etc/cron.d/mioflow-monitor
       echo "✓ Включён мониторинг каждые 5 минут: deploy/scripts/monitor.sh"
     fi
+    # Исполнитель задач панели владельца (mioflow.ru/admin → «Сервер»)
+    if [ "$(id -u)" = 0 ] && [ ! -f /etc/cron.d/mioflow-admin-agent ]; then
+      echo "* * * * * root cd $(pwd) && bash deploy/scripts/admin-agent.sh >> /var/log/mioflow-admin-agent.log 2>&1" > /etc/cron.d/mioflow-admin-agent
+      chmod 644 /etc/cron.d/mioflow-admin-agent
+      echo "✓ Включён исполнитель задач панели владельца"
+    fi
     docker image prune -f >/dev/null
     exit 0
   fi

@@ -10,8 +10,6 @@ export type Me = {
   user: { id: string; email: string; name: string };
   telegramLinked: boolean;
   twoFactor?: { enabled: boolean; channels: string[] };
-  /** Владелец сервиса (ADMIN_EMAILS) — видит админ-панель */
-  isAdmin?: boolean;
   role: Role;
   resourceId: string | null;
   permissions: Perm[];

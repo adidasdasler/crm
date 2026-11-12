@@ -85,7 +85,6 @@ export default function More() {
       <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
         {can(me, 'staff.manage') && <Row icon="cut-outline" title={me.solo ? 'Мой график' : `${terms.staffPlural} и графики`} onPress={() => router.push(me.solo && me.resourceId ? `/master/${me.resourceId}` : '/masters')} />}
         <Row icon="images-outline" title="Библиотека дизайнов" subtitle="Фото работ, теги, портфолио на сайте" onPress={() => router.push('/designs')} />
-        {me.isAdmin && <Row icon="speedometer-outline" title="Админ-панель сервиса" subtitle="Здоровье сервера, салоны, ошибки" onPress={() => router.push('/admin')} />}
         {can(me, 'settings.manage') && <Row icon="card-outline" title="Онлайн-предоплата" subtitle="Через вашу ЮKassa — меньше неявок" onPress={() => router.push('/prepayment')} />}
         {can(me, 'settings.manage') && <Row icon="heart-outline" title="Возврат клиентов" subtitle="«Давно не были» и поздравления с днём рождения" onPress={() => router.push('/winback')} />}
         {!me.solo && (can(me, 'finance.manage') || me.resourceId) && (

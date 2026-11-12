@@ -205,6 +205,9 @@ ok "Ежедневный зашифрованный бэкап в 03:15 → $ROO
 echo "*/5 * * * * root cd $ROOT_DIR && bash deploy/scripts/monitor.sh >> /var/log/mioflow-monitor.log 2>&1" > /etc/cron.d/mioflow-monitor
 chmod 644 /etc/cron.d/mioflow-monitor
 ok "Мониторинг каждые 5 минут (тревоги в Telegram — см. ALERT_TELEGRAM_* в .env)"
+echo "* * * * * root cd $ROOT_DIR && bash deploy/scripts/admin-agent.sh >> /var/log/mioflow-admin-agent.log 2>&1" > /etc/cron.d/mioflow-admin-agent
+chmod 644 /etc/cron.d/mioflow-admin-agent
+ok "Исполнитель задач панели владельца (раз в минуту)"
 
 step "8/8 Проверка, что другие службы не затронуты"
 SNAP_AFTER=$(mktemp)

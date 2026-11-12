@@ -16,6 +16,7 @@ import { Offer } from './legal/Offer';
 import { Privacy } from './legal/Privacy';
 import { MockPay } from './pages/MockPay';
 import { MyPage } from './pages/My';
+import { AdminPage } from './pages/Admin';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/b/:slug/manage/:token" element={<ManagePage />} />
         <Route path="/b/:slug/consent" element={<ClientConsent />} />
         <Route path="/my" element={<MyPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Offer />} />
         <Route path="/consent" element={<OwnerConsent />} />

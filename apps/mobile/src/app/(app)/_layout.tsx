@@ -29,7 +29,6 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="booking/new" options={{ title: 'Новая запись', presentation: 'modal' }} />
       <Stack.Screen name="booking/[id]" options={{ title: 'Запись' }} />
-      <Stack.Screen name="admin" options={{ title: 'Админ-панель MioFlow' }} />
       <Stack.Screen name="prepayment" options={{ title: 'Предоплата' }} />
       <Stack.Screen name="winback" options={{ title: 'Возврат клиентов' }} />
       <Stack.Screen name="payroll" options={{ title: 'Зарплата' }} />

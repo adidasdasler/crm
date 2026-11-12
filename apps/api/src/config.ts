@@ -62,8 +62,8 @@ const schema = z.object({
   YOOKASSA_SECRET_KEY: z.string().optional(),
   /** Ключ шифрования секретов салонов в базе (ключи ЮKassa для предоплаты). 32+ символа */
   SECRETS_KEY: z.string().min(32).optional(),
-  /** Email владельцев сервиса через запятую — им доступна админ-панель (/v1/admin) */
-  ADMIN_EMAILS: z.string().default(''),
+  /** Панель владельца (mioflow.ru/admin): пускать только с этих IP через запятую (необязательно) */
+  ADMIN_ALLOWED_IPS: z.string().optional(),
   /** Версия образа — показывается в админ-панели */
   APP_VERSION: z.string().default('dev'),
 });

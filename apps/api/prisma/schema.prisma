@@ -762,3 +762,30 @@ model ErrorLog {
 
   @@index([at(sort: Desc)], map: "ErrorLog_at_idx")
 }
+
+/// Администраторы сервиса (владелец MioFlow) — отдельно от пользователей салонов (0018_admin_panel)
+model AdminUser {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  passwordHash   String
+  totpSecretEnc  String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime? @db.Timestamptz(3)
+  lastLoginAt    DateTime? @db.Timestamptz(3)
+  lastLoginIp    String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+}
+
+/// Очередь задач для сервера (перезапуск, бэкап, логи) — выполняет deploy/scripts/admin-agent.sh
+model AdminTask {
+  id          BigInt    @id @default(autoincrement())
+  kind        String
+  status      String    @default("PENDING")
+  output      String?
+  requestedBy String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  startedAt   DateTime? @db.Timestamptz(3)
+  finishedAt  DateTime? @db.Timestamptz(3)
+
+  @@index([status, id], map: "AdminTask_status_idx")
+}
