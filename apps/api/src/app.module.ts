@@ -33,7 +33,10 @@ class HealthController {
   @Get()
   async health() {
     await this.prisma.app.$queryRaw`SELECT 1`;
-    return { status: 'ok', time: new Date().toISOString() };
+    // Пульс воркера: напоминания и фоновые задачи. Больше 5 минут без отметки — воркер завис или упал
+    const hb = await this.prisma.system.heartbeat.findUnique({ where: { name: 'worker' } }).catch(() => null);
+    const workerAgeSec = hb ? Math.round((Date.now() - +hb.at) / 1000) : null;
+    return { status: 'ok', time: new Date().toISOString(), worker: workerAgeSec !== null && workerAgeSec < 300 ? 'ok' : 'stale', workerAgeSec };
   }
 }
 

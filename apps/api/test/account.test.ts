@@ -101,3 +101,44 @@ describe('удаление аккаунта и выгрузка', () => {
     expect(t.name).toBe('Удалённый салон');
   });
 });
+
+describe('вход с кодом', () => {
+  it('после пароля нужен код из письма; 5 ошибок — код сгорает', async () => {
+    const { clearOutbox, fakeMessengers, outbox } = await import('./helpers');
+    await fakeMessengers();
+    const { env } = await import('../src/config');
+    const prev = env.SMTP_URL;
+    env.SMTP_URL = 'smtp://test';
+    try {
+      const s = await createSalon('TwoFactor');
+      const me = (await s.api.get('/auth/me')).body.data;
+      expect(me.twoFactor).toEqual({ enabled: false, channels: ['email'] });
+      expect((await s.api.post('/auth/two-factor', { enabled: true, password: 'wrong' })).status).toBe(400);
+      expect((await s.api.post('/auth/two-factor', { enabled: true, password: 'password123' })).status).toBe(200);
+
+      clearOutbox();
+      const step1 = await api().post('/auth/login', { email: me.user.email, password: 'password123' });
+      expect(step1.status).toBe(200);
+      expect(step1.body.data.accessToken).toBeUndefined();
+      const { challenge, sentTo } = step1.body.data.twoFactor;
+      expect(sentTo).toMatch(/\*\*\*@test\.ru$/);
+      const code = outbox.email.at(-1)!.subject.match(/\d{6}/)![0];
+
+      expect((await api().post('/auth/login/code', { challenge, code: code === '000000' ? '111111' : '000000' })).status).toBe(401);
+      const ok = await api().post('/auth/login/code', { challenge, code });
+      expect(ok.status).toBe(200);
+      expect(ok.body.data.accessToken).toBeTruthy();
+      // Код одноразовый
+      expect((await api().post('/auth/login/code', { challenge, code })).status).toBe(401);
+
+      // 5 ошибок — код сгорает даже для верного кода
+      const again = (await api().post('/auth/login', { email: me.user.email, password: 'password123' })).body.data.twoFactor;
+      const good = outbox.email.at(-1)!.subject.match(/\d{6}/)![0];
+      const bad = good === '123456' ? '654321' : '123456';
+      for (let i = 0; i < 5; i++) await api().post('/auth/login/code', { challenge: again.challenge, code: bad });
+      expect((await api().post('/auth/login/code', { challenge: again.challenge, code: good })).status).toBe(401);
+    } finally {
+      env.SMTP_URL = prev;
+    }
+  });
+});

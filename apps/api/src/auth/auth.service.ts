@@ -5,8 +5,10 @@ import { PERM_KEYS } from '../common/permissions';
 import { Injectable } from '@nestjs/common';
 import type { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { randomUUID } from 'node:crypto';
-import { env } from '../config';
+import { randomInt, randomUUID } from 'node:crypto';
+import { mailer } from '../notify/mailer';
+import { telegram } from '../notify/telegram';
+import { env, isProd } from '../config';
 import { AuthCtx, signAccessToken } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
 import { AppError, conflict, isUniqueError } from '../common/errors';
@@ -15,6 +17,20 @@ import { DEFAULT_SCHEDULE } from '../common/schemas';
 import { CONSENT_VERSION } from '../common/legal';
 
 const MAX_FAILED = 5;
+const CODE_TTL_MIN = 10;
+
+type CodeUser = { email: string; name: string; telegramChatId: string | null };
+/** Куда можно отправить код входа: Telegram (если привязан и бот включён) и почта (если настроена) */
+export const codeChannels = (u: CodeUser) => [...(u.telegramChatId && telegram.enabled ? ['telegram'] : []), ...(env.SMTP_URL ? ['email'] : [])];
+
+async function sendLoginCode(u: CodeUser, code: string): Promise<string | null> {
+  const text = `Код входа в MioFlow: ${code}\nДействует ${CODE_TTL_MIN} минут. Если вы не входили — смените пароль.`;
+  if (u.telegramChatId && telegram.enabled && (await telegram.send(u.telegramChatId, text)).ok) return 'Telegram';
+  if (await mailer.send({ to: u.email, subject: `Код входа: ${code}`, text })) return u.email.replace(/^(.).*(@.*)$/, '$1***$2');
+  // Разработка без почты: код уже напечатан в лог сервера письмом-заглушкой
+  if (!isProd) return 'лог сервера (режим разработки)';
+  return null;
+}
 const LOCK_MIN = 15;
 
 export type Meta = { ip?: string; userAgent?: string };
@@ -144,6 +160,23 @@ export class AuthService {
     if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
     const m = (dto.tenantId && memberships.find((x) => x.tenantId === dto.tenantId)) || memberships[0];
 
+    // Вход с кодом: пароль верный, но токены выдаём только после кода из письма или Telegram
+    if (user.twoFactorEnabled && !demo) {
+      const challenge = randomToken(24);
+      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0, lockedUntil: null,
+          loginChallengeHash: sha256(challenge), loginCodeHash: sha256(`${user.id}:${code}`),
+          loginCodeExpires: new Date(Date.now() + CODE_TTL_MIN * 60_000), loginCodeAttempts: 0,
+        },
+      });
+      const sentTo = await sendLoginCode(user, code);
+      if (!sentTo) throw new AppError('CODE_NOT_SENT', 'Не удалось отправить код входа. Напишите в поддержку', 503);
+      return { twoFactor: { challenge, sentTo } } as const;
+    }
+
     await db.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
@@ -157,6 +190,49 @@ export class AuthService {
       user: { id: user.id, email: user.email, name: user.name },
       tenants: memberships.map((x) => ({ ...x.tenant, role: x.role })),
     };
+  }
+
+  /** Второй шаг входа: код из письма или Telegram. 5 попыток, 10 минут. */
+  async loginCode(dto: { challenge: string; code: string }, meta: Meta) {
+    const db = this.prisma.system;
+    const user = await db.user.findUnique({ where: { loginChallengeHash: sha256(dto.challenge) } });
+    const invalid = new AppError('CODE_INVALID', 'Код неверный или устарел. Войдите заново', 401);
+    if (!user || user.deletedAt || !user.loginCodeHash || !user.loginCodeExpires || user.loginCodeExpires < new Date()) throw invalid;
+    if (sha256(`${user.id}:${dto.code.replace(/\D/g, '')}`) !== user.loginCodeHash) {
+      const attempts = user.loginCodeAttempts + 1;
+      await db.user.update({
+        where: { id: user.id },
+        // После 5 ошибок код сгорает — нужно войти заново (новый код)
+        data: attempts >= 5 ? { loginChallengeHash: null, loginCodeHash: null, loginCodeExpires: null, loginCodeAttempts: 0 } : { loginCodeAttempts: attempts },
+      });
+      throw new AppError('CODE_INVALID', attempts >= 5 ? 'Слишком много ошибок. Войдите заново — придёт новый код' : 'Неверный код', 401);
+    }
+    const memberships = await db.membership.findMany({
+      where: { userId: user.id, deletedAt: null, tenant: { deletedAt: null } },
+      include: { tenant: { select: { id: true, name: true, slug: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
+    await db.user.update({
+      where: { id: user.id },
+      data: { loginChallengeHash: null, loginCodeHash: null, loginCodeExpires: null, loginCodeAttempts: 0, lastLoginAt: new Date() },
+    });
+    const m = memberships[0];
+    const tokens = await this.issue({ userId: user.id, tenantId: m.tenantId, role: m.role, resourceId: m.resourceId }, meta);
+    return { tokens, user: { id: user.id, email: user.email, name: user.name }, tenants: memberships.map((x) => ({ ...x.tenant, role: x.role })) };
+  }
+
+  /** Включить/выключить вход с кодом. Нужен пароль и рабочий канал доставки кода. */
+  async setTwoFactor(auth: AuthCtx, enabled: boolean, password: string) {
+    const db = this.prisma.system;
+    const user = await db.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    if (!(await argon2.verify(user.passwordHash, password))) throw new AppError('INVALID_CREDENTIALS', 'Неверный пароль', 400);
+    if (enabled && !codeChannels(user).length) {
+      throw new AppError('NO_CODE_CHANNEL', 'Некуда отправлять код: на сервере не настроена почта, а Telegram не привязан. Привяжите Telegram в разделе «Ещё»', 422);
+    }
+    await db.user.update({ where: { id: user.id }, data: { twoFactorEnabled: enabled } });
+    await db.auditLog.create({ data: { tenantId: auth.tenantId, userId: user.id, action: enabled ? 'user.2fa_on' : 'user.2fa_off', entityType: 'User', entityId: user.id } });
+    return { twoFactorEnabled: enabled, channels: codeChannels(user) };
   }
 
   /** Ротация refresh-токена. Повторное использование старого токена отзывает всю цепочку. */
@@ -215,16 +291,17 @@ export class AuthService {
   async me(auth: AuthCtx) {
     const db = this.prisma.system;
     const [user, memberships] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true } }),
+      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true, twoFactorEnabled: true } }),
       db.membership.findMany({
         where: { userId: auth.userId, deletedAt: null },
         include: { tenant: { select: { id: true, name: true, slug: true, timezone: true, settings: true } } },
       }),
     ]);
     const current = memberships.find((m) => m.tenantId === auth.tenantId);
-    const { telegramChatId, ...u } = user;
+    const { telegramChatId, twoFactorEnabled, ...u } = user;
     return {
       user: u,
+      twoFactor: { enabled: twoFactorEnabled, channels: codeChannels({ ...u, telegramChatId }) },
       telegramLinked: !!telegramChatId,
       role: auth.role,
       resourceId: auth.resourceId,

@@ -86,7 +86,25 @@ export class AuthController {
   @Post('login')
   async login(@Body(new Zod(loginSchema)) dto: z.infer<typeof loginSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const r = await this.auth.login(dto, meta(req));
+    if ('twoFactor' in r) return { twoFactor: r.twoFactor };
     return { ...sendTokens(req, res, r.tokens), user: r.user, tenants: r.tenants };
+  }
+
+  /** Второй шаг входа: код из письма или Telegram */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('login/code')
+  async loginCode(@Body(new Zod(z.object({ challenge: z.string().min(20).max(100), code: z.string().min(4).max(12) }))) dto: { challenge: string; code: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const r = await this.auth.loginCode(dto, meta(req));
+    return { ...sendTokens(req, res, r.tokens), user: r.user, tenants: r.tenants };
+  }
+
+  @HttpCode(200)
+  @NoDemo()
+  @Post('two-factor')
+  twoFactor(@Auth() auth: AuthCtx, @Body(new Zod(z.object({ enabled: z.boolean(), password: z.string().min(1) }))) dto: { enabled: boolean; password: string }) {
+    return this.auth.setTwoFactor(auth, dto.enabled, dto.password);
   }
 
   @Public()

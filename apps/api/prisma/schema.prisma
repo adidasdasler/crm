@@ -117,6 +117,12 @@ model User {
   /// SHA-256 токена сброса пароля и срок действия (1 час)
   passwordResetHash    String?   @unique
   passwordResetExpires DateTime? @db.Timestamptz(3)
+  /// Вход с кодом: после пароля нужен 6-значный код (email или Telegram)
+  twoFactorEnabled    Boolean   @default(false)
+  loginChallengeHash  String?   @unique
+  loginCodeHash       String?
+  loginCodeExpires    DateTime? @db.Timestamptz(3)
+  loginCodeAttempts   Int       @default(0)
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt           DateTime? @db.Timestamptz(3)
@@ -695,4 +701,11 @@ enum WaitlistStatus {
   DONE
   CANCELLED
   EXPIRED
+}
+
+/// Пульс фоновых процессов (воркер) — для мониторинга
+model Heartbeat {
+  name String   @id
+  at   DateTime @default(now()) @db.Timestamptz(3)
+  info Json?
 }

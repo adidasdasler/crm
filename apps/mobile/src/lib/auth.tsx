@@ -12,7 +12,9 @@ import type { Me, Perm } from './types';
 type AuthState = {
   status: 'loading' | 'guest' | 'authed';
   me: Me | null;
-  login: (email: string, password: string) => Promise<void>;
+  /** Вернёт twoFactor, если после пароля нужен код */
+  login: (email: string, password: string) => Promise<{ twoFactor?: { challenge: string; sentTo: string } }>;
+  loginCode: (challenge: string, code: string) => Promise<void>;
   register: (dto: Record<string, unknown>) => Promise<void>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
@@ -66,7 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     me,
     reload,
     async login(email, password) {
-      await tokens.save(await post('/auth/login', { email, password }));
+      const r = await post<{ accessToken?: string; refreshToken?: string; twoFactor?: { challenge: string; sentTo: string } }>('/auth/login', { email, password });
+      if (r.twoFactor) return { twoFactor: r.twoFactor };
+      await tokens.save(r);
+      await reload();
+      return {};
+    },
+    async loginCode(challenge, code) {
+      await tokens.save(await post('/auth/login/code', { challenge, code }));
       await reload();
     },
     async register(dto) {

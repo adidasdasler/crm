@@ -31,6 +31,12 @@ echo "→ Проверка"
 for _ in $(seq 1 40); do
   if curl -fsS "http://127.0.0.1:$SITE_PORT/v1/health" >/dev/null; then
     echo "✓ MioFlow работает"
+    # Мониторинг (для серверов, установленных до его появления): включаем один раз
+    if [ "$(id -u)" = 0 ] && [ ! -f /etc/cron.d/mioflow-monitor ]; then
+      echo "*/5 * * * * root cd $(pwd) && bash deploy/scripts/monitor.sh >> /var/log/mioflow-monitor.log 2>&1" > /etc/cron.d/mioflow-monitor
+      chmod 644 /etc/cron.d/mioflow-monitor
+      echo "✓ Включён мониторинг каждые 5 минут: deploy/scripts/monitor.sh"
+    fi
     docker image prune -f >/dev/null
     exit 0
   fi

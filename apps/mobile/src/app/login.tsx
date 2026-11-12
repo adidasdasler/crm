@@ -10,7 +10,7 @@ import { SignedInGate } from '../components/SignedInGate';
 export const DEMO = { email: 'demo@salon.local', password: 'demo12345' };
 
 export default function Login() {
-  const { status, login, me } = useAuth();
+  const { status, login, loginCode, me } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,6 +18,8 @@ export default function Login() {
   const params = useLocalSearchParams<{ demo?: string }>();
   const autoDemo = useRef(false);
   const [done, setDone] = useState(false);
+  const [step2, setStep2] = useState<{ challenge: string; sentTo: string } | null>(null);
+  const [code, setCode] = useState('');
 
   // Ссылка «Попробовать без регистрации» с главной: mioflow.ru → app.mioflow.ru/login?demo=1
   useEffect(() => {
@@ -27,6 +29,23 @@ export default function Login() {
   if (status === 'loading') return <Loading />;
   // Пришли по ссылке «демо», а вошли в свой аккаунт — спросим, а не покажем свои данные
   if (status === 'authed') return params.demo && !done && me?.tenant?.slug !== 'demo' ? <SignedInGate action="demo" /> : <Redirect href="/" />;
+
+  async function submitCode() {
+    if (!step2) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setDone(true);
+      await loginCode(step2.challenge, code);
+    } catch (e) {
+      setDone(false);
+      setError(e);
+      // Код сгорел или устарел — начинаем вход заново
+      if ((e as Error).message.includes('заново')) { setStep2(null); setCode(''); }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function demo() {
     setBusy(true);
@@ -45,7 +64,8 @@ export default function Login() {
     setError(null);
     try {
       setDone(true);
-      await login(email.trim(), password);
+      const r = await login(email.trim(), password);
+      if (r.twoFactor) { setDone(false); setStep2(r.twoFactor); }
     } catch (e) {
       setError(e);
     } finally {
@@ -59,6 +79,16 @@ export default function Login() {
         <View style={{ height: 64 }} />
         <Logo size={48} />
         <Text style={{ fontSize: 17, color: C.muted, marginBottom: 20, marginTop: 4 }}>Записи, клиенты и напоминания — для салона и частного мастера</Text>
+        {step2 ? (
+          <>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: C.text }}>Введите код входа</Text>
+            <Text style={{ color: C.muted }}>Мы отправили 6 цифр {step2.sentTo === 'Telegram' ? 'в Telegram' : `на ${step2.sentTo}`}. Код действует 10 минут.</Text>
+            <Field label="Код" value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" placeholder="123456" onSubmitEditing={submitCode} autoFocus />
+            <ErrorText error={error} />
+            <Button title="Войти" onPress={submitCode} loading={busy} disabled={code.length !== 6} />
+            <Text style={{ textAlign: 'center', color: C.muted, padding: 6 }} onPress={() => { setStep2(null); setCode(''); setError(null); }}>Назад</Text>
+          </>
+        ) : (<>
         <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" placeholder="you@example.ru" />
         <Field label="Пароль" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" placeholder="••••••••" onSubmitEditing={submit} />
         <ErrorText error={error} />
@@ -68,6 +98,7 @@ export default function Login() {
         <Link href="/register" style={{ textAlign: 'center', color: C.brand, fontWeight: '600', padding: 12 }}>
           Зарегистрироваться — 14 дней бесплатно
         </Link>
+        </>)}
       </Screen>
     </KeyboardAvoidingView>
   );

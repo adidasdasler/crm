@@ -52,6 +52,8 @@ async function main() {
     loop('insights', 60 * 60_000, () => insightsDigestTick(db)),
     loop('demo', 30 * 60_000, () => demoResetTick(db)),
     loop('waitlist', 3 * 60_000, () => waitlistTick(appDb, db)),
+    // Пульс для мониторинга (/v1/health → worker: ok)
+    loop('heartbeat', 60_000, () => db.heartbeat.upsert({ where: { name: 'worker' }, update: { at: new Date() }, create: { name: 'worker' } }).then(() => null)),
   ]);
 }
 

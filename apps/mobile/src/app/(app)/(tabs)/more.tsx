@@ -103,6 +103,13 @@ export default function More() {
           onPress={toggleTelegram}
           right={<Text style={{ color: me.telegramLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.telegramLinked ? 'Отключить' : 'Подключить'}</Text>}
         />
+        <Row
+          icon="shield-checkmark-outline"
+          title="Вход с кодом"
+          subtitle={me.twoFactor?.enabled ? `Включён: после пароля — код ${me.twoFactor.channels.includes('telegram') ? 'в Telegram' : 'на email'}` : 'Защитите базу клиентов: даже с паролем без кода не войти'}
+          onPress={() => router.push('/two-factor')}
+          right={<Text style={{ color: me.twoFactor?.enabled ? '#0F6B48' : C.brand, fontWeight: '600' }}>{me.twoFactor?.enabled ? 'Вкл.' : 'Включить'}</Text>}
+        />
         {!can(me, 'staff.manage') && me.resourceId && <Row icon="time-outline" title="Мой график" onPress={() => router.push(`/master/${me.resourceId}`)} />}
       </View>
 

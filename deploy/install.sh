@@ -201,6 +201,9 @@ fi
 echo "15 3 * * * root cd $ROOT_DIR && bash deploy/scripts/backup.sh >> /var/log/mioflow-backup.log 2>&1" > /etc/cron.d/mioflow-backup
 chmod 644 /etc/cron.d/mioflow-backup
 ok "Ежедневный зашифрованный бэкап в 03:15 → $ROOT_DIR/backups"
+echo "*/5 * * * * root cd $ROOT_DIR && bash deploy/scripts/monitor.sh >> /var/log/mioflow-monitor.log 2>&1" > /etc/cron.d/mioflow-monitor
+chmod 644 /etc/cron.d/mioflow-monitor
+ok "Мониторинг каждые 5 минут (тревоги в Telegram — см. ALERT_TELEGRAM_* в .env)"
 
 step "8/8 Проверка, что другие службы не затронуты"
 SNAP_AFTER=$(mktemp)
