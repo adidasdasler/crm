@@ -128,7 +128,12 @@ describe('абонементы', () => {
     const cust = await system.customer.findFirstOrThrow({ where: { phone: '+79998889999' } });
     await s.api.post(`/customers/${cust.id}/account/topup`, { amount: 5000 });
     const m = (await api().get(`/public/${s.slug}/manage/${book.body.data.manageToken}`)).body.data;
-    expect(m.wallet).toMatchObject({ money: 5000, bonus: 500, passes: [] });
+    // Записаться онлайн может любой, кто знает чужой номер, — счёт по такой ссылке не виден, пока клиент не пришёл
+    expect(m.wallet).toBeUndefined();
+    const bk = await system.booking.findFirstOrThrow({ where: { customerId: cust.id } });
+    await s.api.post(`/bookings/${bk.id}/status`, { status: 'ARRIVED', version: bk.version });
+    const m2 = (await api().get(`/public/${s.slug}/manage/${book.body.data.manageToken}`)).body.data;
+    expect(m2.wallet).toMatchObject({ money: 5000, bonus: 500, passes: [] });
 
     const inv = await s.api.post('/team', { email: `fin-${Date.now()}@test.ru`, name: 'М', role: 'MASTER', resourceId: s.resourceId });
     const login = await api().post('/auth/login', { email: inv.body.data.user.email, password: inv.body.data.tempPassword });

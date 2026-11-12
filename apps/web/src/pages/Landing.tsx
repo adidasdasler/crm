@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Logo, Mark } from '../Logo';
 import { api, APP_URL, rub } from '../lib/api';
+import { OPERATOR } from '../legal/requisites';
 
 type Plan = { code: string; name: string; priceMonthly: number; priceYearly: number; limits: { masters?: number } };
 
@@ -293,9 +294,17 @@ export function Landing() {
             <a href="/my" className="font-semibold text-brand-600 hover:text-ink">Мои записи (для клиентов)</a>
             <a href="/terms" className="hover:text-ink">Оферта</a>
             <a href="/privacy" className="hover:text-ink">Политика ПДн</a>
+            <a href="/consent" className="hover:text-ink">Согласие на обработку ПДн</a>
             <span>© {new Date().getFullYear()} MioFlow</span>
           </span>
         </div>
+        {/* Сведения об исполнителе — требование закона о защите прав потребителей (продажа услуг через сайт) */}
+        {!OPERATOR.fullName.startsWith('[') && (
+          <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-ink-muted sm:px-6">
+            Исполнитель: {OPERATOR.fullName}, плательщик налога на профессиональный доход, ИНН {OPERATOR.inn}. Обращения: {OPERATOR.email}.
+            Сайт использует только технически необходимые cookie.
+          </p>
+        )}
       </footer>
     </div>
   );

@@ -254,7 +254,10 @@ export class PublicController {
       tx.booking.findUnique({ where: { manageTokenHash: sha256(token) }, include: bookingInclude }),
     );
     if (!b) throw notFound('Запись');
-    const [review, wallet] = await this.prisma.withTenant(t.id, (tx) => Promise.all([
+    // Онлайн-запись может создать кто угодно, зная чужой номер, — по такой ссылке счёт и абонементы
+    // не показываем, пока клиент не пришёл. Записи, созданные салоном, показывают сразу.
+    const showWallet = b.source !== 'WIDGET' || ['ARRIVED', 'COMPLETED'].includes(b.status);
+    const [review, walletFull] = await this.prisma.withTenant(t.id, (tx) => Promise.all([
       tx.review.findUnique({ where: { bookingId: b.id }, select: { rating: true, comment: true } }),
       // Баланс и абонементы клиента этой записи — видны только по личной ссылке
       tx.customer.findUnique({
@@ -269,7 +272,7 @@ export class PublicController {
     return {
       id: b.id, status: b.status, startsAt: b.startsAt, endsAt: b.endsAt, price: b.price,
       review,
-      wallet,
+      wallet: showWallet ? walletFull : undefined,
       canReview: b.status === 'COMPLETED' && Date.now() - +b.endsAt <= FEEDBACK_WINDOW_DAYS * 86400_000,
       mapsLinks: { yandex: t.s.links?.yandexMaps ?? null, twoGis: t.s.links?.twoGis ?? null },
       resource: b.resource.name, services: b.items.map((i) => i.name),
