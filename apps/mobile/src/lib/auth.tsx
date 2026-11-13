@@ -15,6 +15,8 @@ type AuthState = {
   /** Вернёт twoFactor, если после пароля нужен код */
   login: (email: string, password: string) => Promise<{ twoFactor?: { challenge: string; sentTo: string } }>;
   loginCode: (challenge: string, code: string) => Promise<void>;
+  /** Телефон: одноразовый билет после входа через Яндекс/VK → токены */
+  loginTicket: (ticket: string) => Promise<{ twoFactor?: { challenge: string; sentTo: string } }>;
   register: (dto: Record<string, unknown>) => Promise<void>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
@@ -69,6 +71,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reload,
     async login(email, password) {
       const r = await post<{ accessToken?: string; refreshToken?: string; twoFactor?: { challenge: string; sentTo: string } }>('/auth/login', { email, password });
+      if (r.twoFactor) return { twoFactor: r.twoFactor };
+      await tokens.save(r);
+      await reload();
+      return {};
+    },
+    async loginTicket(ticket) {
+      const r = await post<{ accessToken?: string; refreshToken?: string; twoFactor?: { challenge: string; sentTo: string } }>('/auth/oauth/exchange', { ticket });
       if (r.twoFactor) return { twoFactor: r.twoFactor };
       await tokens.save(r);
       await reload();

@@ -123,6 +123,9 @@ model User {
   passwordResetHash    String?   @unique
   passwordResetExpires DateTime? @db.Timestamptz(3)
   /// Вход с кодом: после пароля нужен 6-значный код (email или Telegram)
+  /// Вход через Яндекс ID и VK ID (0022_staff_oauth)
+  yandexId            String?   @unique
+  vkId                String?   @unique
   twoFactorEnabled    Boolean   @default(false)
   loginChallengeHash  String?   @unique
   loginCodeHash       String?
@@ -829,4 +832,12 @@ model ClientBooking {
 
   @@id([clientUserId, bookingId])
   @@index([bookingId], map: "ClientBooking_booking_idx")
+}
+
+/// Одноразовые билеты после входа через Яндекс/VK (0022_staff_oauth)
+model OAuthTicket {
+  hash      String   @id
+  kind      String
+  payload   Json
+  expiresAt DateTime @db.Timestamptz(3)
 }

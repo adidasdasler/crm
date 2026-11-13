@@ -20,7 +20,9 @@ const slug = z
 
 const registerSchema = z.object({
   email,
-  password,
+  /** Не нужен при регистрации через Яндекс ID / VK ID (oauthTicket) */
+  password: password.optional(),
+  oauthTicket: z.string().min(20).max(100).optional(),
   name: z.string().trim().min(2).max(100),
   phone: z.string().trim().max(20).optional(),
   /** solo — частный мастер (название и адрес страницы не обязательны), salon — салон или студия */
@@ -39,7 +41,8 @@ const registerSchema = z.object({
   acceptPrivacy: z.literal(true, { error: 'Необходимо согласие на обработку персональных данных' }),
   /** honeypot: настоящий пользователь это поле не заполняет */
   website: z.string().max(0).optional(),
-}).refine((d) => d.kind === 'solo' || (!!d.salonName && !!d.slug), { error: 'Укажите название салона и адрес страницы', path: ['salonName'] });
+}).refine((d) => d.kind === 'solo' || (!!d.salonName && !!d.slug), { error: 'Укажите название салона и адрес страницы', path: ['salonName'] })
+  .refine((d) => !!d.password || !!d.oauthTicket, { error: 'Пароль — минимум 8 символов', path: ['password'] });
 const loginSchema = z.object({ email, password: z.string().min(1).max(128), tenantId: uuid.optional() });
 const refreshSchema = z.object({ refreshToken: z.string().min(10).optional() });
 
@@ -49,7 +52,7 @@ export const REFRESH_COOKIE_PATH = '/v1/auth';
  * Веб-клиент получает токены в httpOnly-cookie.
  * Мобильный клиент (заголовок X-Client: mobile) — в теле ответа, хранит в SecureStore.
  */
-function sendTokens(req: Request, res: Response, tokens: Tokens) {
+export function sendTokens(req: Request, res: Response, tokens: Tokens) {
   if (req.headers['x-client'] === 'mobile') {
     return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }

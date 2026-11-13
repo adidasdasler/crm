@@ -42,14 +42,14 @@ export async function requireClient(req: Request, prisma: PrismaService) {
 }
 
 /** Состояние входа через Яндекс/VK: state и PKCE-verifier в подписанной cookie на 10 минут */
-export async function signOAuthState(s: { provider: string; state: string; verifier: string; consent: boolean }) {
+export async function signOAuthState(s: { provider: string; state: string; verifier: string; consent: boolean; mobile?: boolean; mode?: string }) {
   return new SignJWT(s).setProtectedHeader({ alg: 'HS256' }).setAudience('mioflow-oauth').setExpirationTime('10m').sign(key('oauth'));
 }
 export async function readOAuthState(token: string | undefined) {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key('oauth'), { audience: 'mioflow-oauth' });
-    return payload as unknown as { provider: string; state: string; verifier: string; consent: boolean };
+    return payload as unknown as { provider: string; state: string; verifier: string; consent: boolean; mobile?: boolean; mode?: string };
   } catch {
     return null;
   }

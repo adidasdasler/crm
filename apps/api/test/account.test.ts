@@ -142,3 +142,58 @@ describe('вход с кодом', () => {
     }
   });
 });
+
+describe('вход сотрудников через Яндекс ID и VK ID', () => {
+  it('новый — на регистрацию с билетом; существующий по email — вход; мобильное приложение — билет; код входа не обходится', async () => {
+    const request = (await import('supertest')).default;
+    const { oauth } = await import('../src/client/oauth');
+    const { env } = await import('../src/config');
+    const { getApp } = await import('./helpers');
+    const srv = (await getApp()).getHttpServer();
+    env.YANDEX_CLIENT_ID = 'yid'; env.YANDEX_CLIENT_SECRET = 'ys'; env.VKID_CLIENT_ID = 'vk';
+    const flow = async (p: 'yandex' | 'vk', mobile = false) => {
+      const ag = request.agent(srv);
+      const s = await ag.get(`/v1/auth/oauth/${p}/start${mobile ? '?mobile=1' : ''}`);
+      expect(s.status).toBe(302);
+      expect(new URL(s.headers.location).searchParams.get('redirect_uri')).toContain('/v1/auth/oauth/');
+      const cb = await ag.get(`/v1/auth/oauth/${p}/callback?code=c&state=${new URL(s.headers.location).searchParams.get('state')}`);
+      return { ag, loc: cb.headers.location as string, cookies: cb.headers['set-cookie'] as unknown as string[] | undefined };
+    };
+
+    // 1. Новый человек: на регистрацию; регистрируется без пароля, email берётся из Яндекса
+    oauth.profile = async () => ({ id: 'staff-y-1', email: 'yandex-owner@ya.ru', name: 'Вера Яндекс', phone: null });
+    const r1 = await flow('yandex');
+    expect(r1.loc).toContain('/register?');
+    const ticket = new URL(r1.loc).searchParams.get('oauth')!;
+    const reg = await api().post('/auth/register', {
+      oauthTicket: ticket, email: 'evil@x.ru', name: 'Вера Яндекс', kind: 'solo', timezone: 'Europe/Moscow', acceptTerms: true, acceptPrivacy: true,
+    });
+    expect(reg.status).toBe(201);
+    expect(reg.body.data.user.email).toBe('yandex-owner@ya.ru');
+    // Билет одноразовый
+    expect((await api().post('/auth/register', { oauthTicket: ticket, email: 'a@b.ru', name: 'X', kind: 'solo', timezone: 'Europe/Moscow', acceptTerms: true, acceptPrivacy: true })).status).toBe(400);
+
+    // 2. Повторный вход: сразу в приложение с cookie-сессией
+    const r2 = await flow('yandex');
+    expect(r2.loc).toMatch(/\/$/);
+    expect(r2.cookies?.some((c) => c.startsWith('access_token='))).toBe(true);
+
+    // 3. Существующий владелец по паролю входит через VK с тем же email; мобильное приложение — билет
+    const s = await createSalon('VkLogin');
+    const email = (await s.api.get('/auth/me')).body.data.user.email;
+    oauth.profile = async () => ({ id: 'staff-vk-1', email, name: 'Владелец', phone: null });
+    const r3 = await flow('vk', true);
+    expect(r3.loc).toMatch(/^mioflow:\/\/oauth\?ticket=/);
+    const ex = await api().post('/auth/oauth/exchange', { ticket: new URL(r3.loc.replace('mioflow://', 'https://x/')).searchParams.get('ticket') });
+    expect(ex.status).toBe(200);
+    expect(ex.body.data.accessToken).toBeTruthy();
+
+    // 4. Включён вход с кодом — Яндекс/VK его не обходят
+    await system.user.update({ where: { email }, data: { twoFactorEnabled: true } });
+    const prevSmtp = env.SMTP_URL; env.SMTP_URL = 'smtp://test';
+    const r4 = await flow('vk');
+    env.SMTP_URL = prevSmtp;
+    expect(r4.loc).toContain('/login?tf=');
+    expect(r4.cookies?.some((c) => c.startsWith('access_token='))).toBeFalsy();
+  });
+});

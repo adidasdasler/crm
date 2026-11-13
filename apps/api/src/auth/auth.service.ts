@@ -3,7 +3,7 @@ import { createTemplateServices, industry } from '../common/industries';
 import { readSettings } from '../common/tenant-settings';
 import { PERM_KEYS } from '../common/permissions';
 import { Injectable } from '@nestjs/common';
-import type { Role } from '@prisma/client';
+import type { Role, User } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomInt, randomUUID } from 'node:crypto';
 import { mailer } from '../notify/mailer';
@@ -69,7 +69,7 @@ export class AuthService {
 
   /** Регистрация владельца: пользователь + салон + подписка TRIAL + первый мастер. */
   async register(
-    dto: { email: string; password: string; name: string; phone?: string; kind?: 'solo' | 'salon'; salonName?: string; slug?: string; timezone: string; industry?: string },
+    dto: { email: string; password?: string; oauthTicket?: string; name: string; phone?: string; kind?: 'solo' | 'salon'; salonName?: string; slug?: string; timezone: string; industry?: string },
     meta: Meta,
   ) {
     const solo = dto.kind === 'solo';
@@ -86,11 +86,22 @@ export class AuthService {
       ?? await this.prisma.system.plan.findFirst({ where: { code: 'START' } });
     if (!plan) throw new AppError('NO_PLANS', 'Тарифы не настроены (запустите seed)', 500);
 
-    const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
+    // Регистрация после входа через Яндекс ID / VK ID: пароль не нужен (его можно задать потом через «Забыли пароль?»)
+    let link: Record<string, string> = {};
+    if (dto.oauthTicket) {
+      const tk = await this.prisma.system.oAuthTicket.findUnique({ where: { hash: sha256(dto.oauthTicket) } });
+      if (!tk || tk.kind !== 'register' || tk.expiresAt < new Date()) throw new AppError('OAUTH_TICKET', 'Вход через Яндекс или VK устарел — нажмите кнопку ещё раз', 400);
+      await this.prisma.system.oAuthTicket.delete({ where: { hash: tk.hash } });
+      const pr = tk.payload as { provider: 'yandex' | 'vk'; id: string; email: string | null };
+      // Email подтверждён Яндексом/VK — подменить его на чужой нельзя
+      if (pr.email) dto.email = pr.email;
+      link = { [pr.provider === 'yandex' ? 'yandexId' : 'vkId']: pr.id };
+    }
+    const passwordHash = await argon2.hash(dto.password ?? randomToken(32), { type: argon2.argon2id });
     try {
       const { user, tenant, membership } = await this.prisma.system.$transaction(async (tx) => {
         const user = await tx.user.create({
-          data: { email: dto.email, passwordHash, name: dto.name, phone: dto.phone },
+          data: { email: dto.email, passwordHash, name: dto.name, phone: dto.phone, ...link },
         });
         const tenant = await tx.tenant.create({
           data: { name: salonName, slug: slugValue, timezone: dto.timezone, phone: dto.phone, settings: { ...(dto.industry ? { industry: dto.industry } : {}), ...(solo ? { solo: true } : {}) } },
@@ -158,6 +169,16 @@ export class AuthService {
       throw invalid;
     }
 
+    return this.completeLogin(user, meta, dto.tenantId);
+  }
+
+  /**
+   * Пароль (или Яндекс ID / VK ID) подтверждён — дальше одинаково: есть ли салон, не заблокирован ли он,
+   * нужен ли код входа; затем токены.
+   */
+  async completeLogin(user: User, meta: Meta, tenantId?: string) {
+    const db = this.prisma.system;
+    const demo = user.email === DEMO_EMAIL;
     const memberships = await db.membership.findMany({
       where: { userId: user.id, deletedAt: null, tenant: { deletedAt: null } },
       include: { tenant: { select: { id: true, name: true, slug: true } } },
@@ -165,7 +186,7 @@ export class AuthService {
     });
     if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
     await assertNotBlocked(db, memberships.map((m) => m.tenantId));
-    const m = (dto.tenantId && memberships.find((x) => x.tenantId === dto.tenantId)) || memberships[0];
+    const m = (tenantId && memberships.find((x) => x.tenantId === tenantId)) || memberships[0];
 
     // Вход с кодом: пароль верный, но токены выдаём только после кода из письма или Telegram
     if (user.twoFactorEnabled && !demo) {

@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ReactNode } from 'react';
 import { Linking, Pressable, View } from 'react-native';
@@ -9,6 +9,7 @@ import { Button, C, Chip, ErrorText, Field, Muted, Screen } from '../components/
 import { ApiError, get, PUBLIC_WEB_URL } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { SignedInGate } from '../components/SignedInGate';
+import { goRegister, OAuthButtons } from '../components/OAuthButtons';
 import type { IndustryInfo } from '../lib/types';
 
 const translit = (s: string) => {
@@ -19,11 +20,13 @@ const translit = (s: string) => {
 type Kind = 'solo' | 'salon';
 
 export default function Register() {
-  const { status, register } = useAuth();
+  const { status, register, loginTicket } = useAuth();
   // Ссылка с сайта может сразу выбрать вариант: /register?kind=solo
-  const params = useLocalSearchParams<{ kind?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; oauth?: string; name?: string; email?: string; phone?: string; provider?: string }>();
+  // Пришли после «Войти с Яндекс ID / VK ID»: имя и email уже известны, пароль не нужен
+  const oauth = params.oauth;
   const [kind, setKind] = useState<Kind | null>(params.kind === 'solo' || params.kind === 'salon' ? params.kind : null);
-  const [f, setF] = useState({ salonName: '', name: '', phone: '', email: '', password: '', slug: '' });
+  const [f, setF] = useState({ salonName: '', name: params.name ?? '', phone: params.phone ?? '', email: params.email ?? '', password: '', slug: '' });
   const [industry, setIndustry] = useState('beauty');
   const [industries, setIndustries] = useState<IndustryInfo[]>([]);
   useEffect(() => { get<IndustryInfo[]>('/public-meta/industries').then(setIndustries).catch(() => null); }, []);
@@ -56,6 +59,7 @@ export default function Register() {
       setDone(true);
       await register({
         ...f, kind, email: f.email.trim(), phone: f.phone || undefined, timezone, industry, acceptTerms: accept, acceptPrivacy,
+        ...(oauth ? { oauthTicket: oauth, password: undefined } : {}),
         // Частному мастеру название и адрес не обязательны: возьмём имя, свободный адрес подберёт сервер
         salonName: f.salonName.trim() || (kind === 'solo' ? undefined : f.salonName), slug: f.slug || undefined,
       });
@@ -104,7 +108,20 @@ export default function Register() {
       <Muted>{PUBLIC_WEB_URL.replace(/^https?:\/\//, '')}/b/{f.slug || '…'}</Muted>
       <Field label="Телефон" value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" placeholder="+7 999 123-45-67" />
       <Field label="Email" value={f.email} onChangeText={set('email')} autoCapitalize="none" keyboardType="email-address" />
-      <Field label="Пароль (минимум 8 символов)" value={f.password} onChangeText={set('password')} secureTextEntry />
+      {!oauth && (
+        <OAuthButtons onResult={async (r) => {
+          if (r.register) return goRegister(r.register);
+          if (r.error) return setError(new Error(r.error));
+          // Такой пользователь уже есть — просто входим
+          if (r.ticket) { setDone(true); await loginTicket(r.ticket).catch((e) => { setDone(false); setError(e); }); }
+          if (r.tf) router.replace({ pathname: '/login', params: { tf: r.tf, sent: r.sent ?? 'email' } });
+        }} />
+      )}
+      {oauth ? (
+        <Muted>Вход — через Яндекс ID или VK ID, пароль не нужен. Задать пароль можно потом: «Забыли пароль?» на экране входа.</Muted>
+      ) : (
+        <Field label="Пароль (минимум 8 символов)" value={f.password} onChangeText={set('password')} secureTextEntry />
+      )}
       <Check value={accept} onChange={setAccept}>
         Принимаю условия <Text style={{ color: C.brand }} onPress={() => Linking.openURL(`${PUBLIC_WEB_URL}/terms`)}>оферты</Text>
       </Check>
@@ -117,7 +134,7 @@ export default function Register() {
         title={solo ? 'Начать работу' : 'Создать салон'}
         onPress={submit}
         loading={busy}
-        disabled={!accept || !acceptPrivacy || f.name.trim().length < 2 || (!solo && f.salonName.trim().length < 2) || !f.email.includes('@') || f.password.length < 8 || (slugFree === false && !solo)}
+        disabled={!accept || !acceptPrivacy || f.name.trim().length < 2 || (!solo && f.salonName.trim().length < 2) || !f.email.includes('@') || (!oauth && f.password.length < 8) || (slugFree === false && !solo)}
       />
       {f.name.trim().length < 2 && <Muted>Укажите имя — его увидят клиенты.</Muted>}
     </Screen>
