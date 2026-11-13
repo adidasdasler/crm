@@ -5,6 +5,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@
 import type { Request, Response } from 'express';
 import { bookingIcs } from './ics';
 import { MAX_WAITLIST_PER_PHONE } from '../waitlist/waitlist';
+import { readClient } from '../client/session';
 import { credsOf, prepayAmount, salonPay, syncPayment } from '../prepayment/prepayment';
 import { Throttle } from '@nestjs/throttler';
 import { DateTime } from 'luxon';
@@ -212,6 +213,11 @@ export class PublicController {
     const date = DateTime.fromJSDate(dto.startsAt, { zone: t.timezone }).toISODate()!;
     // Мини-приложение Telegram: подпись проверена — напоминания сразу пойдут в этот чат, без лишних кнопок
     const tgUser = dto.tgInitData ? telegram.verifyInitData(dto.tgInitData) : null;
+    // Записывается из кабинета mioflow.ru — запись появится в «Моих записях» на любом устройстве
+    const client = await readClient(req, this.prisma);
+    // Существующего клиента салона связываем с кабинетом целиком, только если это его подтверждённый телефон:
+    // иначе, указав чужой номер, можно было бы увидеть чужую историю визитов
+    const ownPhone = !!client?.phoneVerifiedAt && client.phone === dto.phone;
 
     const booking = await this.prisma.withTenant(t.id, async (tx) => {
       const free = await this.bookings.slots(tx, t, { date, serviceIds: dto.serviceIds, resourceId: dto.resourceId, onlyPublic: true });
@@ -231,15 +237,17 @@ export class PublicController {
       }
       if (!customer) {
         customer = await tx.customer.create({
-          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent, telegramChatId: tgUser?.id },
+          // Новый клиент салона, созданный этой записью, — целиком связываем с кабинетом
+          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent, telegramChatId: tgUser?.id, clientUserId: client?.id },
         });
-      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email) || (tgUser && customer.telegramChatId !== tgUser.id)) {
+      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email) || (tgUser && customer.telegramChatId !== tgUser.id) || (ownPhone && !customer.clientUserId)) {
         customer = await tx.customer.update({
           where: { id: customer.id },
           data: {
             ...(dto.marketingConsent ? { marketingConsent: true } : {}),
             ...(dto.email && !customer.email ? { email: dto.email } : {}),
             ...(tgUser ? { telegramChatId: tgUser.id } : {}),
+            ...(ownPhone && !customer.clientUserId ? { clientUserId: client!.id } : {}),
           },
         });
       }
@@ -263,6 +271,8 @@ export class PublicController {
     });
 
     const token = manageToken(booking.id);
+    // Сама запись всегда видна в кабинете того, кто её сделал
+    if (client) await this.prisma.system.clientBooking.createMany({ data: [{ clientUserId: client.id, bookingId: booking.id }], skipDuplicates: true });
     // Предоплата: платёж в магазине ЮKassa салона; без оплаты запись держится 20 минут
     let payUrl: string | null = null, prepaid = 0;
     const pay = await this.prepaySettings(t.id);

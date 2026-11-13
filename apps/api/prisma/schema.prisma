@@ -364,6 +364,8 @@ model Customer {
   totalSpent       Int       @default(0)
   lastVisitAt      DateTime? @db.Timestamptz(3)
   /// Возврат клиентов: последнее «давно не были» и поздравление с днём рождения
+  /// Аккаунт клиента на mioflow.ru (кабинет «Мои записи»), если клиент записывался из него
+  clientUserId     String?   @db.Uuid
   lastWinbackAt    DateTime? @db.Timestamptz(3)
   lastBirthdayAt   DateTime? @db.Timestamptz(3)
   source           BookingSource @default(MANUAL)
@@ -793,4 +795,38 @@ model AdminTask {
   finishedAt  DateTime? @db.Timestamptz(3)
 
   @@index([status, id], map: "AdminTask_status_idx")
+}
+
+/// Кабинет клиента на mioflow.ru (0020_client_accounts)
+model ClientUser {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String?   @unique
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+  passwordHash    String?
+  name            String
+  phone           String?
+  phoneVerifiedAt DateTime? @db.Timestamptz(3)
+  yandexId        String?   @unique
+  vkId            String?   @unique
+  sessionVersion  Int       @default(0)
+  verifyHash      String?   @unique
+  resetHash       String?   @unique
+  resetExpires    DateTime? @db.Timestamptz(3)
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime? @db.Timestamptz(3)
+  consentVersion  String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  lastLoginAt     DateTime? @db.Timestamptz(3)
+
+  @@index([phone], map: "ClientUser_phone_idx")
+}
+
+/// Запись в кабинете клиента (0021_client_bookings)
+model ClientBooking {
+  clientUserId String   @db.Uuid
+  bookingId    String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([clientUserId, bookingId])
+  @@index([bookingId], map: "ClientBooking_booking_idx")
 }

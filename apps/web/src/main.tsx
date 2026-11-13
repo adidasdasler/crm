@@ -11,12 +11,13 @@ import { BookingPage } from './pages/Booking';
 import { Landing } from './pages/Landing';
 import { ManagePage } from './pages/Manage';
 import { NotFound } from './pages/NotFound';
-import { ClientConsent, OwnerConsent } from './legal/Consent';
+import { AccountConsent, ClientConsent, OwnerConsent } from './legal/Consent';
 import { Offer } from './legal/Offer';
 import { Privacy } from './legal/Privacy';
 import { MockPay } from './pages/MockPay';
 import { MyPage } from './pages/My';
 import { AdminPage } from './pages/Admin';
+import { AccountForgot, AccountLogin, AccountRegister, AccountReset, AccountVerify } from './pages/Account';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -28,6 +29,12 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/b/:slug/consent" element={<ClientConsent />} />
         <Route path="/my" element={<MyPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/account/login" element={<AccountLogin />} />
+        <Route path="/account/register" element={<AccountRegister />} />
+        <Route path="/account/forgot" element={<AccountForgot />} />
+        <Route path="/account/reset" element={<AccountReset />} />
+        <Route path="/account/verify" element={<AccountVerify />} />
+        <Route path="/account/consent" element={<AccountConsent />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Offer />} />
         <Route path="/consent" element={<OwnerConsent />} />

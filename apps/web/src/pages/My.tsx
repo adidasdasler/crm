@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Mark } from '../Logo';
 import { api, ApiError, fmtDate, fmtTime, rub } from '../lib/api';
 import { calendarUrl, forgetBooking, myBookings, MyRef } from '../lib/my';
+import { ClientBooking, ClientMe, clientMe } from '../lib/client';
 
 type Visit = {
   ref: MyRef;
@@ -24,22 +25,53 @@ const ACTIVE = ['SCHEDULED', 'CONFIRMED', 'ARRIVED'];
 /** «Мои записи»: все записи с этого устройства во все салоны — где, когда и к кому */
 export function MyPage() {
   const [visits, setVisits] = useState<Visit[] | null>(null);
+  const [me, setMe] = useState<ClientMe | null | undefined>(undefined);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = 'Мои записи — MioFlow';
-    const refs = myBookings();
-    Promise.all(
-      refs.map((ref) =>
-        api<Omit<Visit, 'ref'>>(`/public/${ref.slug}/manage/${ref.token}`)
-          .then((v) => ({ ...v, ref }))
-          .catch((e: ApiError) => {
-            // Запись удалили или салон закрылся — убираем из списка
-            if (e.status === 404) forgetBooking(ref.token);
-            return null;
-          }),
-      ),
-    ).then((list) => setVisits(list.filter(Boolean) as Visit[]));
+    (async () => {
+      const user = await clientMe();
+      setMe(user);
+      const refs = myBookings();
+      let server: Visit[] = [];
+      if (user) {
+        // Записи, сохранённые на этом телефоне, привязываем к кабинету — они появятся и на других устройствах
+        if (refs.length) await api('/client/claim', { method: 'POST', body: JSON.stringify({ refs: refs.map(({ slug, token }) => ({ slug, token })) }) }).catch(() => null);
+        server = (await api<ClientBooking[]>('/client/bookings').catch(() => [] as ClientBooking[])).map((b) => ({
+          ref: { slug: b.slug, token: b.token, at: b.startsAt, salon: b.salon.name },
+          status: b.status, startsAt: b.startsAt, price: b.price, resource: b.resource, services: b.services,
+          salon: b.salon, serviceIds: b.serviceIds, resourceId: b.resourceId,
+        }));
+      }
+      const known = new Set(server.map((v) => v.ref.token));
+      const local = await Promise.all(
+        refs.filter((r) => !known.has(r.token)).map((ref) =>
+          api<Omit<Visit, 'ref'>>(`/public/${ref.slug}/manage/${ref.token}`)
+            .then((v) => ({ ...v, ref }))
+            .catch((e: ApiError) => {
+              // Запись удалили или салон закрылся — убираем из списка
+              if (e.status === 404) forgetBooking(ref.token);
+              return null;
+            }),
+        ),
+      );
+      setVisits([...server, ...(local.filter(Boolean) as Visit[])]);
+    })();
   }, []);
+
+  async function logout() {
+    await api('/client/logout', { method: 'POST' }).catch(() => null);
+    location.reload();
+  }
+  async function removeAccount() {
+    if (!confirm('Удалить кабинет? Записи в салонах останутся, но в кабинете их больше не будет. Это действие нельзя отменить.')) return;
+    await api('/client/me', { method: 'DELETE' }).catch(() => null);
+    location.reload();
+  }
+  async function resend() {
+    try { await api('/client/verify/resend', { method: 'POST' }); setNotice('Письмо отправлено — проверьте почту'); } catch (e) { setNotice((e as ApiError).message); }
+  }
 
   const now = Date.now();
   const upcoming = (visits ?? []).filter((v) => ACTIVE.includes(v.status) && +new Date(v.startsAt) > now - 3 * 3600_000).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -49,9 +81,29 @@ export function MyPage() {
     <div className="min-h-screen">
       <div className="mx-auto max-w-xl space-y-6 px-4 pb-16 pt-8">
         <header className="space-y-1">
-          <h1 className="display text-3xl">Мои записи</h1>
-          <p className="text-ink-muted">Все ваши записи через MioFlow на этом телефоне: где, когда и к кому.</p>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="display text-3xl">Мои записи</h1>
+            {me && <button className="pt-2 text-sm font-semibold text-brand-600" onClick={logout}>Выйти</button>}
+          </div>
+          <p className="text-ink-muted">{me ? `${me.name}${me.email ? ` · ${me.email}` : ''} — записи во всех салонах на MioFlow, на любом устройстве.` : 'Все ваши записи через MioFlow на этом телефоне: где, когда и к кому.'}</p>
         </header>
+        {me === null && (
+          <div className="card space-y-3 bg-brand-50">
+            <p className="font-semibold">Войдите, чтобы записи были на любом устройстве</p>
+            <p className="text-sm text-ink-muted">Сейчас список хранится только в этом браузере. В кабинете появятся и записи, которые салон сделал на ваш email или телефон.</p>
+            <div className="flex gap-2">
+              <Link className="btn-primary flex-1" to="/account/login">Войти</Link>
+              <Link className="btn-ghost flex-1" to="/account/register">Регистрация</Link>
+            </div>
+          </div>
+        )}
+        {me && me.email && !me.emailVerified && (
+          <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+            Подтвердите email по ссылке из письма — тогда здесь появятся и записи, которые салоны сделали на {me.email}.{' '}
+            <button className="font-semibold underline" onClick={resend}>Отправить письмо ещё раз</button>
+            {notice && <p className="mt-1">{notice}</p>}
+          </div>
+        )}
 
         {visits === null && <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="card h-32 animate-pulse bg-brand-50" />)}</div>}
 
@@ -76,8 +128,9 @@ export function MyPage() {
         )}
 
         <p className="text-xs text-ink-muted">
-          Список хранится только в этом браузере. Чтобы визиты не потерялись при смене телефона, добавляйте их в календарь — кнопка «В календарь».
+          {me ? 'Чтобы визиты были и в календаре телефона, нажимайте «В календарь».' : 'Список хранится только в этом браузере. Чтобы визиты не потерялись при смене телефона, войдите в кабинет или добавляйте их в календарь — кнопка «В календарь».'}
         </p>
+        {me && <button className="text-xs text-ink-muted underline" onClick={removeAccount}>Удалить кабинет</button>}
         <footer className="flex items-center justify-center gap-2 text-xs text-ink-muted"><Mark size={16} /> <Link to="/" className="font-semibold underline">MioFlow</Link></footer>
       </div>
     </div>

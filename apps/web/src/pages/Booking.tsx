@@ -4,6 +4,7 @@ import { Mark } from '../Logo';
 import { tg, tgFirstName, tgInitData } from '../lib/telegram';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
 import { calendarUrl, myBookings, rememberBooking } from '../lib/my';
+import { clientMe } from '../lib/client';
 
 type Hours = ({ day: string; from: string; to: string } | null)[];
 type Salon = {
@@ -357,6 +358,17 @@ function Contacts(props: {
   const [comment, setComment] = useState('');
   const [consent, setConsent] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [account, setAccount] = useState<string | null>(null);
+  // Вошёл в кабинет — подставляем имя, email и телефон; запись появится в «Моих записях»
+  useEffect(() => {
+    void clientMe().then((u) => {
+      if (!u) return;
+      setAccount(u.name);
+      setName((n) => n || u.name);
+      setEmail((e) => e || u.email || '');
+      if (u.phone) setPhone((p) => (p.replace(/\D/g, '').length <= 1 ? u.phone! : p));
+    });
+  }, []);
   const [website, setWebsite] = useState(''); // honeypot
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -396,6 +408,11 @@ function Contacts(props: {
         )}
       </div>
       <h2 className="display text-2xl">Как с вами связаться</h2>
+      {account ? (
+        <p className="text-sm text-ink-muted">Вы вошли как {account} — запись появится в <Link to="/my" className="text-brand-600 underline">кабинете</Link>.</p>
+      ) : (
+        <p className="text-sm text-ink-muted"><Link to="/account/login" className="text-brand-600 underline">Войдите</Link>, чтобы видеть свои записи на любом устройстве — или запишитесь без входа.</p>
+      )}
       <input className="input" required placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       <input className="input" required type="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
       <input className="input" type="email" placeholder="Email для напоминаний (необязательно)" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
