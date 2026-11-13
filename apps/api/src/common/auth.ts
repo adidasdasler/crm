@@ -64,7 +64,9 @@ export const demoBlocked = () => new AppError('DEMO_READONLY', 'В демо эт
 const permCache = new Map<string, { at: number; v: PermissionOverrides | undefined }>();
 export const invalidatePermissions = (tenantId: string) => permCache.delete(tenantId);
 /** Активен ли доступ пользователя к салону (не удалён аккаунт, сотрудник или салон) — кэш на 10 секунд */
-const accessCache = new Map<string, { at: number; ok: boolean; demo: boolean }>();
+const accessCache = new Map<string, { at: number; ok: boolean; demo: boolean; blocked: boolean }>();
+/** Сбросить кэш доступа всех сотрудников салона (блокировка, удаление) */
+export const invalidateTenantAccess = (tenantId: string) => { for (const k of accessCache.keys()) if (k.endsWith(`:${tenantId}`)) accessCache.delete(k); };
 export const invalidateAccess = (userId: string) => { for (const k of accessCache.keys()) if (k.startsWith(`${userId}:`)) accessCache.delete(k); };
 
 /** Роли, которые управляют салоном (всё, кроме мастера). */
@@ -81,14 +83,14 @@ export const STAFF_ADMIN: Role[] = ['OWNER', 'MANAGER', 'ADMIN'];
 export class AuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector, private readonly prisma: PrismaService) {}
 
-  private async access(userId: string, tenantId: string): Promise<{ ok: boolean; demo: boolean }> {
+  private async access(userId: string, tenantId: string): Promise<{ ok: boolean; demo: boolean; blocked: boolean }> {
     const key = `${userId}:${tenantId}`;
     const hit = accessCache.get(key);
     if (hit && Date.now() - hit.at < 10_000) return hit;
     const m = await this.prisma.system.membership.findFirst({
-      where: { userId, tenantId, deletedAt: null, user: { deletedAt: null }, tenant: { deletedAt: null } }, select: { tenant: { select: { slug: true } } },
+      where: { userId, tenantId, deletedAt: null, user: { deletedAt: null }, tenant: { deletedAt: null } }, select: { tenant: { select: { slug: true, blockedAt: true } } },
     });
-    const v = { at: Date.now(), ok: !!m, demo: m?.tenant.slug === DEMO_SLUG };
+    const v = { at: Date.now(), ok: !!m, demo: m?.tenant.slug === DEMO_SLUG, blocked: !!m?.tenant.blockedAt };
     accessCache.set(key, v);
     return v;
   }
@@ -128,6 +130,7 @@ export class AuthGuard implements CanActivate {
     // Токен ещё действует, но аккаунт удалён или сотрудника убрали из салона — сессия закончена
     const access = await this.access(req.auth.userId, req.auth.tenantId);
     if (!access.ok) throw new AppError('UNAUTHORIZED', 'Сессия завершена, войдите снова', 401);
+    if (access.blocked) throw new AppError('TENANT_BLOCKED', `Салон заблокирован. Напишите в поддержку MioFlow: ${env.SUPPORT_EMAIL}`, 403);
     req.auth.demo = access.demo;
     if (access.demo && this.reflector.getAllAndOverride<boolean>(NO_DEMO, targets)) throw demoBlocked();
 

@@ -64,6 +64,8 @@ const schema = z.object({
   SECRETS_KEY: z.string().min(32).optional(),
   /** Панель владельца (mioflow.ru/admin): пускать только с этих IP через запятую (необязательно) */
   ADMIN_ALLOWED_IPS: z.string().optional(),
+  /** Адрес поддержки — в сообщениях о блокировке и письмах владельцам */
+  SUPPORT_EMAIL: z.string().default('help@mioflow.ru'),
   /** Версия образа — показывается в админ-панели */
   APP_VERSION: z.string().default('dev'),
 });

@@ -47,7 +47,7 @@ export class MiniSiteController {
    */
   @Get('public/:slug/page')
   async page(@Param('slug') slug: string, @Res() res: Response) {
-    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null } });
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null, blockedAt: null } });
     if (!t) throw notFound('Салон');
     const s = readSettings(t.settings);
     const ind = industry(s.industry);
@@ -70,7 +70,7 @@ export class MiniSiteController {
   /** Портфолио салона: опубликованные фото работ */
   @Get('public/:slug/portfolio')
   async portfolio(@Param('slug') slug: string) {
-    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null }, select: { id: true } });
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null, blockedAt: null }, select: { id: true } });
     if (!t) throw notFound('Салон');
     return this.prisma.withTenant(t.id, async (tx) => {
       const rows = await tx.design.findMany({ where: { isPublic: true }, orderBy: { createdAt: 'desc' }, take: 60, select: { id: true, title: true, tags: true, resourceId: true, serviceId: true, width: true, height: true } });
@@ -84,7 +84,7 @@ export class MiniSiteController {
 
   @Get('public/:slug/portfolio/:id/:size')
   async portfolioImage(@Param('slug') slug: string, @Param('id', ParseUUIDPipe) id: string, @Param('size') size: string, @Res() res: Response) {
-    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null }, select: { id: true } });
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null, blockedAt: null }, select: { id: true } });
     if (!t) throw notFound('Салон');
     const d = await this.prisma.withTenant(t.id, (tx) => tx.design.findFirst({ where: { id, isPublic: true }, select: { fileKey: true, thumbKey: true } }));
     if (!d) throw notFound('Фото');
@@ -105,7 +105,7 @@ export class MiniSiteController {
   }
 
   private async qr(slug: string, ext: 'svg' | 'png', src: string | undefined, res: Response) {
-    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null }, select: { slug: true } });
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null, blockedAt: null }, select: { slug: true } });
     if (!t) throw notFound('Салон');
     const tag = src && SRC_RE.test(src) ? src : 'qr';
     const url = `${env.PUBLIC_WEB_URL}/b/${t.slug}?src=${tag}`;

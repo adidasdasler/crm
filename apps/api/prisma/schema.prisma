@@ -92,6 +92,11 @@ model Tenant {
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt DateTime? @db.Timestamptz(3)
+  /// Заблокирован владельцем сервиса (мошенничество, жалобы): ни запись, ни вход
+  blockedAt   DateTime? @db.Timestamptz(3)
+  blockReason String?
+  /// Адрес страницы до удаления — для восстановления в течение 30 дней
+  deletedSlug String?
   /// Последняя еженедельная сводка с советами владельцу
   insightsSentAt DateTime? @db.Timestamptz(3)
 

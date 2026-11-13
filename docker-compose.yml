@@ -76,6 +76,7 @@ services:
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
       SECRETS_KEY: ${SECRETS_KEY:-}
       ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help@mioflow.ru}
       APP_VERSION: ${IMAGE_TAG:-latest}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}

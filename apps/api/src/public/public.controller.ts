@@ -78,7 +78,7 @@ export class PublicController {
   constructor(private readonly prisma: PrismaService, private readonly bookings: BookingsService) {}
 
   private async tenant(slug: string) {
-    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null } });
+    const t = await this.prisma.app.tenant.findFirst({ where: { slug: slug.toLowerCase(), deletedAt: null, blockedAt: null } });
     if (!t) throw notFound('Салон');
     const s = readSettings(t.settings);
     // Subscription под RLS — читаем в контексте тенанта.

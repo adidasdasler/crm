@@ -137,19 +137,19 @@ export class AdminController {
   }
 
   @Get('tenants')
-  async tenants(@Query('q') q?: string) {
+  async tenants(@Query('q') q?: string, @Query('deleted') deleted?: string) {
     const db = this.prisma.system;
     const rows = await db.tenant.findMany({
       where: {
-        deletedAt: null,
+        ...(deleted ? { deletedAt: { not: null }, slug: { startsWith: 'removed-' } } : { deletedAt: null }),
         ...(q?.trim() ? { OR: [{ name: { contains: q.trim(), mode: 'insensitive' } }, { slug: { contains: q.trim().toLowerCase() } }, { memberships: { some: { role: 'OWNER', user: { email: { contains: q.trim().toLowerCase() } } } } }] } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
-        id: true, name: true, slug: true, createdAt: true,
+        id: true, name: true, slug: true, deletedSlug: true, createdAt: true, blockedAt: true, deletedAt: true,
         subscription: { select: { status: true, trialEndsAt: true, currentPeriodEnd: true, plan: { select: { name: true } } } },
-        memberships: { where: { role: 'OWNER', deletedAt: null }, select: { user: { select: { email: true, name: true, lastLoginAt: true } } }, take: 1 },
+        memberships: { where: { role: 'OWNER' }, orderBy: { createdAt: 'asc' }, select: { user: { select: { email: true, name: true, lastLoginAt: true } } }, take: 1 },
       },
     });
     const since = new Date(Date.now() - 30 * DAY);
@@ -158,7 +158,7 @@ export class AdminController {
     const masters = await db.resource.groupBy({ by: ['tenantId'], where: { tenantId: { in: rows.map((r) => r.id) }, deletedAt: null, isActive: true }, _count: true });
     const mastersBy = new Map(masters.map((c) => [c.tenantId, c._count]));
     return rows.map((t) => ({
-      id: t.id, name: t.name, slug: t.slug, createdAt: t.createdAt, masters: mastersBy.get(t.id) ?? 0, bookings30: byTenant.get(t.id) ?? 0,
+      id: t.id, name: t.name, slug: t.deletedSlug ?? t.slug, createdAt: t.createdAt, blocked: !!t.blockedAt, deletedAt: t.deletedAt, masters: mastersBy.get(t.id) ?? 0, bookings30: byTenant.get(t.id) ?? 0,
       owner: t.memberships[0]?.user ?? null,
       plan: t.subscription?.plan.name ?? null, status: t.subscription?.status ?? null,
       until: t.subscription?.status === 'TRIAL' ? t.subscription.trialEndsAt : t.subscription?.currentPeriodEnd ?? null,

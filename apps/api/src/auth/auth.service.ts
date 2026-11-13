@@ -17,6 +17,12 @@ import { DEFAULT_SCHEDULE } from '../common/schemas';
 import { CONSENT_VERSION } from '../common/legal';
 
 const MAX_FAILED = 5;
+
+/** Все салоны пользователя заблокированы владельцем сервиса — не пускаем, объясняем почему */
+async function assertNotBlocked(db: PrismaService['system'], tenantIds: string[]) {
+  const open = await db.tenant.count({ where: { id: { in: tenantIds }, blockedAt: null } });
+  if (!open) throw new AppError('TENANT_BLOCKED', `Салон заблокирован. Напишите в поддержку MioFlow: ${env.SUPPORT_EMAIL}`, 403);
+}
 const CODE_TTL_MIN = 10;
 
 type CodeUser = { email: string; name: string; telegramChatId: string | null };
@@ -158,6 +164,7 @@ export class AuthService {
       orderBy: { createdAt: 'asc' },
     });
     if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
+    await assertNotBlocked(db, memberships.map((m) => m.tenantId));
     const m = (dto.tenantId && memberships.find((x) => x.tenantId === dto.tenantId)) || memberships[0];
 
     // Вход с кодом: пароль верный, но токены выдаём только после кода из письма или Telegram
@@ -213,6 +220,7 @@ export class AuthService {
       orderBy: { createdAt: 'asc' },
     });
     if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
+    await assertNotBlocked(db, memberships.map((m) => m.tenantId));
     await db.user.update({
       where: { id: user.id },
       data: { loginChallengeHash: null, loginCodeHash: null, loginCodeExpires: null, loginCodeAttempts: 0, lastLoginAt: new Date() },

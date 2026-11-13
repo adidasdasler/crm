@@ -56,3 +56,58 @@ describe('панель владельца сервиса', () => {
     await app.$disconnect();
   });
 });
+
+describe('действия поддержки', () => {
+  it('блокировка, удаление с восстановлением, смена данных — только с паролем и кодом', async () => {
+    const ok = await login({ email: 'owner@mioflow.ru', password: 'very-long-password-1', code: totp(SECRET) });
+    const cookie = ok.headers['set-cookie'] as unknown as string[];
+    const as = (r: request.Test) => r.set('Cookie', cookie).set('X-Requested-With', 'x');
+    const confirm = { password: 'very-long-password-1', code: totp(SECRET) };
+    const s = await createSalon('Support');
+    const pub = () => request(srv).get(`/v1/public/${s.slug}`);
+    const me = (await s.api.get('/auth/me')).body.data;
+
+    // Карточка — без данных клиентов
+    const card = (await as(request(srv).get(`/v1/admin/tenants/${s.tenantId}`))).body.data;
+    expect(card).toMatchObject({ name: 'Support', owner: { email: me.user.email }, counts: { masters: 1 } });
+
+    // Без верного кода — ничего не происходит
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/block`)).send({ reason: 'спам', password: 'very-long-password-1', code: '000000' })).status).toBe(403);
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/block`)).send({ reason: 'жалобы клиентов', ...confirm })).status).toBe(200);
+    expect((await pub()).status).toBe(404);
+    const blocked = await s.api.get('/tenant');
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error.code).toBe('TENANT_BLOCKED');
+    expect((await request(srv).post('/v1/auth/login').set('X-Client', 'mobile').send({ email: me.user.email, password: 'password123' })).body.error.code).toBe('TENANT_BLOCKED');
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/unblock`)).send(confirm)).status).toBe(200);
+    expect((await pub()).status).toBe(200);
+    expect((await s.api.get('/tenant')).status).toBe(200);
+
+    // Смена названия, адреса и тарифа
+    const newSlug = `support-${Date.now() % 100000}`;
+    const ed = await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/edit`)).send({ name: 'Студия Поддержка', slug: newSlug, planCode: 'BUSINESS', ...confirm });
+    expect(ed.body).toMatchObject({ success: true });
+    expect((await request(srv).get(`/v1/public/${newSlug}`)).body.data.name).toBe('Студия Поддержка');
+
+    // Удаление: нужно точное название
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/delete`)).send({ confirmName: 'Support', reason: 'просьба владельца', ...confirm })).status).toBe(422);
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/delete`)).send({ confirmName: 'Студия Поддержка', reason: 'просьба владельца', ...confirm })).status).toBe(200);
+    expect((await request(srv).get(`/v1/public/${newSlug}`)).status).toBe(404);
+    expect((await s.api.get('/tenant')).status).toBe(401);
+    const deleted = (await as(request(srv).get('/v1/admin/tenants?deleted=1'))).body.data;
+    expect(deleted.map((t: any) => t.slug)).toContain(newSlug);
+
+    // Восстановление: тот же адрес, сотрудники снова входят
+    const r = await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/restore`)).send(confirm);
+    expect(r.body.data.slug).toBe(newSlug);
+    expect((await request(srv).get(`/v1/public/${newSlug}`)).status).toBe(200);
+    expect((await request(srv).post('/v1/auth/login').set('X-Client', 'mobile').send({ email: me.user.email, password: 'password123' })).status).toBe(200);
+
+    // Владелец потерял телефон — выключаем вход с кодом; журнал действий виден в карточке
+    await system.user.update({ where: { email: me.user.email }, data: { twoFactorEnabled: true } });
+    expect((await as(request(srv).post(`/v1/admin/tenants/${s.tenantId}/owner`)).send({ action: 'disable-2fa', ...confirm })).status).toBe(200);
+    expect((await system.user.findUniqueOrThrow({ where: { email: me.user.email } })).twoFactorEnabled).toBe(false);
+    const history = (await as(request(srv).get(`/v1/admin/tenants/${s.tenantId}`))).body.data.history.map((h: any) => h.action);
+    expect(history).toEqual(expect.arrayContaining(['admin.block', 'admin.unblock', 'admin.edit', 'admin.delete', 'admin.restore', 'admin.owner_disable_2fa']));
+  });
+});
