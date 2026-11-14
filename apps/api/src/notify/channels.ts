@@ -44,7 +44,10 @@ export const max = {
       });
       return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) };
     } catch (e) {
-      return { ok: false, status: 0, json: { message: (e as Error).message } };
+      // «fetch failed» сам по себе ничего не говорит — добавляем причину (сертификат, DNS, таймаут)
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+      const hint = cause?.code && /CERT|SELF_SIGNED|ISSUER/.test(cause.code) ? ' — нужен сертификат Минцифры, см. RUNBOOK «Бот MAX»' : '';
+      return { ok: false, status: 0, json: { message: `${(e as Error).message}${cause ? `: ${cause.code ?? cause.message}` : ''}${hint}` } };
     }
   },
   deepLink: (payload: string) => (env.MAX_BOT_USERNAME ? `https://max.ru/${env.MAX_BOT_USERNAME}?start=${payload}` : null),

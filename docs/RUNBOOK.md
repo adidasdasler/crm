@@ -253,12 +253,18 @@ scp root@<IP сервера>:/opt/mioflow/.env ./mioflow.env
    - `MAX_BOT_TOKEN=` — токен;
    - `MAX_BOT_USERNAME=` — имя бота без @;
    - `MAX_WEBHOOK_SECRET=` — любая длинная случайная строка (`openssl rand -hex 24`).
-3. Обычный деплой. В логе воркера должно быть `max subscription ok`:
+3. **Сертификат Минцифры.** Адрес MAX API (platform-api2.max.ru) работает на сертификате Минцифры, которому система по умолчанию не доверяет (в логе — `fetch failed: UNABLE_TO_GET_ISSUER_CERT_LOCALLY`). Один раз на сервере:
+   ```bash
+   cd /opt/mioflow && sudo mkdir -p certs && sudo curl -fsSL -o certs/russian_trusted_root_ca.pem https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt
+   sudo openssl x509 -in certs/russian_trusted_root_ca.pem -noout -subject -enddate
+   ```
+   Должно быть `CN = Russian Trusted Root CA`. Сертификат подключается к API и воркеру автоматически (`docker-compose.yml`, `NODE_EXTRA_CA_CERTS`).
+4. Обычный деплой. В логе воркера должно быть `max subscription ok`:
    ```bash
    cd /opt/mioflow && sudo docker compose logs worker | grep -i max
    ```
-4. **Проверка.** В приложении салона «Для карт и соцсетей» → ссылка MAX вида `https://max.ru/<бот>?start=s_<салон>`. Открыть с телефона → бот присылает «Записаться онлайн».
-5. **Мини-приложение (запись внутри MAX, необязательно).** В кабинете бота → «Мини-приложение» → адрес `https://mioflow.ru/max`. Затем в `.env` — `MAX_MINIAPP=true` и деплой. После этого кнопка «Записаться» открывает запись прямо в MAX, а напоминания подключаются сами, без отдельной кнопки.
+5. **Проверка.** В приложении салона «Для карт и соцсетей» → ссылка MAX вида `https://max.ru/<бот>?start=s_<салон>`. Открыть с телефона → бот присылает «Записаться онлайн».
+6. **Мини-приложение (запись внутри MAX, необязательно).** В кабинете бота → «Мини-приложение» → адрес `https://mioflow.ru/max`. Затем в `.env` — `MAX_MINIAPP=true` и деплой. После этого кнопка «Записаться» открывает запись прямо в MAX, а напоминания подключаются сами, без отдельной кнопки.
 
 Что умеет бот:
 - запись в салон по ссылке салона;
