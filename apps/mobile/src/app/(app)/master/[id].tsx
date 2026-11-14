@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, Switch, TextInput, View } from 'react-native';
 import { Text } from '../../../components/Text';
 import { Button, C, Chip, ErrorText, Field, H, Loading, Muted, Screen, s, Toggle } from '../../../components/ui';
+import { MasterPhotoEditor } from '../../../components/MasterPhoto';
 import { del, get, patch, post } from '../../../lib/api';
 import { can, useMe } from '../../../lib/auth';
 import { ScheduleEditor, scheduleValid } from '../../../components/ScheduleEditor';
@@ -47,6 +48,7 @@ export default function MasterScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: isNew ? 'Новый мастер' : f.name || 'Мастер' }} />
+      {!isNew && (editable || me.resourceId === id) && <MasterPhotoEditor id={id} url={q.data?.photoUrl} name={f.name || 'Мастер'} color={f.color} />}
       {editable && (
         <>
           <Field label="Имя" value={f.name} onChangeText={(name) => setF({ ...f, name })} />

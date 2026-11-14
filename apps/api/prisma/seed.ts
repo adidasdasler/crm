@@ -15,7 +15,7 @@ const db = new PrismaClient({ datasourceUrl: process.env.SYSTEM_DATABASE_URL });
 const yearly = (monthly: number) => Math.round((monthly * 12 * 0.8) / 100) * 100;
 export const PLANS = [
   { code: 'SOLO', name: 'Соло', priceMonthly: 29000, priceYearly: yearly(29000), limits: { masters: 1 }, sortOrder: 0 },
-  { code: 'START', name: 'Старт', priceMonthly: 69000, priceYearly: yearly(69000), limits: { masters: 3 }, sortOrder: 1 },
+  { code: 'START', name: 'Старт', priceMonthly: 69000, priceYearly: yearly(69000), limits: { masters: 5 }, sortOrder: 1 },
   { code: 'BUSINESS', name: 'Бизнес', priceMonthly: 149000, priceYearly: yearly(149000), limits: { masters: 10 }, sortOrder: 2 },
   { code: 'NETWORK', name: 'Сеть', priceMonthly: 299000, priceYearly: yearly(299000), limits: { masters: 30 }, sortOrder: 3 },
 ];

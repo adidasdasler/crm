@@ -78,10 +78,9 @@ describe('подписка: оплата по ссылке', () => {
 
   it('лимит мастеров по тарифу и права на оплату', async () => {
     const s = await createSalon('Limit');
-    // Тариф START: до 3 мастеров (владелец уже мастер)
-    expect((await s.api.post('/resources', { name: 'Второй' })).status).toBe(201);
-    expect((await s.api.post('/resources', { name: 'Третий' })).status).toBe(201);
-    const third = await s.api.post('/resources', { name: 'Четвёртый' });
+    // Тариф START: до 5 мастеров (владелец уже мастер)
+    for (const name of ['Второй', 'Третий', 'Четвёртый', 'Пятый']) expect((await s.api.post('/resources', { name })).status).toBe(201);
+    const third = await s.api.post('/resources', { name: 'Шестой' });
     expect(third.status).toBe(403);
     expect(third.body.error.code).toBe('PLAN_LIMIT');
     expect((await s.api.post('/resources', { name: 'Неактивный', isActive: false })).status).toBe(201);

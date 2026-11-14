@@ -89,3 +89,35 @@ describe('библиотека дизайнов', () => {
     expect((await api().get(`/public/${s.slug}/portfolio/${d.id}/thumb`)).status).toBe(404);
   });
 });
+
+describe('фото мастера', () => {
+  it('владелец и сам мастер загружают фото, клиент видит его при записи; чужой мастер — нет', async () => {
+    const { api, createSalon } = await import('./helpers');
+    const s = await createSalon('Photo');
+    const up = (token: string, id: string, file = fx('design-thumb.jpg')) =>
+      request(app.getHttpServer()).post(`/v1/resources/${id}/photo`).set('Authorization', `Bearer ${token}`).set('X-Client', 'mobile').attach('photo', file, 'p.jpg');
+    expect((await up(s.token, s.resourceId, fx('not-image.jpg'))).status).toBe(400);
+    const ok = await up(s.token, s.resourceId);
+    expect(ok.status).toBe(201);
+    const url = ok.body.data.photoUrl as string;
+    expect(url).toMatch(new RegExp(`^/v1/public/${s.slug}/masters/${s.resourceId}/photo\\?v=`));
+    // Страница записи: ссылка на фото и сама картинка
+    const masters = (await api().get(`/public/${s.slug}/resources`)).body.data;
+    expect(masters[0].photoUrl).toBe(url);
+    const img = await request(app.getHttpServer()).get(url);
+    expect(img.status).toBe(200);
+    expect(img.headers['content-type']).toBe('image/jpeg');
+
+    // Мастер меняет своё фото, но не чужое
+    const m2 = await s.api.post('/resources', { name: 'Ольга', schedule: { '1': [['10:00', '20:00']] } });
+    const inv = await s.api.post('/team', { email: `ph-${Date.now()}@test.ru`, name: 'Ольга', role: 'MASTER', resourceId: m2.body.data.id });
+    const login = await api().post('/auth/login', { email: inv.body.data.user.email, password: inv.body.data.tempPassword });
+    const mt = login.body.data.accessToken as string;
+    expect((await up(mt, m2.body.data.id)).status).toBe(201);
+    expect((await up(mt, s.resourceId)).status).toBe(403);
+    // Удаление: ссылки больше нет, старый файл не отдаётся
+    expect((await s.api.delete(`/resources/${s.resourceId}/photo`)).status).toBe(200);
+    expect((await api().get(`/public/${s.slug}/resources`)).body.data.find((r: any) => r.id === s.resourceId).photoUrl).toBeNull();
+    expect((await request(app.getHttpServer()).get(url)).status).toBe(404);
+  });
+});

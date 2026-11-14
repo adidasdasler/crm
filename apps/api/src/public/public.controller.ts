@@ -1,7 +1,9 @@
 import { afterRating, FEEDBACK_WINDOW_DAYS, submitReview } from '../reviews/reviews';
 import { industry } from '../common/industries';
 import { hoursText, salonHours } from './minisite';
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, Res } from '@nestjs/common';
+import { storage } from '../media/storage';
+import { masterPhotoUrl } from '../resources/resources.controller';
 import type { Request, Response } from 'express';
 import { bookingIcs } from './ics';
 import { MAX_WAITLIST_PER_PHONE } from '../waitlist/waitlist';
@@ -148,9 +150,22 @@ export class PublicController {
           ...(ids.length ? { AND: ids.map((serviceId) => ({ services: { some: { serviceId } } })) } : {}),
         },
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        select: { id: true, name: true, position: true },
+        select: { id: true, name: true, position: true, photoKey: true },
       }),
-    );
+    ).then((rows) => rows.map(({ photoKey, ...r }) => ({ ...r, photoUrl: masterPhotoUrl(t.slug, r.id, photoKey) })));
+  }
+
+  /** Фото мастера для страницы записи (публичное, кэшируется браузером) */
+  @Get('masters/:id/photo')
+  async masterPhoto(@Param('slug') slug: string, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const t = await this.tenant(slug);
+    const r = await this.prisma.withTenant(t.id, (tx) => tx.resource.findFirst({ where: { id, deletedAt: null }, select: { photoKey: true } }));
+    const data = r?.photoKey ? await storage.get(r.photoKey) : null;
+    if (!data) throw notFound('Фото');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(data);
   }
 
   @Get('slots')

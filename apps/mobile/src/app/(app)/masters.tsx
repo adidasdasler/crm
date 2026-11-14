@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { View } from 'react-native';
+import { MasterAvatar } from '../../components/MasterPhoto';
 import { Text } from '../../components/Text';
 import { Button, Card, Muted, Screen } from '../../components/ui';
 import { get } from '../../lib/api';
@@ -16,7 +17,7 @@ export default function Masters() {
       {(list.data ?? []).map((r) => (
         <Card key={r.id} onPress={() => router.push(`/master/${r.id}`)} style={{ opacity: r.isActive ? 1 : 0.5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: r.color }} />
+            <MasterAvatar url={r.photoUrl} name={r.name} color={r.color} size={36} />
             <Text style={{ fontSize: 16, fontWeight: '600' }}>{r.name}</Text>
           </View>
           <Muted>{r.position ? `${r.position} · ` : ''}{scheduleSummary(r)}</Muted>

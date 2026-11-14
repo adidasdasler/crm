@@ -20,7 +20,7 @@ type Salon = {
 type Service = { id: string; name: string; description: string | null; price: number; duration: number; categoryId: string | null; comboOf?: string[] };
 type Nearest = { resourceId: string; name: string; at: string };
 type Category = { id: string; name: string };
-type Master = { id: string; name: string; position: string | null };
+type Master = { id: string; name: string; position: string | null; photoUrl?: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
 type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; payUrl?: string | null; prepaid?: number; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
 
@@ -206,7 +206,7 @@ export function BookingPage() {
           </button>
           {masters.map((m) => (
             <button key={m.id} onClick={() => { setMasterId(m.id); setStep('time'); }} className="card flex w-full items-center gap-4 text-left hover:ring-brand-500">
-              <Avatar name={m.name} />
+              <Avatar name={m.name} photo={m.photoUrl} />
               <div>
                 <p className="font-semibold">{m.name}</p>
                 {m.position && <p className="text-sm text-ink-muted">{m.position}</p>}
@@ -530,7 +530,9 @@ function BottomBar({ disabled, onNext, label }: { disabled: boolean; onNext: () 
   );
 }
 const Back = ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick} className="text-sm font-medium text-brand-600">← Назад</button>;
-const Avatar = ({ name }: { name: string }) => (
+const Avatar = ({ name, photo }: { name: string; photo?: string | null }) => photo ? (
+  <img src={photo} alt={name} loading="lazy" className="h-12 w-12 shrink-0 rounded-full bg-brand-50 object-cover" />
+) : (
   <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 font-display text-xl text-brand-700">{name.slice(0, 1)}</div>
 );
 const Skeleton = () => <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-3xl bg-brand-50" />)}</div>;

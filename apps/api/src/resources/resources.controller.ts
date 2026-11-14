@@ -1,7 +1,11 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { randomUUID } from 'node:crypto';
+import { cleanJpeg, storage } from '../media/storage';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
-import { Auth, AuthCtx, Can, can } from '../common/auth';
+import { Auth, AuthCtx, Can, can, NoDemo } from '../common/auth';
 import { audit } from '../common/audit';
 import { AppError, notFound } from '../common/errors';
 import { Zod } from '../common/http';
@@ -41,14 +45,57 @@ export class ResourcesController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  list(@Auth() a: AuthCtx, @Query('all') all?: string) {
-    return this.prisma.withTenant(a.tenantId, (tx) =>
+  async list(@Auth() a: AuthCtx, @Query('all') all?: string) {
+    const [rows, t] = await this.prisma.withTenant(a.tenantId, (tx) => Promise.all([
       tx.resource.findMany({
         where: { deletedAt: null, ...(all ? {} : { isActive: true }) },
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
         include: { services: { select: { serviceId: true } } },
       }),
-    ).then((rows) => rows.map(({ services, ...r }) => ({ ...r, serviceIds: services.map((s) => s.serviceId) })));
+      tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } }),
+    ]));
+    return rows.map(({ services, photoKey, ...r }) => ({ ...r, photoUrl: masterPhotoUrl(t.slug, r.id, photoKey), serviceIds: services.map((s) => s.serviceId) }));
+  }
+
+  /**
+   * Фото мастера: загружает владелец/управляющий или сам мастер. Картинка готовится на телефоне
+   * (квадрат до 800 px, JPEG), сервер проверяет, что это JPEG, и вырезает метаданные.
+   */
+  @NoDemo()
+  @Post(':id/photo')
+  @UseInterceptors(FileInterceptor('photo', { storage: memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } }))
+  async setPhoto(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File | undefined) {
+    if (!can(a, 'staff.manage') && a.resourceId !== id) throw new AppError('FORBIDDEN', 'Менять можно только своё фото', 403);
+    const img = file?.buffer && cleanJpeg(file.buffer);
+    if (!img) throw new AppError('VALIDATION_ERROR', 'Нужно фото в формате JPEG');
+    if (img.width > 1600 || img.height > 1600) throw new AppError('VALIDATION_ERROR', 'Слишком большое изображение');
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const r = await tx.resource.findFirst({ where: { id, deletedAt: null } });
+      if (!r) throw notFound('Мастер');
+      // Новое имя файла при каждой загрузке — браузеры не покажут старое фото из кэша
+      const key = `${a.tenantId}/${randomUUID()}-thumb.jpg`;
+      await storage.put(key, img.data);
+      await tx.resource.update({ where: { id }, data: { photoKey: key } });
+      if (r.photoKey) await storage.remove(r.photoKey).catch(() => null);
+      await audit(tx, a, 'resource.photo', 'Resource', id);
+      const t = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } });
+      return { photoUrl: masterPhotoUrl(t.slug, id, key) };
+    });
+  }
+
+  @Delete(':id/photo')
+  async removePhoto(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string) {
+    if (!can(a, 'staff.manage') && a.resourceId !== id) throw new AppError('FORBIDDEN', 'Менять можно только своё фото', 403);
+    return this.prisma.withTenant(a.tenantId, async (tx) => {
+      const r = await tx.resource.findFirst({ where: { id, deletedAt: null } });
+      if (!r) throw notFound('Мастер');
+      if (r.photoKey) {
+        await tx.resource.update({ where: { id }, data: { photoKey: null } });
+        await storage.remove(r.photoKey).catch(() => null);
+        await audit(tx, a, 'resource.photo_delete', 'Resource', id);
+      }
+      return { ok: true };
+    });
   }
 
   /** Закрытое время всех мастеров за день — для календаря. Мастер без права «все записи» видит только своё. */
@@ -74,8 +121,9 @@ export class ResourcesController {
       tx.resource.findFirst({ where: { id, deletedAt: null }, include: { services: { select: { serviceId: true } } } }),
     );
     if (!r) throw notFound('Мастер');
-    const { services, ...rest } = r;
-    return { ...rest, serviceIds: services.map((s) => s.serviceId) };
+    const { services, photoKey, ...rest } = r;
+    const t = await this.prisma.withTenant(a.tenantId, (tx) => tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } }));
+    return { ...rest, photoUrl: masterPhotoUrl(t.slug, id, photoKey), serviceIds: services.map((s) => s.serviceId) };
   }
 
   @Can('staff.manage')
@@ -190,6 +238,10 @@ export class ResourcesController {
     });
   }
 }
+
+/** Публичная ссылка на фото мастера; ?v= меняется вместе с файлом, поэтому кэш браузера всегда свежий */
+export const masterPhotoUrl = (slug: string, id: string, key: string | null) =>
+  key ? `/v1/public/${slug}/masters/${id}/photo?v=${key.split('/')[1].slice(0, 8)}` : null;
 
 /** Ограничение тарифа по числу активных мастеров. */
 async function assertMastersLimit(tx: Tx, tenantId: string, adding: number) {

@@ -261,6 +261,8 @@ model Resource {
   schedule  Json
   /// Правило оплаты: { percent, perShift, monthly, deductMaterials } — см. src/payroll
   payRule   Json?
+  /// Фото мастера (ключ в хранилище), показывается клиентам при записи
+  photoKey  String?
   isActive  Boolean   @default(true)
   sortOrder Int       @default(0)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)

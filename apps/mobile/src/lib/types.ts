@@ -19,7 +19,7 @@ export type Me = {
   /** Частный мастер: без команды и ролей */
   solo?: boolean;
 };
-export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; schedule: Week | { mode: 'week' | 'cycle'; [k: string]: unknown }; isActive: boolean; serviceIds: string[] };
+export type Resource = { id: string; name: string; phone: string | null; position: string | null; color: string; photoUrl?: string | null; schedule: Week | { mode: 'week' | 'cycle'; [k: string]: unknown }; isActive: boolean; serviceIds: string[] };
 export type Service = { id: string; name: string; description: string | null; price: number; duration: number; bufferTime: number; isActive: boolean; isPublic: boolean; categoryId: string | null; resourceIds: string[]; comboOf?: string[] };
 export type Customer = {
   id: string; name: string; phone: string; email: string | null; notes: string | null; tags: string[];
