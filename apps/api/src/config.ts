@@ -45,6 +45,8 @@ const schema = z.object({
   MAX_BOT_TOKEN: z.string().optional(),
   MAX_BOT_USERNAME: z.string().optional(),
   MAX_WEBHOOK_SECRET: z.string().optional(),
+  /** Мини-приложение бота MAX подключено (адрес https://<сайт>/max задан в кабинете MAX для партнёров) — запись открывается прямо в MAX */
+  MAX_MINIAPP: z.enum(['true', 'false', '1', '0', '']).optional().transform((v) => v === 'true' || v === '1'),
   MAX_API_BASE: z.string().url().default('https://platform-api2.max.ru'),
 
   // ── Почта (восстановление пароля): smtps://user:pass@smtp.yandex.ru:465 ──

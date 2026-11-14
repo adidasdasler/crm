@@ -67,6 +67,8 @@ const bookSchema = z.object({
   email: z.string().trim().toLowerCase().email('Некорректный email').max(200).optional().or(z.literal('').transform(() => undefined)),
   /** Запись из мини-приложения Telegram: подписанные данные пользователя (WebApp initData) */
   tgInitData: z.string().max(4096).optional(),
+  /** То же для мини-приложения MAX */
+  maxInitData: z.string().max(4096).optional(),
   /** Откуда пришёл клиент: yandex_maps, 2gis, vk, instagram, site, qr… (из ссылки ?src=) */
   ref: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,32}$/).optional().or(z.literal('').transform(() => undefined)),
 });
@@ -228,6 +230,7 @@ export class PublicController {
     const date = DateTime.fromJSDate(dto.startsAt, { zone: t.timezone }).toISODate()!;
     // Мини-приложение Telegram: подпись проверена — напоминания сразу пойдут в этот чат, без лишних кнопок
     const tgUser = dto.tgInitData ? telegram.verifyInitData(dto.tgInitData) : null;
+    const maxUser = dto.maxInitData ? max.verifyInitData(dto.maxInitData) : null;
     // Записывается из кабинета mioflow.ru — запись появится в «Моих записях» на любом устройстве
     const client = await readClient(req, this.prisma);
     // Существующего клиента салона связываем с кабинетом целиком, только если это его подтверждённый телефон:
@@ -253,15 +256,16 @@ export class PublicController {
       if (!customer) {
         customer = await tx.customer.create({
           // Новый клиент салона, созданный этой записью, — целиком связываем с кабинетом
-          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent, telegramChatId: tgUser?.id, clientUserId: client?.id },
+          data: { tenantId: t.id, name: dto.name, phone: dto.phone, email: dto.email, source: 'WIDGET', marketingConsent: !!dto.marketingConsent, telegramChatId: tgUser?.id, maxUserId: maxUser?.id, clientUserId: client?.id },
         });
-      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email) || (tgUser && customer.telegramChatId !== tgUser.id) || (ownPhone && !customer.clientUserId)) {
+      } else if ((dto.marketingConsent && !customer.marketingConsent) || (dto.email && !customer.email) || (tgUser && customer.telegramChatId !== tgUser.id) || (maxUser && customer.maxUserId !== maxUser.id) || (ownPhone && !customer.clientUserId)) {
         customer = await tx.customer.update({
           where: { id: customer.id },
           data: {
             ...(dto.marketingConsent ? { marketingConsent: true } : {}),
             ...(dto.email && !customer.email ? { email: dto.email } : {}),
             ...(tgUser ? { telegramChatId: tgUser.id } : {}),
+            ...(maxUser ? { maxUserId: maxUser.id } : {}),
             ...(ownPhone && !customer.clientUserId ? { clientUserId: client!.id } : {}),
           },
         });
@@ -335,6 +339,8 @@ export class PublicController {
       messengers: messengerLinks(token),
       /** Запись из мини-приложения Telegram — напоминания уже подключены */
       telegramLinked: !!tgUser,
+      /** Запись из мини-приложения MAX — напоминания уже подключены */
+      maxLinked: !!maxUser,
       /** Предоплата: перейти по ссылке и оплатить (иначе запись отменится через 20 минут) */
       payUrl, prepaid,
     };

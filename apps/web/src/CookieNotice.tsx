@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { currentChoice, onChoice, setChoice, trackPage, YM_ID } from './lib/analytics';
+import { maxInitData } from './lib/max';
 import { tgInitData } from './lib/telegram';
 
 const OLD_KEY = 'mioflow_cookie_notice';
@@ -20,7 +21,7 @@ export function CookieNotice() {
   useEffect(() => { trackPage(pathname); }, [pathname, choice]);
 
   const decided = choice !== null || (!YM_ID && gotIt);
-  if (decided || pathname === '/cookies' || pathname === '/admin' || pathname === '/master-photo-consent' || tgInitData()) return null;
+  if (decided || pathname === '/cookies' || pathname === '/admin' || pathname === '/master-photo-consent' || tgInitData() || maxInitData() || pathname === '/max') return null;
 
   return (
     <div role="region" aria-label="Сообщение о cookie" className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">

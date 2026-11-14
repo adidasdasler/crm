@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { env } from '../config';
+import { verifyWebAppData } from './webapp';
 
 export type InlineButton = { text: string; callback_data?: string; url?: string; web_app?: { url: string } };
 export type TgResult = { ok: boolean; error?: string; blocked?: boolean; result?: unknown };
@@ -75,24 +75,8 @@ export const telegram = {
    * secret = HMAC_SHA256(key="WebAppData", bot_token); hash = HMAC_SHA256(secret, data_check_string).
    * Возвращает пользователя Telegram или null, если подпись неверна или данные старше суток.
    */
-  verifyInitData(initData: string, maxAgeSec = 86_400): { id: string; firstName?: string } | null {
-    if (!env.TELEGRAM_BOT_TOKEN || !initData || initData.length > 4096) return null;
-    const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null;
-    params.delete('hash');
-    const check = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k}=${v}`).join('\n');
-    const secret = createHmac('sha256', 'WebAppData').update(env.TELEGRAM_BOT_TOKEN).digest();
-    const calc = createHmac('sha256', secret).update(check).digest();
-    if (!timingSafeEqual(calc, Buffer.from(hash, 'hex'))) return null;
-    const authDate = Number(params.get('auth_date'));
-    if (!authDate || Date.now() / 1000 - authDate > maxAgeSec) return null;
-    try {
-      const user = JSON.parse(params.get('user') ?? 'null') as { id?: number; first_name?: string } | null;
-      return user?.id ? { id: String(user.id), firstName: user.first_name } : null;
-    } catch {
-      return null;
-    }
+  verifyInitData(initData: string, maxAgeSec = 86_400) {
+    return verifyWebAppData(initData, env.TELEGRAM_BOT_TOKEN, maxAgeSec);
   },
 
   deepLink(payload: string) {

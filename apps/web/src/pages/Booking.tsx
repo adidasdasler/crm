@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Mark } from '../Logo';
 import { tg, tgFirstName, tgInitData } from '../lib/telegram';
+import { maxApp, maxFirstName, maxInitData } from '../lib/max';
 import { api, ApiError, dateInTz, fmtDate, fmtTime, minutes, rub } from '../lib/api';
 import { calendarUrl, myBookings, rememberBooking } from '../lib/my';
 import { clientMe } from '../lib/client';
@@ -22,7 +23,7 @@ type Nearest = { resourceId: string; name: string; at: string };
 type Category = { id: string; name: string };
 type Master = { id: string; name: string; position: string | null; photoUrl?: string | null };
 type SlotsByMaster = { resourceId: string; name: string; slots: string[] }[];
-type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; payUrl?: string | null; prepaid?: number; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean };
+type Booked = { id: string; startsAt: string; price: number; resource: string; services: string[]; manageUrl: string; manageToken: string; payUrl?: string | null; prepaid?: number; telegramUrl: string | null; messengers?: { telegram: string | null; max: string | null; vk: string | null }; telegramLinked?: boolean; maxLinked?: boolean };
 
 /** Источник перехода: ?src=yandex, ?src=2gis, ?src=vk… — салон видит в отчёте, откуда приходят клиенты */
 function readRef(): string | undefined {
@@ -76,6 +77,7 @@ export function BookingPage() {
           }
         }
         tg.ready();
+        maxApp.ready();
       })
       .catch((e: ApiError) => setError(e.status === 404 ? 'Салон не найден' : e.message));
   }, [slug]);
@@ -115,6 +117,18 @@ export function BookingPage() {
 
   if (error) return <Shell><div className="card text-center py-12"><p className="text-lg font-semibold">{error}</p></div></Shell>;
   if (!salon || !catalog) return <Shell><Skeleton /></Shell>;
+  // Новый салон ещё не добавил услуги — честно говорим, а не показываем пустую страницу
+  if (!catalog.services.length) {
+    return (
+      <Shell salon={salon}>
+        <div className="card text-center py-10">
+          <p className="text-lg font-semibold">Скоро здесь появится онлайн-запись</p>
+          <p className="mt-2 text-ink-muted">Салон ещё добавляет услуги. Пока можно записаться по телефону.</p>
+          {salon.phone && <a className="btn-primary mt-4" href={`tel:${salon.phone}`}>Позвонить в салон</a>}
+        </div>
+      </Shell>
+    );
+  }
   if (!salon.available) {
     return (
       <Shell salon={salon}>
@@ -283,6 +297,12 @@ export function BookingPage() {
               <p className="text-sm text-ink-muted">За сутки и за 2 часа — с кнопками «Подтвердить» и «Отменить».</p>
               <button className="btn-primary w-full" onClick={() => tg.close()}>Готово</button>
             </div>
+          ) : booked.maxLinked ? (
+            <div className="space-y-3 rounded-3xl bg-brand-50 p-5">
+              <p className="font-semibold">Напомним здесь, в MAX</p>
+              <p className="text-sm text-ink-muted">За сутки и за 2 часа — с кнопками «Подтвердить» и «Отменить».</p>
+              <button className="btn-primary w-full" onClick={() => maxApp.close()}>Готово</button>
+            </div>
           ) : <Messengers booked={booked} />}
           <div className="grid gap-2 sm:grid-cols-2">
             <a className="btn-ghost" href={calendarUrl(slug, booked.manageToken)}>📅 Добавить в календарь</a>
@@ -300,7 +320,7 @@ export function BookingPage() {
 /** «Сообщите, если освободится»: заявка в лист ожидания на выбранный день */
 function Waitlist({ slug, date, serviceIds, resourceId }: { slug: string; date: string; serviceIds: string[]; resourceId: string | null }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(() => tgFirstName() ?? '');
+  const [name, setName] = useState(() => tgFirstName() ?? maxFirstName() ?? '');
   const [phone, setPhone] = useState('+7 ');
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
@@ -352,7 +372,7 @@ function Contacts(props: {
   onDone: (b: Booked) => void;
   onTaken: () => void;
 }) {
-  const [name, setName] = useState(() => tgFirstName() ?? '');
+  const [name, setName] = useState(() => tgFirstName() ?? maxFirstName() ?? '');
   const [phone, setPhone] = useState('+7 ');
   const [email, setEmail] = useState('');
   const [comment, setComment] = useState('');
@@ -380,7 +400,7 @@ function Contacts(props: {
     try {
       const b = await api<Booked>(`/public/${props.slug}/book`, {
         method: 'POST',
-        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef() ?? (tgInitData() ? 'telegram' : undefined), tgInitData: tgInitData() ?? undefined, comment: comment || undefined, consent, marketingConsent: marketing || undefined, website: website || undefined }),
+        body: JSON.stringify({ ...props.payload, name, phone, email: email.trim() || undefined, ref: readRef() ?? (tgInitData() ? 'telegram' : maxInitData() ? 'max' : undefined), tgInitData: tgInitData() ?? undefined, maxInitData: maxInitData() ?? undefined, comment: comment || undefined, consent, marketingConsent: marketing || undefined, website: website || undefined }),
       });
       props.onDone(b);
     } catch (e) {

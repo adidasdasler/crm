@@ -6,6 +6,7 @@
 import { env } from '../config';
 import { mailer } from './mailer';
 import { InlineButton, telegram } from './telegram';
+import { verifyWebAppData } from './webapp';
 
 export type ChannelName = 'TELEGRAM' | 'MAX' | 'VK' | 'EMAIL';
 /** data — действие кнопки («c:<id>» подтвердить, «x:<id>» отменить); url — ссылка */
@@ -47,6 +48,10 @@ export const max = {
     }
   },
   deepLink: (payload: string) => (env.MAX_BOT_USERNAME ? `https://max.ru/${env.MAX_BOT_USERNAME}?start=${payload}` : null),
+  /** Запись в салон внутри MAX (мини-приложение); null — мини-приложение не подключено */
+  miniAppLink: (slug: string) => (env.MAX_MINIAPP && env.MAX_BOT_USERNAME ? `https://max.ru/${env.MAX_BOT_USERNAME}?startapp=${slug}` : null),
+  /** Подписанные данные мини-приложения MAX → пользователь MAX */
+  verifyInitData: (initData: string) => verifyWebAppData(initData, env.MAX_BOT_TOKEN),
   keyboard: (buttons?: Button[][]) =>
     buttons?.length
       ? [{ type: 'inline_keyboard', payload: { buttons: buttons.map((r) => r.map((b) => (b.url ? { type: 'link', text: b.text, url: b.url } : { type: 'callback', text: b.text, payload: b.data }))) } }]

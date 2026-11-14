@@ -19,6 +19,7 @@ import { MasterPhotoConsent } from './legal/MasterPhotoConsent';
 import { CookieNotice } from './CookieNotice';
 import { MockPay } from './pages/MockPay';
 import { MyPage } from './pages/My';
+import { MaxEntry } from './pages/MaxEntry';
 import { AdminPage } from './pages/Admin';
 import { AccountForgot, AccountLogin, AccountRegister, AccountReset, AccountVerify } from './pages/Account';
 
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/b/:slug/manage/:token" element={<ManagePage />} />
         <Route path="/b/:slug/consent" element={<ClientConsent />} />
         <Route path="/my" element={<MyPage />} />
+        <Route path="/max" element={<MaxEntry />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/account/login" element={<AccountLogin />} />
         <Route path="/account/register" element={<AccountRegister />} />

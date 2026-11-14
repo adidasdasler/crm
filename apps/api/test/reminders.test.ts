@@ -226,6 +226,44 @@ describe('запись через мессенджеры', () => {
     const r3 = await api().post(`/public/${s.slug}/book`, { ...body, startsAt: tomorrowAt('18:00', 2), phone: '+79994440003', tgInitData: old });
     expect(r3.body.data.telegramLinked).toBe(false);
   });
+
+  it('MAX: мини-приложение — запись внутри MAX, напоминания сразу; бот показывает ближайшие записи', async () => {
+    const { env } = await import('../src/config');
+    const s = await createSalon('MaxMini');
+    const startsAt = tomorrowAt('12:00', 2);
+    const body = { serviceIds: [s.serviceId], resourceId: null, startsAt, name: 'Оля', phone: '+79994440011', consent: true };
+    // Подпись токеном бота MAX (тот же алгоритм, что у Telegram)
+    const r = await api().post(`/public/${s.slug}/book`, { ...body, maxInitData: initData(555, undefined, 'max-test-token') });
+    expect(r.status).toBe(201);
+    expect(r.body.data.maxLinked).toBe(true);
+    expect((await system.customer.findFirstOrThrow({ where: { phone: '+79994440011' } })).maxUserId).toBe('555');
+    // Подписано токеном Telegram — для MAX не подходит
+    const r2 = await api().post(`/public/${s.slug}/book`, { ...body, startsAt: tomorrowAt('15:00', 2), phone: '+79994440012', maxInitData: initData(556) });
+    expect(r2.body.data.maxLinked).toBe(false);
+
+    // Клиент пишет боту без ссылки — видит свою запись и кнопку «Перенести или отменить»
+    clearOutbox();
+    await maxUpdate({ update_type: 'message_created', message: { sender: { user_id: 555 }, body: { text: 'привет' } } });
+    const m = outbox.max.find((x) => x.path === '/messages?user_id=555')!;
+    expect(m.body.text).toContain('Ваши записи');
+    expect(m.body.text).toContain('MaxMini');
+    expect(m.body.attachments[0].payload.buttons[0][0].url).toContain(`/b/${s.slug}/manage/`);
+
+    // Мини-приложение подключено — ссылка салона открывает запись прямо в MAX
+    env.MAX_MINIAPP = true;
+    try {
+      clearOutbox();
+      await maxUpdate({ update_type: 'bot_started', user: { user_id: 78 }, payload: `s_${s.slug}` });
+      const e = outbox.max.find((x) => x.path === '/messages?user_id=78')!;
+      expect(e.body.attachments[0].payload.buttons[0][0]).toMatchObject({ type: 'link', url: `https://max.ru/mioflow_test_bot?startapp=${s.slug}` });
+    } finally {
+      env.MAX_MINIAPP = false;
+    }
+    // Новый человек без записей — приветствие
+    clearOutbox();
+    await maxUpdate({ update_type: 'bot_started', user: { user_id: 79 }, payload: '' });
+    expect(outbox.max.find((x) => x.path === '/messages?user_id=79')!.body.text).toContain('Здравствуйте');
+  });
 });
 
 describe('оценки после визита', () => {
