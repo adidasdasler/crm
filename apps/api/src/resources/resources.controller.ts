@@ -54,7 +54,7 @@ export class ResourcesController {
       }),
       tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } }),
     ]));
-    return rows.map(({ services, photoKey, ...r }) => ({ ...r, photoUrl: masterPhotoUrl(t.slug, r.id, photoKey), serviceIds: services.map((s) => s.serviceId) }));
+    return rows.map(({ services, photoKey, photoConsent: _c, photoConsentAt: _ca, photoConsentBy: _cb, ...r }) => ({ ...r, photoUrl: masterPhotoUrl(t.slug, r.id, photoKey), serviceIds: services.map((s) => s.serviceId) }));
   }
 
   /**
@@ -64,8 +64,14 @@ export class ResourcesController {
   @NoDemo()
   @Post(':id/photo')
   @UseInterceptors(FileInterceptor('photo', { storage: memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } }))
-  async setPhoto(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File | undefined) {
-    if (!can(a, 'staff.manage') && a.resourceId !== id) throw new AppError('FORBIDDEN', 'Менять можно только своё фото', 403);
+  async setPhoto(@Auth() a: AuthCtx, @Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File | undefined, @Body() body: { consent?: string }) {
+    const own = a.resourceId === id;
+    if (!can(a, 'staff.manage') && !own) throw new AppError('FORBIDDEN', 'Менять можно только своё фото', 403);
+    // Фото с именем на странице записи — распространение персональных данных: нужно отдельное согласие мастера
+    const consent = own ? 'self' : 'written';
+    if (body?.consent !== consent) {
+      throw new AppError('CONSENT_REQUIRED', own ? 'Подтвердите согласие на показ фото клиентам' : 'Подтвердите, что у вас есть письменное согласие мастера', 400);
+    }
     const img = file?.buffer && cleanJpeg(file.buffer);
     if (!img) throw new AppError('VALIDATION_ERROR', 'Нужно фото в формате JPEG');
     if (img.width > 1600 || img.height > 1600) throw new AppError('VALIDATION_ERROR', 'Слишком большое изображение');
@@ -75,9 +81,9 @@ export class ResourcesController {
       // Новое имя файла при каждой загрузке — браузеры не покажут старое фото из кэша
       const key = `${a.tenantId}/${randomUUID()}-thumb.jpg`;
       await storage.put(key, img.data);
-      await tx.resource.update({ where: { id }, data: { photoKey: key } });
+      await tx.resource.update({ where: { id }, data: { photoKey: key, photoConsent: consent, photoConsentAt: new Date(), photoConsentBy: a.userId } });
       if (r.photoKey) await storage.remove(r.photoKey).catch(() => null);
-      await audit(tx, a, 'resource.photo', 'Resource', id);
+      await audit(tx, a, 'resource.photo', 'Resource', id, undefined, { consent });
       const t = await tx.tenant.findUniqueOrThrow({ where: { id: a.tenantId }, select: { slug: true } });
       return { photoUrl: masterPhotoUrl(t.slug, id, key) };
     });
@@ -90,7 +96,8 @@ export class ResourcesController {
       const r = await tx.resource.findFirst({ where: { id, deletedAt: null } });
       if (!r) throw notFound('Мастер');
       if (r.photoKey) {
-        await tx.resource.update({ where: { id }, data: { photoKey: null } });
+        // Удаление фото — это и отзыв согласия
+        await tx.resource.update({ where: { id }, data: { photoKey: null, photoConsent: null, photoConsentAt: null, photoConsentBy: null } });
         await storage.remove(r.photoKey).catch(() => null);
         await audit(tx, a, 'resource.photo_delete', 'Resource', id);
       }

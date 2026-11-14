@@ -20,7 +20,7 @@ export function CookieNotice() {
   useEffect(() => { trackPage(pathname); }, [pathname, choice]);
 
   const decided = choice !== null || (!YM_ID && gotIt);
-  if (decided || pathname === '/cookies' || pathname === '/admin' || tgInitData()) return null;
+  if (decided || pathname === '/cookies' || pathname === '/admin' || pathname === '/master-photo-consent' || tgInitData()) return null;
 
   return (
     <div role="region" aria-label="Сообщение о cookie" className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">

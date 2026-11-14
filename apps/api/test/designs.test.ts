@@ -94,10 +94,19 @@ describe('фото мастера', () => {
   it('владелец и сам мастер загружают фото, клиент видит его при записи; чужой мастер — нет', async () => {
     const { api, createSalon } = await import('./helpers');
     const s = await createSalon('Photo');
-    const up = (token: string, id: string, file = fx('design-thumb.jpg')) =>
-      request(app.getHttpServer()).post(`/v1/resources/${id}/photo`).set('Authorization', `Bearer ${token}`).set('X-Client', 'mobile').attach('photo', file, 'p.jpg');
-    expect((await up(s.token, s.resourceId, fx('not-image.jpg'))).status).toBe(400);
-    const ok = await up(s.token, s.resourceId);
+    const up = (token: string, id: string, consent?: string, file = fx('design-thumb.jpg')) => {
+      const r = request(app.getHttpServer()).post(`/v1/resources/${id}/photo`).set('Authorization', `Bearer ${token}`).set('X-Client', 'mobile');
+      if (consent) r.field('consent', consent);
+      return r.attach('photo', file, 'p.jpg');
+    };
+    const me = (await s.api.get('/auth/me')).body.data;
+    const ownId = (me.membership?.resourceId ?? me.tenants?.[0]?.resourceId ?? s.resourceId) as string;
+    expect((await up(s.token, s.resourceId, 'self', fx('not-image.jpg'))).status).toBe(400);
+    // Без согласия фото не принимается
+    const noConsent = await up(s.token, s.resourceId);
+    expect(noConsent.status).toBe(400);
+    expect(noConsent.body.error.code).toBe('CONSENT_REQUIRED');
+    const ok = await up(s.token, s.resourceId, ownId === s.resourceId ? 'self' : 'written');
     expect(ok.status).toBe(201);
     const url = ok.body.data.photoUrl as string;
     expect(url).toMatch(new RegExp(`^/v1/public/${s.slug}/masters/${s.resourceId}/photo\\?v=`));
@@ -113,8 +122,14 @@ describe('фото мастера', () => {
     const inv = await s.api.post('/team', { email: `ph-${Date.now()}@test.ru`, name: 'Ольга', role: 'MASTER', resourceId: m2.body.data.id });
     const login = await api().post('/auth/login', { email: inv.body.data.user.email, password: inv.body.data.tempPassword });
     const mt = login.body.data.accessToken as string;
-    expect((await up(mt, m2.body.data.id)).status).toBe(201);
-    expect((await up(mt, s.resourceId)).status).toBe(403);
+    // Мастер про своё фото не может сослаться на «письменное согласие» — только своё собственное
+    expect((await up(mt, m2.body.data.id, 'written')).status).toBe(400);
+    expect((await up(mt, m2.body.data.id, 'self')).status).toBe(201);
+    expect((await up(mt, s.resourceId, 'self')).status).toBe(403);
+    // Владелец загружает фото другого мастера — подтверждает письменное согласие
+    expect((await up(s.token, m2.body.data.id, 'self')).status).toBe(400);
+    expect((await up(s.token, m2.body.data.id, 'written')).status).toBe(201);
+    expect((await s.api.get(`/resources/${m2.body.data.id}`)).body.data).toMatchObject({ photoConsent: 'written' });
     // Удаление: ссылки больше нет, старый файл не отдаётся
     expect((await s.api.delete(`/resources/${s.resourceId}/photo`)).status).toBe(200);
     expect((await api().get(`/public/${s.slug}/resources`)).body.data.find((r: any) => r.id === s.resourceId).photoUrl).toBeNull();

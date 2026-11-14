@@ -1,4 +1,5 @@
 import * as ImageManipulator from 'expo-image-manipulator';
+import { uriToBlob } from './fileBlob';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 import { API_URL, tokens, upload } from './api';
@@ -24,7 +25,7 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<Prepared 
 }
 
 async function part(form: FormData, name: string, uri: string) {
-  if (Platform.OS === 'web') form.append(name, await (await fetch(uri)).blob(), `${name}.jpg`);
+  if (Platform.OS === 'web') form.append(name, await uriToBlob(uri), `${name}.jpg`);
   // В React Native файл передаётся объектом { uri, name, type }
   else form.append(name, { uri, name: `${name}.jpg`, type: 'image/jpeg' } as unknown as Blob);
 }

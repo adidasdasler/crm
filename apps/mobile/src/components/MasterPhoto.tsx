@@ -2,11 +2,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Platform, Pressable, View } from 'react-native';
+import { Image, Linking, Platform, Pressable, View } from 'react-native';
 import { Text } from './Text';
-import { C, ErrorText, Muted } from './ui';
-import { API_URL, del, upload } from '../lib/api';
+import { C, ErrorText, Muted, Toggle } from './ui';
+import { API_URL, del, PUBLIC_WEB_URL, upload } from '../lib/api';
 import { confirm } from '../lib/confirm';
+import { uriToBlob } from '../lib/fileBlob';
 
 /** Полный адрес картинки: в вебе хватает пути /v1/…, в приложении нужен адрес сервера */
 export const photoSrc = (path: string | null | undefined) =>
@@ -39,9 +40,11 @@ async function pickSquare(): Promise<string | null> {
 }
 
 /** Фото мастера в карточке: загрузить, сменить, удалить */
-export function MasterPhotoEditor({ id, url, name, color }: { id: string; url: string | null | undefined; name: string; color: string }) {
+export function MasterPhotoEditor({ id, url, name, color, own, consentAt }: { id: string; url: string | null | undefined; name: string; color: string; own: boolean; consentAt?: string | null }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const consent = own ? 'self' : 'written';
   const [error, setError] = useState<unknown>(null);
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['resource', id] }); void qc.invalidateQueries({ queryKey: ['resources'] }); };
 
@@ -52,7 +55,8 @@ export function MasterPhotoEditor({ id, url, name, color }: { id: string; url: s
       if (!uri) return;
       setBusy(true);
       const form = new FormData();
-      if (Platform.OS === 'web') form.append('photo', await (await fetch(uri)).blob(), 'photo.jpg');
+      form.append('consent', consent);
+      if (Platform.OS === 'web') form.append('photo', await uriToBlob(uri), 'photo.jpg');
       else form.append('photo', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
       await upload(`/resources/${id}/photo`, form);
       refresh();
@@ -73,11 +77,25 @@ export function MasterPhotoEditor({ id, url, name, color }: { id: string; url: s
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
         <MasterAvatar url={url} name={name} color={color} size={72} />
         <View style={{ flex: 1, gap: 6 }}>
-          <Pressable onPress={choose} disabled={busy}><Text style={{ color: C.brand, fontWeight: '600' }}>{busy ? 'Загружаем…' : url ? 'Сменить фото' : 'Загрузить фото'}</Text></Pressable>
+          <Pressable onPress={choose} disabled={busy || !agreed} accessibilityState={{ disabled: busy || !agreed }}>
+            <Text style={{ color: agreed ? C.brand : C.muted, fontWeight: '600' }}>{busy ? 'Загружаем…' : url ? 'Сменить фото' : 'Загрузить фото'}</Text>
+          </Pressable>
           {url && <Pressable onPress={remove}><Text style={{ color: C.muted }}>Удалить фото</Text></Pressable>}
         </View>
       </View>
-      <Muted>Фото видят клиенты при онлайн-записи. Загружайте фото мастера только с его согласия.</Muted>
+      {own ? (
+        <Toggle value={agreed} onChange={setAgreed} label="Согласен(на) показывать фото клиентам"
+          hint="Фото, имя и должность будут видны на странице онлайн-записи салона. Согласие можно отозвать в любой момент — просто удалите фото." />
+      ) : (
+        <>
+          <Toggle value={agreed} onChange={setAgreed} label="У меня есть письменное согласие мастера"
+            hint="Показ фото с именем клиентам — распространение персональных данных: нужно отдельное письменное согласие мастера (ст. 10.1 закона № 152-ФЗ)." />
+          <Pressable onPress={() => void Linking.openURL(`${PUBLIC_WEB_URL}/master-photo-consent`)}>
+            <Text style={{ color: C.brand }}>Бланк согласия — распечатать и подписать</Text>
+          </Pressable>
+        </>
+      )}
+      {url && consentAt && <Muted>Согласие подтверждено {new Date(consentAt).toLocaleDateString('ru-RU')}</Muted>}
       <ErrorText error={error} />
     </View>
   );

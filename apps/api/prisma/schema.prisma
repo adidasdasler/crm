@@ -262,6 +262,10 @@ model Resource {
   payRule   Json?
   /// Фото мастера (ключ в хранилище), показывается клиентам при записи
   photoKey  String?
+  /// Согласие на показ фото: self — мастер сам, written — у салона письменное согласие мастера (0025)
+  photoConsent   String?
+  photoConsentAt DateTime? @db.Timestamptz(3)
+  photoConsentBy String?   @db.Uuid
   isActive  Boolean   @default(true)
   sortOrder Int       @default(0)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)

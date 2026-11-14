@@ -48,7 +48,7 @@ export default function MasterScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: isNew ? 'Новый мастер' : f.name || 'Мастер' }} />
-      {!isNew && (editable || me.resourceId === id) && <MasterPhotoEditor id={id} url={q.data?.photoUrl} name={f.name || 'Мастер'} color={f.color} />}
+      {!isNew && (editable || me.resourceId === id) && <MasterPhotoEditor id={id} url={q.data?.photoUrl} name={f.name || 'Мастер'} color={f.color} own={me.resourceId === id} consentAt={q.data?.photoConsentAt} />}
       {editable && (
         <>
           <Field label="Имя" value={f.name} onChangeText={(name) => setF({ ...f, name })} />
