@@ -18,6 +18,9 @@ async function nailSalon() {
   expect(reg.status).toBe(201);
   const a = api(reg.body.data.accessToken);
   const me = (await a.get('/auth/me')).body.data;
+  // Мастер работает каждый день: иначе тест падает, когда «завтра» — выходной по стандартному графику (воскресенье)
+  const all = Object.fromEntries(['1', '2', '3', '4', '5', '6', '7'].map((d) => [d, [['10:00', '20:00']]]));
+  await a.patch(`/resources/${me.resourceId}`, { schedule: all });
   const services = (await a.get('/services')).body.data as { id: string; name: string }[];
   return { a, resourceId: me.resourceId as string, tenantId: reg.body.data.tenant.id as string, svc: (n: string) => services.find((s) => s.name === n)!.id };
 }
