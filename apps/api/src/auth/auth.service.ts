@@ -8,6 +8,7 @@ import * as argon2 from 'argon2';
 import { randomInt, randomUUID } from 'node:crypto';
 import { mailer } from '../notify/mailer';
 import { telegram } from '../notify/telegram';
+import { max } from '../notify/channels';
 import { env, isProd } from '../config';
 import { AuthCtx, signAccessToken } from '../common/auth';
 import { randomToken, sha256 } from '../common/crypto';
@@ -25,12 +26,15 @@ async function assertNotBlocked(db: PrismaService['system'], tenantIds: string[]
 }
 const CODE_TTL_MIN = 10;
 
-type CodeUser = { email: string; name: string; telegramChatId: string | null };
-/** Куда можно отправить код входа: Telegram (если привязан и бот включён) и почта (если настроена) */
-export const codeChannels = (u: CodeUser) => [...(u.telegramChatId && telegram.enabled ? ['telegram'] : []), ...(env.SMTP_URL ? ['email'] : [])];
+type CodeUser = { email: string; name: string; telegramChatId: string | null; maxUserId?: string | null };
+/** Куда можно отправить код входа: MAX и Telegram (если привязаны и боты включены) и почта (если настроена) */
+export const codeChannels = (u: CodeUser) => [
+  ...(u.maxUserId && max.enabled ? ['max'] : []), ...(u.telegramChatId && telegram.enabled ? ['telegram'] : []), ...(env.SMTP_URL ? ['email'] : []),
+];
 
 async function sendLoginCode(u: CodeUser, code: string): Promise<string | null> {
   const text = `Код входа в MioFlow: ${code}\nДействует ${CODE_TTL_MIN} минут. Если вы не входили — смените пароль.`;
+  if (u.maxUserId && max.enabled && (await max.send(u.maxUserId, text)).ok) return 'MAX';
   if (u.telegramChatId && telegram.enabled && (await telegram.send(u.telegramChatId, text)).ok) return 'Telegram';
   if (await mailer.send({ to: u.email, subject: `Код входа: ${code}`, text })) return u.email.replace(/^(.).*(@.*)$/, '$1***$2');
   // Разработка без почты: код уже напечатан в лог сервера письмом-заглушкой
@@ -257,7 +261,7 @@ export class AuthService {
     const user = await db.user.findUniqueOrThrow({ where: { id: auth.userId } });
     if (!(await argon2.verify(user.passwordHash, password))) throw new AppError('INVALID_CREDENTIALS', 'Неверный пароль', 400);
     if (enabled && !codeChannels(user).length) {
-      throw new AppError('NO_CODE_CHANNEL', 'Некуда отправлять код: на сервере не настроена почта, а Telegram не привязан. Привяжите Telegram в разделе «Ещё»', 422);
+      throw new AppError('NO_CODE_CHANNEL', 'Некуда отправлять код: на сервере не настроена почта, а MAX и Telegram не привязаны. Привяжите MAX или Telegram в разделе «Ещё»', 422);
     }
     await db.user.update({ where: { id: user.id }, data: { twoFactorEnabled: enabled } });
     await db.auditLog.create({ data: { tenantId: auth.tenantId, userId: user.id, action: enabled ? 'user.2fa_on' : 'user.2fa_off', entityType: 'User', entityId: user.id } });
@@ -320,18 +324,21 @@ export class AuthService {
   async me(auth: AuthCtx) {
     const db = this.prisma.system;
     const [user, memberships] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true, twoFactorEnabled: true } }),
+      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true, maxUserId: true, twoFactorEnabled: true } }),
       db.membership.findMany({
         where: { userId: auth.userId, deletedAt: null },
         include: { tenant: { select: { id: true, name: true, slug: true, timezone: true, settings: true } } },
       }),
     ]);
     const current = memberships.find((m) => m.tenantId === auth.tenantId);
-    const { telegramChatId, twoFactorEnabled, ...u } = user;
+    const { telegramChatId, maxUserId, twoFactorEnabled, ...u } = user;
     return {
       user: u,
-      twoFactor: { enabled: twoFactorEnabled, channels: codeChannels({ ...u, telegramChatId }) },
+      twoFactor: { enabled: twoFactorEnabled, channels: codeChannels({ ...u, telegramChatId, maxUserId }) },
       telegramLinked: !!telegramChatId,
+      maxLinked: !!maxUserId,
+      /** Боты подключены на сервере — показывать ли пункты «Уведомления в …» */
+      bots: { telegram: telegram.enabled, max: max.enabled },
       role: auth.role,
       resourceId: auth.resourceId,
       // Права текущей роли — приложение показывает только доступные разделы

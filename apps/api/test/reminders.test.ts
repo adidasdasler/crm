@@ -164,6 +164,41 @@ describe('напоминания и Telegram-бот', () => {
     expect(outbox.telegram.some((m) => m.body.chat_id === '4242' && m.body.text.includes('отменил'))).toBe(true);
   });
 
+  it('MAX для сотрудника: привязка из приложения, уведомление о новой записи, код входа', async () => {
+    const s = await createSalon('StaffMax');
+    const me0 = (await s.api.get('/auth/me')).body.data;
+    expect(me0.bots).toEqual({ telegram: true, max: true });
+    const link = await s.api.post('/me/max');
+    const start = new URL(link.body.data.url).searchParams.get('start')!;
+    expect(start).toMatch(/^u_/);
+    // Чужой или устаревший токен — не привязывает
+    clearOutbox();
+    await maxUpdate({ update_type: 'bot_started', user: { user_id: 5151 }, payload: 'u_wrong-token-123' });
+    expect(outbox.max.at(-1)!.body.text).toContain('устарела');
+    await maxUpdate({ update_type: 'bot_started', user: { user_id: 5151 }, payload: start });
+    expect(outbox.max.at(-1)!.body.text).toContain('Готово');
+    const me = (await s.api.get('/auth/me')).body.data;
+    expect(me.maxLinked).toBe(true);
+    expect(me.twoFactor.channels[0]).toBe('max');
+
+    clearOutbox();
+    await bookOnline(s.slug, s.serviceId, '15:00', '+79990001077');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(outbox.max.some((m) => m.path === '/messages?user_id=5151' && m.body.text.includes('Онлайн-запись'))).toBe(true);
+
+    // Вход с кодом: код приходит в MAX
+    await system.user.update({ where: { id: me.user.id }, data: { twoFactorEnabled: true } });
+    clearOutbox();
+    const login = await api().post('/auth/login', { email: me.user.email, password: 'password123' });
+    expect(login.body.data.twoFactor.sentTo).toBe('MAX');
+    expect(outbox.max.some((m) => m.path === '/messages?user_id=5151' && /Код входа в MioFlow: \d{6}/.test(m.body.text))).toBe(true);
+
+    // Отключение
+    await system.user.update({ where: { id: me.user.id }, data: { twoFactorEnabled: false } });
+    await s.api.delete('/me/max');
+    expect((await s.api.get('/auth/me')).body.data.maxLinked).toBe(false);
+  });
+
   it('у записей, созданных сотрудником, тоже есть ссылка управления', async () => {
     const s = await createSalon('Staff');
     const bk = await s.api.post('/bookings', { customer: { name: 'К', phone: '+79990001005' }, resourceId: s.resourceId, serviceIds: [s.serviceId], startsAt: tomorrowAt('13:00') });

@@ -5,7 +5,7 @@ import { Button, C, Card, ErrorText, Field, Muted, Screen } from '../../componen
 import { post } from '../../lib/api';
 import { useAuth, useMe } from '../../lib/auth';
 
-/** Вход с кодом (второй фактор): после пароля — 6 цифр в Telegram или на email */
+/** Вход с кодом (второй фактор): после пароля — 6 цифр в MAX, Telegram или на email */
 export default function TwoFactor() {
   const me = useMe();
   const { reload } = useAuth();
@@ -38,7 +38,7 @@ export default function TwoFactor() {
             : 'Пароль можно подсмотреть или подобрать. С кодом войти сможете только вы: после пароля придёт 6-значный код.'}
         </Muted>
         <Muted>
-          Куда придёт код: {channels.length ? channels.map((c) => (c === 'telegram' ? 'Telegram' : `email ${me.user.email}`)).join(', затем ') : 'пока некуда — подключите «Уведомления в Telegram» в разделе «Ещё»'}.
+          Куда придёт код: {channels.length ? channels.map((c) => (c === 'max' ? 'MAX' : c === 'telegram' ? 'Telegram' : `email ${me.user.email}`)).join(', затем ') : 'пока некуда — подключите «Уведомления в MAX» или «в Telegram» в разделе «Ещё»'}.
         </Muted>
       </Card>
       <Field label="Пароль для подтверждения" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" />

@@ -20,21 +20,24 @@ export default function More() {
   const terms = useTerms();
   const stockAlerts = useQuery({ queryKey: ['stock', 'alerts'], queryFn: () => get<StockAlerts>('/stock/alerts'), enabled: can(me, 'stock.manage') });
   const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription') });
-  const toggleTelegram = async () => {
+  /** Привязать или отвязать мессенджер для уведомлений о записях и кодов входа */
+  const toggleBot = (kind: 'telegram' | 'max', linked: boolean, title: string) => async () => {
     try {
-      if (me.telegramLinked) {
-        await del('/me/telegram');
+      if (linked) {
+        await del(`/me/${kind}`);
         await reload();
         return;
       }
-      const { url } = await post<{ url: string }>('/me/telegram');
+      const { url } = await post<{ url: string }>(`/me/${kind}`);
       await Linking.openURL(url);
-      // Пользователь вернётся из Telegram — обновим статус привязки
+      // Пользователь вернётся из мессенджера — обновим статус привязки
       setTimeout(reload, 8000);
     } catch (e) {
-      Platform.OS === 'web' ? alert((e as Error).message) : Alert.alert('Telegram', (e as Error).message);
+      Platform.OS === 'web' ? alert((e as Error).message) : Alert.alert(title, (e as Error).message);
     }
   };
+  // Старый сервер не сообщает о ботах — тогда показываем только Telegram, как раньше
+  const bots = me.bots ?? { telegram: true, max: false };
   const link = `${PUBLIC_WEB_URL}/b/${me.tenant.slug}`;
 
   const share = async () => {
@@ -101,17 +104,28 @@ export default function More() {
           subtitle={sub.data ? `${sub.data.plan.name} · ${SUB_STATUS[sub.data.status] ?? sub.data.status}${sub.data.daysLeft !== null && sub.data.status !== 'EXPIRED' ? ` · ${sub.data.daysLeft} дн.` : ''}` : undefined}
           onPress={() => router.push('/billing')}
         />
-        <Row
-          icon="paper-plane-outline"
-          title="Уведомления в Telegram"
-          subtitle={me.telegramLinked ? 'Подключены: новые записи и напоминания об оплате' : 'Узнавайте о новых онлайн-записях сразу'}
-          onPress={toggleTelegram}
-          right={<Text style={{ color: me.telegramLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.telegramLinked ? 'Отключить' : 'Подключить'}</Text>}
-        />
+        {(bots.max || me.maxLinked) && (
+          <Row
+            icon="chatbubble-ellipses-outline"
+            title="Уведомления в MAX"
+            subtitle={me.maxLinked ? 'Подключены: новые записи, отмены, переносы и коды входа' : 'Узнавайте о новых онлайн-записях сразу'}
+            onPress={toggleBot('max', !!me.maxLinked, 'MAX')}
+            right={<Text style={{ color: me.maxLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.maxLinked ? 'Отключить' : 'Подключить'}</Text>}
+          />
+        )}
+        {(bots.telegram || me.telegramLinked) && (
+          <Row
+            icon="paper-plane-outline"
+            title="Уведомления в Telegram"
+            subtitle={me.telegramLinked ? 'Подключены: новые записи и напоминания об оплате' : 'Узнавайте о новых онлайн-записях сразу'}
+            onPress={toggleBot('telegram', me.telegramLinked, 'Telegram')}
+            right={<Text style={{ color: me.telegramLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.telegramLinked ? 'Отключить' : 'Подключить'}</Text>}
+          />
+        )}
         <Row
           icon="shield-checkmark-outline"
           title="Вход с кодом"
-          subtitle={me.twoFactor?.enabled ? `Включён: после пароля — код ${me.twoFactor.channels.includes('telegram') ? 'в Telegram' : 'на email'}` : 'Защитите базу клиентов: даже с паролем без кода не войти'}
+          subtitle={me.twoFactor?.enabled ? `Включён: после пароля — код ${me.twoFactor.channels[0] === 'max' ? 'в MAX' : me.twoFactor.channels[0] === 'telegram' ? 'в Telegram' : 'на email'}` : 'Защитите базу клиентов: даже с паролем без кода не войти'}
           onPress={() => router.push('/two-factor')}
           right={<Text style={{ color: me.twoFactor?.enabled ? '#0F6B48' : C.brand, fontWeight: '600' }}>{me.twoFactor?.enabled ? 'Вкл.' : 'Включить'}</Text>}
         />

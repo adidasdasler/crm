@@ -5,7 +5,7 @@ import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
-import { toTelegramButtons } from './channels';
+import { max, toTelegramButtons } from './channels';
 import { ClientBotService } from './client-bot.service';
 import { esc, telegram } from './telegram';
 
@@ -48,6 +48,25 @@ export class BotController {
       data: { telegramLinkHash: sha256(token), telegramLinkExpires: new Date(Date.now() + 15 * 60_000) },
     });
     return { url: telegram.deepLink(`u_${token}`) };
+  }
+
+  // ─── Привязка MAX сотрудника: ссылка max.ru/<бот>?start=u_<токен>, обработка — в MessengersController ───
+  @NoDemo()
+  @Post('me/max')
+  async linkStaffMax(@Auth() a: AuthCtx) {
+    if (!max.enabled || !env.MAX_BOT_USERNAME) throw new AppError('MAX_DISABLED', 'Бот MAX ещё не настроен', 503);
+    const token = randomToken(18);
+    await this.prisma.system.user.update({
+      where: { id: a.userId },
+      data: { maxLinkHash: sha256(token), maxLinkExpires: new Date(Date.now() + 15 * 60_000) },
+    });
+    return { url: max.deepLink(`u_${token}`) };
+  }
+
+  @Delete('me/max')
+  async unlinkStaffMax(@Auth() a: AuthCtx) {
+    await this.prisma.system.user.update({ where: { id: a.userId }, data: { maxUserId: null } });
+    return { ok: true };
   }
 
   @Delete('me/telegram')

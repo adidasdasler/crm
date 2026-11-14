@@ -114,7 +114,7 @@ export class AccountController {
         where: { id: user.id },
         data: {
           email: `deleted-${user.id}@deleted.invalid`, name: 'Удалённый пользователь', phone: null,
-          passwordHash: await argon2.hash(randomToken(32)), telegramChatId: null, telegramLinkHash: null,
+          passwordHash: await argon2.hash(randomToken(32)), telegramChatId: null, telegramLinkHash: null, maxUserId: null, maxLinkHash: null,
           passwordResetHash: null, deletedAt: now,
         },
       });

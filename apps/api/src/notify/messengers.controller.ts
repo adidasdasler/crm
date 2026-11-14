@@ -3,9 +3,12 @@ import type { Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { Public } from '../common/auth';
 import { AppError } from '../common/errors';
+import { sha256 } from '../common/crypto';
+import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
 import { max, vk } from './channels';
 import { ClientBotService } from './client-bot.service';
+import { esc } from './telegram';
 
 const safeEqual = (a?: string, b?: string) => !!a && !!b && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -16,7 +19,18 @@ const safeEqual = (a?: string, b?: string) => !!a && !!b && a.length === b.lengt
 @Public()
 @Controller('webhooks')
 export class MessengersController {
-  constructor(private readonly clientBot: ClientBotService) {}
+  constructor(private readonly clientBot: ClientBotService, private readonly prisma: PrismaService) {}
+
+  /** Сотрудник открыл ссылку из приложения «Уведомления в MAX» (payload u_<токен>) */
+  private async linkStaff(userId: string, token: string) {
+    const db = this.prisma.system;
+    const user = await db.user.findUnique({ where: { maxLinkHash: sha256(token) } });
+    if (!user || user.deletedAt || !user.maxLinkExpires || user.maxLinkExpires < new Date()) {
+      return 'Ссылка устарела. Получите новую в приложении MioFlow: «Ещё» → «Уведомления в MAX».';
+    }
+    await db.user.update({ where: { id: user.id }, data: { maxUserId: userId, maxLinkHash: null, maxLinkExpires: null } });
+    return `Готово, ${esc(user.name)}! Сюда будут приходить новые онлайн-записи, отмены и переносы, а также коды входа.`;
+  }
 
   /**
    * ВКонтакте, Callback API (версия 5.199). В настройках сообщества указывается адрес
@@ -63,7 +77,9 @@ export class MessengersController {
     try {
       if (u.update_type === 'bot_started') {
         const userId = String(u.user?.user_id ?? '');
-        if (userId) {
+        if (userId && (u.payload ?? '').startsWith('u_')) {
+          await max.send(userId, await this.linkStaff(userId, u.payload!.slice(2)));
+        } else if (userId) {
           const reply = await this.clientBot.linkCustomer('MAX', userId, u.payload ?? '');
           await max.send(userId, reply.text, reply.buttons);
         }

@@ -9,6 +9,9 @@ export type Perm =
 export type Me = {
   user: { id: string; email: string; name: string };
   telegramLinked: boolean;
+  maxLinked?: boolean;
+  /** Какие боты подключены на сервере */
+  bots?: { telegram: boolean; max: boolean };
   twoFactor?: { enabled: boolean; channels: string[] };
   role: Role;
   resourceId: string | null;
