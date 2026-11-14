@@ -10,6 +10,9 @@ import { max, vk } from './channels';
 import { ClientBotService } from './client-bot.service';
 import { esc } from './telegram';
 
+/** Короткая запись в лог без персональных данных — чтобы видеть, доходят ли события и почему не уходят ответы */
+const log = (msg: string, extra?: unknown) => console.log(JSON.stringify({ time: new Date().toISOString(), msg, ...(extra ? { extra } : {}) }));
+
 const safeEqual = (a?: string, b?: string) => !!a && !!b && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /**
@@ -45,20 +48,30 @@ export class MessengersController {
   @HttpCode(200)
   @Post('vk')
   async vk(@Body() body: { type?: string; secret?: string; object?: any }, @Res() res: Response) {
-    if (body.type === 'confirmation') return res.type('text/plain').send(env.VK_CONFIRMATION_CODE ?? '');
-    if (!safeEqual(body.secret, env.VK_SECRET)) throw new AppError('FORBIDDEN', 'bad secret', 403);
+    if (body.type === 'confirmation') {
+      log('vk confirmation', { configured: !!env.VK_CONFIRMATION_CODE });
+      return res.type('text/plain').send(env.VK_CONFIRMATION_CODE ?? '');
+    }
+    if (!safeEqual(body.secret, env.VK_SECRET)) {
+      log('vk: неверный секретный ключ — сравните «Секретный ключ» в Callback API и VK_SECRET', { hasSecret: !!body.secret });
+      throw new AppError('FORBIDDEN', 'bad secret', 403);
+    }
+    log('vk event', { type: body.type });
     try {
       if (body.type === 'message_new') {
-        const m = body.object?.message ?? {};
+        // Версия API в Callback API ниже 5.103 присылает сообщение прямо в object
+        const m = body.object?.message ?? body.object ?? {};
         const userId = String(m.from_id ?? '');
         // Ссылка vk.me/<сообщество>?ref=b_<токен> передаёт токен в поле ref первого сообщения
         const payload = typeof m.ref === 'string' ? m.ref : '';
         if (userId && payload.startsWith('u_')) {
-          await vk.send(userId, await this.linkStaff('VK', userId, payload.slice(2)));
+          const r = await vk.send(userId, await this.linkStaff('VK', userId, payload.slice(2)));
+          if (!r.ok) log('vk: ответ не отправлен', { error: r.error });
         } else if (userId) {
           const text = typeof m.text === 'string' ? m.text : '';
           const reply = payload || !text ? await this.clientBot.linkCustomer('VK', userId, payload) : await this.clientBot.message('VK', userId, text);
-          await vk.send(userId, reply.text, reply.buttons);
+          const r = await vk.send(userId, reply.text, reply.buttons);
+          if (!r.ok) log('vk: ответ не отправлен', { error: r.error });
         }
       } else if (body.type === 'message_event') {
         const o = body.object ?? {};
@@ -68,8 +81,9 @@ export class MessengersController {
         await vk.answer(String(o.event_id), String(o.user_id), String(o.peer_id), r.note || 'Готово');
         if (r.reply) await vk.send(String(o.user_id), r.reply.text, r.reply.buttons);
       }
-    } catch {
+    } catch (e) {
       // VK повторяет доставку при ошибке — отвечаем ok, чтобы не было бесконечных повторов
+      log('vk: ошибка обработки', { error: (e as Error).message });
     }
     return res.type('text/plain').send('ok');
   }
