@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Logo, Mark } from '../Logo';
+import { Logo } from '../Logo';
 import { api, APP_URL, rub } from '../lib/api';
 import { OPERATOR } from '../legal/requisites';
 
@@ -65,7 +65,7 @@ export function Landing() {
           <a href="/" aria-label="MioFlow — на главную"><Logo size={30} /></a>
           <nav className="hidden items-center gap-1 text-sm font-semibold text-ink-muted md:flex">
             <a href="#features" className="rounded-full px-3 py-2 hover:text-ink">Возможности</a>
-            <a href="#maps" className="rounded-full px-3 py-2 hover:text-ink">Карты</a>
+            <a href="#maps" className="rounded-full px-3 py-2 hover:text-ink">Для карт</a>
             <a href="#prices" className="rounded-full px-3 py-2 hover:text-ink">Цены</a>
             <a href="#faq" className="rounded-full px-3 py-2 hover:text-ink">Вопросы</a>
           </nav>
@@ -82,25 +82,23 @@ export function Landing() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 sm:px-6 md:grid-cols-[1.15fr_0.85fr] md:pb-24 md:pt-16">
           <div className="space-y-7">
             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink shadow-sm ring-1 ring-brand-100">
-              <span className="h-2 w-2 rounded-full bg-[#19AA1E]" /> Напоминания бесплатно — без SMS
+              <span className="h-2 w-2 rounded-full bg-[#19AA1E]" /> Напоминания в мессенджеры — бесплатно
             </span>
             <h1 className="display text-[2.6rem] leading-[1.04] sm:text-6xl md:text-[4.1rem]">
               Клиенты записываются сами. <span className="text-brand-600">И&nbsp;приходят.</span>
             </h1>
             <p className="max-w-xl text-lg text-ink-muted sm:text-xl">
-              Онлайн-запись из Яндекс Карт, 2ГИС и соцсетей, календарь мастеров, кабинет владельца и напоминания в Telegram, MAX и ВКонтакте. Приложение для iOS, Android и веб.
+              Запись из Яндекс Карт, 2ГИС и соцсетей — круглосуточно и без звонков. За день до визита клиент получает напоминание в Telegram, MAX или ВКонтакте, а вы видите все записи, мастеров и выручку в одном месте — с телефона и компьютера.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a href={register} className="btn-primary whitespace-nowrap px-7 py-4 text-lg shadow-[0_12px_30px_-10px_rgba(47,59,255,.7)]">Попробовать 14 дней бесплатно</a>
               <a href={`${APP_URL}/login?demo=1`} className="btn-ghost whitespace-nowrap px-7 py-4 text-lg">Посмотреть демо</a>
             </div>
             <p className="text-ink-muted">
-              Работаете без команды? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Тариф для частного мастера — 290 ₽/мес</a>
-              {' · '}
-              <a href="/b/demo" className="underline underline-offset-4 hover:text-ink">Как запись видит клиент</a>
+              Работаете одна? <a href={`${register}?kind=solo`} className="font-semibold text-brand-600 underline underline-offset-4">Тариф «Соло» — 290 ₽ в месяц</a>
             </p>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
-              {['Без карты и автосписаний', 'Все функции в любом тарифе', 'Перенос базы бесплатно', 'Данные в России'].map((t) => (
+              {['Без карты и автосписаний', 'Все функции в любом тарифе', 'Перенос из YCLIENTS и DIKIDI за 5 минут', 'Без SMS-расходов'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5"><span className="text-brand-600"><Svg d={I.check} size={16} /></span>{t}</li>
               ))}
             </ul>
@@ -344,8 +342,8 @@ function HeroVisual() {
       <div className="relative mx-auto w-[290px] rounded-[2.75rem] bg-ink p-2.5 shadow-[0_40px_80px_-25px_rgba(47,59,255,.55)]">
         <div className="rounded-[2.25rem] bg-[#DDE3F7] p-4">
           <div className="mb-4 flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5">
-            <Mark size={32} />
-            <div><p className="text-sm font-semibold">MioFlow</p><p className="text-xs text-ink-muted">напоминания о записи</p></div>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-blush-300 font-display text-ink">Л</span>
+            <div><p className="text-sm font-semibold">Студия «Лаванда»</p><p className="text-xs text-ink-muted">напоминание</p></div>
           </div>
           <div className="space-y-2.5">
             <div className="max-w-[90%] rounded-3xl rounded-bl-md bg-white p-3.5">
@@ -356,15 +354,15 @@ function HeroVisual() {
               <span className="rounded-xl bg-white/80 py-2">Подтвердить</span>
               <span className="rounded-xl bg-white/80 py-2">Отменить</span>
             </div>
-            <div className="ml-auto w-fit rounded-3xl rounded-br-md bg-brand-600 px-3.5 py-2 text-xs text-white">Подтвердить</div>
+            <div className="ml-auto w-fit rounded-3xl rounded-br-md bg-brand-600 px-3.5 py-2 text-xs text-white">Приду ✓</div>
             <div className="max-w-[90%] rounded-3xl rounded-bl-md bg-white p-3 text-xs">Спасибо! Ждём вас завтра в 14:00.</div>
           </div>
         </div>
       </div>
       <div className="absolute -left-2 -top-2 hidden w-48 rounded-2xl bg-white p-3.5 shadow-xl ring-1 ring-brand-50 sm:block md:-left-16">
-        <p className="text-xs text-ink-muted">Записей на сумму</p>
+        <p className="text-xs text-ink-muted">Выручка за месяц</p>
         <p className="text-xl font-bold">412 600 ₽</p>
-        <p className="mt-1 inline-block rounded-full bg-[#E6F6EC] px-2 py-0.5 text-xs font-semibold text-[#0F7A52]">▲ 18% к прошлому</p>
+        <p className="mt-1 inline-block whitespace-nowrap rounded-full bg-[#E6F6EC] px-2 py-0.5 text-xs font-semibold text-[#0F7A52]">▲ 18% к прошлому месяцу</p>
       </div>
       <div className="absolute -right-2 -bottom-8 hidden w-56 items-center gap-3 rounded-2xl bg-white p-3.5 shadow-xl ring-1 ring-brand-50 sm:flex md:-right-14">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#FC3F1D] text-white"><Svg d={I.pin} size={18} /></span>
