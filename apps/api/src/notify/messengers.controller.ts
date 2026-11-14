@@ -21,14 +21,20 @@ const safeEqual = (a?: string, b?: string) => !!a && !!b && a.length === b.lengt
 export class MessengersController {
   constructor(private readonly clientBot: ClientBotService, private readonly prisma: PrismaService) {}
 
-  /** Сотрудник открыл ссылку из приложения «Уведомления в MAX» (payload u_<токен>) */
-  private async linkStaff(userId: string, token: string) {
+  /** Сотрудник открыл ссылку из приложения «Уведомления в MAX / ВКонтакте» (payload u_<токен>) */
+  private async linkStaff(channel: 'MAX' | 'VK', userId: string, token: string) {
     const db = this.prisma.system;
-    const user = await db.user.findUnique({ where: { maxLinkHash: sha256(token) } });
-    if (!user || user.deletedAt || !user.maxLinkExpires || user.maxLinkExpires < new Date()) {
-      return 'Ссылка устарела. Получите новую в приложении MioFlow: «Ещё» → «Уведомления в MAX».';
+    const user = channel === 'MAX'
+      ? await db.user.findUnique({ where: { maxLinkHash: sha256(token) } })
+      : await db.user.findUnique({ where: { vkLinkHash: sha256(token) } });
+    const expires = channel === 'MAX' ? user?.maxLinkExpires : user?.vkLinkExpires;
+    if (!user || user.deletedAt || !expires || expires < new Date()) {
+      return `Ссылка устарела. Получите новую в приложении MioFlow: «Ещё» → «Уведомления ${channel === 'MAX' ? 'в MAX' : 'во ВКонтакте'}».`;
     }
-    await db.user.update({ where: { id: user.id }, data: { maxUserId: userId, maxLinkHash: null, maxLinkExpires: null } });
+    await db.user.update({
+      where: { id: user.id },
+      data: channel === 'MAX' ? { maxUserId: userId, maxLinkHash: null, maxLinkExpires: null } : { vkUserId: userId, vkLinkHash: null, vkLinkExpires: null },
+    });
     return `Готово, ${esc(user.name)}! Сюда будут приходить новые онлайн-записи, отмены и переносы, а также коды входа.`;
   }
 
@@ -47,7 +53,9 @@ export class MessengersController {
         const userId = String(m.from_id ?? '');
         // Ссылка vk.me/<сообщество>?ref=b_<токен> передаёт токен в поле ref первого сообщения
         const payload = typeof m.ref === 'string' ? m.ref : '';
-        if (userId) {
+        if (userId && payload.startsWith('u_')) {
+          await vk.send(userId, await this.linkStaff('VK', userId, payload.slice(2)));
+        } else if (userId) {
           const text = typeof m.text === 'string' ? m.text : '';
           const reply = payload || !text ? await this.clientBot.linkCustomer('VK', userId, payload) : await this.clientBot.message('VK', userId, text);
           await vk.send(userId, reply.text, reply.buttons);
@@ -78,7 +86,7 @@ export class MessengersController {
       if (u.update_type === 'bot_started') {
         const userId = String(u.user?.user_id ?? '');
         if (userId && (u.payload ?? '').startsWith('u_')) {
-          await max.send(userId, await this.linkStaff(userId, u.payload!.slice(2)));
+          await max.send(userId, await this.linkStaff('MAX', userId, u.payload!.slice(2)));
         } else if (userId) {
           const reply = await this.clientBot.linkCustomer('MAX', userId, u.payload ?? '');
           await max.send(userId, reply.text, reply.buttons);

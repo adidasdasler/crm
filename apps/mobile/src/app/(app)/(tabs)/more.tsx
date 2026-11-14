@@ -21,7 +21,7 @@ export default function More() {
   const stockAlerts = useQuery({ queryKey: ['stock', 'alerts'], queryFn: () => get<StockAlerts>('/stock/alerts'), enabled: can(me, 'stock.manage') });
   const sub = useQuery({ queryKey: ['subscription'], queryFn: () => get<Subscription>('/billing/subscription') });
   /** Привязать или отвязать мессенджер для уведомлений о записях и кодов входа */
-  const toggleBot = (kind: 'telegram' | 'max', linked: boolean, title: string) => async () => {
+  const toggleBot = (kind: 'telegram' | 'max' | 'vk', linked: boolean, title: string) => async () => {
     try {
       if (linked) {
         await del(`/me/${kind}`);
@@ -113,6 +113,15 @@ export default function More() {
             right={<Text style={{ color: me.maxLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.maxLinked ? 'Отключить' : 'Подключить'}</Text>}
           />
         )}
+        {(bots.vk || me.vkLinked) && (
+          <Row
+            icon="logo-vk"
+            title="Уведомления во ВКонтакте"
+            subtitle={me.vkLinked ? 'Подключены: новые записи, отмены, переносы и коды входа' : 'Сообщения от сообщества MioFlow'}
+            onPress={toggleBot('vk', !!me.vkLinked, 'ВКонтакте')}
+            right={<Text style={{ color: me.vkLinked ? C.danger : C.brand, fontWeight: '600' }}>{me.vkLinked ? 'Отключить' : 'Подключить'}</Text>}
+          />
+        )}
         {(bots.telegram || me.telegramLinked) && (
           <Row
             icon="paper-plane-outline"
@@ -125,7 +134,7 @@ export default function More() {
         <Row
           icon="shield-checkmark-outline"
           title="Вход с кодом"
-          subtitle={me.twoFactor?.enabled ? `Включён: после пароля — код ${me.twoFactor.channels[0] === 'max' ? 'в MAX' : me.twoFactor.channels[0] === 'telegram' ? 'в Telegram' : 'на email'}` : 'Защитите базу клиентов: даже с паролем без кода не войти'}
+          subtitle={me.twoFactor?.enabled ? `Включён: после пароля — код ${me.twoFactor.channels[0] === 'max' ? 'в MAX' : me.twoFactor.channels[0] === 'telegram' ? 'в Telegram' : me.twoFactor.channels[0] === 'vk' ? 'во ВКонтакте' : 'на email'}` : 'Защитите базу клиентов: даже с паролем без кода не войти'}
           onPress={() => router.push('/two-factor')}
           right={<Text style={{ color: me.twoFactor?.enabled ? '#0F6B48' : C.brand, fontWeight: '600' }}>{me.twoFactor?.enabled ? 'Вкл.' : 'Включить'}</Text>}
         />

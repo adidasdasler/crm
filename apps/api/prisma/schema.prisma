@@ -123,6 +123,10 @@ model User {
   maxUserId           String?
   maxLinkHash         String?   @unique
   maxLinkExpires      DateTime? @db.Timestamptz(3)
+  /// ВКонтакте сотрудника: уведомления о записях и коды входа (0027)
+  vkUserId            String?
+  vkLinkHash          String?   @unique
+  vkLinkExpires       DateTime? @db.Timestamptz(3)
   /// SHA-256 токена сброса пароля и срок действия (1 час)
   passwordResetHash    String?   @unique
   passwordResetExpires DateTime? @db.Timestamptz(3)

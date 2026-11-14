@@ -10,8 +10,9 @@ export type Me = {
   user: { id: string; email: string; name: string };
   telegramLinked: boolean;
   maxLinked?: boolean;
+  vkLinked?: boolean;
   /** Какие боты подключены на сервере */
-  bots?: { telegram: boolean; max: boolean };
+  bots?: { telegram: boolean; max: boolean; vk?: boolean };
   twoFactor?: { enabled: boolean; channels: string[] };
   role: Role;
   resourceId: string | null;

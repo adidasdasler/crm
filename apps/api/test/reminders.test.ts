@@ -167,7 +167,7 @@ describe('напоминания и Telegram-бот', () => {
   it('MAX для сотрудника: привязка из приложения, уведомление о новой записи, код входа', async () => {
     const s = await createSalon('StaffMax');
     const me0 = (await s.api.get('/auth/me')).body.data;
-    expect(me0.bots).toEqual({ telegram: true, max: true });
+    expect(me0.bots).toMatchObject({ telegram: true, max: true });
     const link = await s.api.post('/me/max');
     const start = new URL(link.body.data.url).searchParams.get('start')!;
     expect(start).toMatch(/^u_/);
@@ -197,6 +197,32 @@ describe('напоминания и Telegram-бот', () => {
     await system.user.update({ where: { id: me.user.id }, data: { twoFactorEnabled: false } });
     await s.api.delete('/me/max');
     expect((await s.api.get('/auth/me')).body.data.maxLinked).toBe(false);
+  });
+
+  it('ВКонтакте для сотрудника: привязка по ссылке vk.me, уведомление о новой записи, код входа', async () => {
+    const s = await createSalon('StaffVk');
+    const link = await s.api.post('/me/vk');
+    const url = new URL(link.body.data.url);
+    expect(url.host).toBe('vk.me');
+    const ref = url.searchParams.get('ref')!;
+    expect(ref).toMatch(/^u_/);
+    clearOutbox();
+    await vkEvent({ type: 'message_new', object: { message: { from_id: 6161, text: 'Начать', ref } } });
+    expect(outbox.vk.at(-1)!.params.message).toContain('Готово');
+    const me = (await s.api.get('/auth/me')).body.data;
+    expect(me.vkLinked).toBe(true);
+    expect(me.bots.vk).toBe(true);
+
+    clearOutbox();
+    await bookOnline(s.slug, s.serviceId, '14:00', '+79990001088');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(outbox.vk.some((m) => m.params.user_id === '6161' && String(m.params.message).includes('Онлайн-запись'))).toBe(true);
+
+    await system.user.update({ where: { id: me.user.id }, data: { twoFactorEnabled: true } });
+    clearOutbox();
+    const login = await api().post('/auth/login', { email: me.user.email, password: 'password123' });
+    expect(login.body.data.twoFactor.sentTo).toBe('ВКонтакте');
+    await system.user.update({ where: { id: me.user.id }, data: { twoFactorEnabled: false } });
   });
 
   it('у записей, созданных сотрудником, тоже есть ссылка управления', async () => {

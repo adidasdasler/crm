@@ -5,7 +5,7 @@ import { randomToken, sha256 } from '../common/crypto';
 import { AppError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { env } from '../config';
-import { max, toTelegramButtons } from './channels';
+import { max, toTelegramButtons, vk } from './channels';
 import { ClientBotService } from './client-bot.service';
 import { esc, telegram } from './telegram';
 
@@ -66,6 +66,25 @@ export class BotController {
   @Delete('me/max')
   async unlinkStaffMax(@Auth() a: AuthCtx) {
     await this.prisma.system.user.update({ where: { id: a.userId }, data: { maxUserId: null } });
+    return { ok: true };
+  }
+
+  // ─── Привязка ВКонтакте сотрудника: ссылка vk.me/<сообщество>?ref=u_<токен> ───
+  @NoDemo()
+  @Post('me/vk')
+  async linkStaffVk(@Auth() a: AuthCtx) {
+    if (!vk.enabled || !env.VK_GROUP_SCREEN_NAME) throw new AppError('VK_DISABLED', 'Сообщество ВКонтакте ещё не подключено', 503);
+    const token = randomToken(18);
+    await this.prisma.system.user.update({
+      where: { id: a.userId },
+      data: { vkLinkHash: sha256(token), vkLinkExpires: new Date(Date.now() + 15 * 60_000) },
+    });
+    return { url: vk.deepLink(`u_${token}`) };
+  }
+
+  @Delete('me/vk')
+  async unlinkStaffVk(@Auth() a: AuthCtx) {
+    await this.prisma.system.user.update({ where: { id: a.userId }, data: { vkUserId: null } });
     return { ok: true };
   }
 

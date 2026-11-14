@@ -1,11 +1,11 @@
 import { DEMO_SLUG } from '../demo/demo';
 import type { PrismaClient } from '@prisma/client';
-import { max } from './channels';
+import { max, vk } from './channels';
 import { push } from './push';
 import { esc, telegram } from './telegram';
 
 /**
- * Уведомить сотрудников салона: Telegram и MAX (если привязаны) и push в приложение (если включено).
+ * Уведомить сотрудников салона: Telegram, MAX и ВКонтакте (если привязаны) и push в приложение (если включено).
  * resourceId — мастер записи: мастер получает уведомления только о своих записях.
  * Ошибки не пробрасываются — уведомление не должно ломать основную операцию.
  */
@@ -27,7 +27,7 @@ export async function notifyStaff(
           ? { role: 'OWNER' }
           : { OR: [{ role: { in: ['OWNER', 'MANAGER', 'ADMIN'] } }, ...(opts.resourceId ? [{ role: 'MASTER' as const, resourceId: opts.resourceId }] : [])] }),
       },
-      select: { user: { select: { id: true, telegramChatId: true, maxUserId: true } } },
+      select: { user: { select: { id: true, telegramChatId: true, maxUserId: true, vkUserId: true } } },
     });
     const tg = telegram.enabled
       ? await Promise.all(members.filter((m) => m.user.telegramChatId).map((m) => telegram.send(m.user.telegramChatId!, text, opts.buttons)))
@@ -35,8 +35,11 @@ export async function notifyStaff(
     const mx = max.enabled
       ? await Promise.all(members.filter((m) => m.user.maxUserId).map((m) => max.send(m.user.maxUserId!, text, opts.buttons)))
       : [];
+    const vks = vk.enabled
+      ? await Promise.all(members.filter((m) => m.user.vkUserId).map((m) => vk.send(m.user.vkUserId!, text, opts.buttons)))
+      : [];
     const pushed = opts.push ? await push.toUsers(system, members.map((m) => m.user.id), opts.push) : 0;
-    return tg.filter((r) => r.ok).length + mx.filter((r) => r.ok).length + pushed;
+    return tg.filter((r) => r.ok).length + mx.filter((r) => r.ok).length + vks.filter((r) => r.ok).length + pushed;
   } catch {
     return 0;
   }
