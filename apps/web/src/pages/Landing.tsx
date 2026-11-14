@@ -304,6 +304,7 @@ export function Landing() {
             <a href="/terms" className="hover:text-ink">Оферта</a>
             <a href="/privacy" className="hover:text-ink">Политика ПДн</a>
             <a href="/consent" className="hover:text-ink">Согласие на обработку ПДн</a>
+            <a href="/cookies" className="hover:text-ink">Cookie</a>
             <span>© {new Date().getFullYear()} MioFlow</span>
           </span>
         </div>
@@ -311,7 +312,7 @@ export function Landing() {
         {!OPERATOR.fullName.startsWith('[') && (
           <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-ink-muted sm:px-6">
             Исполнитель: {OPERATOR.fullName}, плательщик налога на профессиональный доход, ИНН {OPERATOR.inn}. Обращения: {OPERATOR.email}.
-            Сайт использует только технически необходимые cookie.
+            Сайт использует только технически необходимые cookie (<a href="/cookies" className="underline">подробнее</a>).
           </p>
         )}
       </footer>

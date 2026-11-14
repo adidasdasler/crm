@@ -18,6 +18,7 @@ export function Doc({ title, children, subtitle }: { title: string; subtitle?: R
         <Link to="/terms">Оферта</Link>
         <Link to="/privacy">Политика обработки ПДн</Link>
         <Link to="/consent">Согласие на обработку ПДн</Link>
+        <Link to="/cookies">Cookie</Link>
       </nav>
     </div>
   );
