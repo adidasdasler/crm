@@ -35,7 +35,7 @@ function Consent({ value, onChange }: { value: boolean; onChange: (v: boolean) =
   );
 }
 
-/** Кнопки Яндекс ID и VK ID — если они подключены на сервере */
+/** Кнопка Яндекс ID — если вход подключён на сервере */
 function OAuth({ consent, needConsent }: { consent: boolean; needConsent: boolean }) {
   const [providers, setProviders] = useState<string[]>([]);
   useEffect(() => { api<{ providers: string[] }>('/client/config').then((r) => setProviders(r.providers)).catch(() => null); }, []);
@@ -45,7 +45,6 @@ function OAuth({ consent, needConsent }: { consent: boolean; needConsent: boolea
   return (
     <div className="space-y-2">
       {providers.includes('yandex') && <a className={`${cls} bg-[#FC3F1D] text-white`} href={oauthUrl('yandex', consent)}>Войти с Яндекс ID</a>}
-      {providers.includes('vk') && <a className={`${cls} bg-[#0077FF] text-white`} href={oauthUrl('vk', consent)}>Войти с VK ID</a>}
       {off && <p className="text-center text-xs text-ink-muted">Отметьте согласие ниже, чтобы войти впервые</p>}
       <div className="flex items-center gap-3 py-1 text-xs text-ink-muted"><span className="h-px flex-1 bg-brand-50" />или по email<span className="h-px flex-1 bg-brand-50" /></div>
     </div>
@@ -78,7 +77,7 @@ export function AccountLogin() {
         <button className="btn-primary w-full" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
       </form>
       <Consent value={consent} onChange={setConsent} />
-      <p className="-mt-2 text-xs text-ink-muted">Согласие нужно один раз — при первом входе через Яндекс ID или VK ID.</p>
+      <p className="-mt-2 text-xs text-ink-muted">Согласие нужно один раз — при первом входе через Яндекс ID.</p>
       <div className="flex justify-between text-sm">
         <Link className="text-ink-muted hover:underline" to="/account/forgot">Забыли пароль?</Link>
         <Link className="font-semibold text-brand-600" to="/account/register">Регистрация</Link>

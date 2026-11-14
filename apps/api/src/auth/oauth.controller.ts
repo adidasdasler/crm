@@ -18,7 +18,7 @@ const STATE_COOKIE = 'mioflow_staff_oauth';
 const TICKET_MIN = 15;
 
 /**
- * Вход владельцев, администраторов и мастеров через Яндекс ID и VK ID.
+ * Вход владельцев, администраторов и мастеров через Яндекс ID.
  * Веб (app.mioflow.ru): после входа — сразу cookie-сессия. Мобильное приложение: возврат по ссылке
  * mioflow://oauth?ticket=… и обмен одноразового билета на токены.
  * Нового человека отправляем на регистрацию салона с подставленными именем и email.
@@ -62,17 +62,16 @@ export class StaffOAuthController {
 
     let prof;
     try {
-      prof = await oauth.profile(p as Provider, { code: q.code, verifier: st.verifier, state: q.state, deviceId: q.device_id, who: 'staff' });
+      prof = await oauth.profile(p as Provider, { code: q.code, verifier: st.verifier });
     } catch {
-      return go('login', { error: `Не удалось войти через ${p === 'yandex' ? 'Яндекс ID' : 'VK ID'}. Попробуйте ещё раз` });
+      return go('login', { error: 'Не удалось войти через Яндекс ID. Попробуйте ещё раз' });
     }
     const db = this.prisma.system;
-    const idField = p === 'yandex' ? 'yandexId' : 'vkId';
-    let user = await db.user.findFirst({ where: { [idField]: prof.id, deletedAt: null } });
-    // Уже зарегистрирован по email — привязываем Яндекс/VK (email подтверждён провайдером)
+    let user = await db.user.findFirst({ where: { yandexId: prof.id, deletedAt: null } });
+    // Уже зарегистрирован по email — привязываем Яндекс ID (email подтверждён провайдером)
     if (!user && prof.email) {
       const byEmail = await db.user.findFirst({ where: { email: prof.email, deletedAt: null } });
-      if (byEmail && byEmail.email !== DEMO_EMAIL) user = await db.user.update({ where: { id: byEmail.id }, data: { [idField]: prof.id } });
+      if (byEmail && byEmail.email !== DEMO_EMAIL) user = await db.user.update({ where: { id: byEmail.id }, data: { yandexId: prof.id } });
     }
 
     if (!user) {

@@ -143,15 +143,15 @@ describe('вход с кодом', () => {
   });
 });
 
-describe('вход сотрудников через Яндекс ID и VK ID', () => {
+describe('вход сотрудников через Яндекс ID', () => {
   it('новый — на регистрацию с билетом; существующий по email — вход; мобильное приложение — билет; код входа не обходится', async () => {
     const request = (await import('supertest')).default;
     const { oauth } = await import('../src/client/oauth');
     const { env } = await import('../src/config');
     const { getApp } = await import('./helpers');
     const srv = (await getApp()).getHttpServer();
-    env.YANDEX_CLIENT_ID = 'yid'; env.YANDEX_CLIENT_SECRET = 'ys'; env.VKID_CLIENT_ID = 'vk';
-    const flow = async (p: 'yandex' | 'vk', mobile = false) => {
+    env.YANDEX_CLIENT_ID = 'yid'; env.YANDEX_CLIENT_SECRET = 'ys';
+    const flow = async (p: 'yandex', mobile = false) => {
       const ag = request.agent(srv);
       const s = await ag.get(`/v1/auth/oauth/${p}/start${mobile ? '?mobile=1' : ''}`);
       expect(s.status).toBe(302);
@@ -178,20 +178,21 @@ describe('вход сотрудников через Яндекс ID и VK ID', 
     expect(r2.loc).toMatch(/\/$/);
     expect(r2.cookies?.some((c) => c.startsWith('access_token='))).toBe(true);
 
-    // 3. Существующий владелец по паролю входит через VK с тем же email; мобильное приложение — билет
+    // 3. Существующий владелец по паролю входит через Яндекс ID с тем же email; мобильное приложение — билет
     const s = await createSalon('VkLogin');
     const email = (await s.api.get('/auth/me')).body.data.user.email;
-    oauth.profile = async () => ({ id: 'staff-vk-1', email, name: 'Владелец', phone: null });
-    const r3 = await flow('vk', true);
+    oauth.profile = async () => ({ id: 'staff-y-2', email, name: 'Владелец', phone: null });
+    expect((await request(srv).get('/v1/auth/oauth/vk/start')).status).toBe(404);
+    const r3 = await flow('yandex', true);
     expect(r3.loc).toMatch(/^mioflow:\/\/oauth\?ticket=/);
     const ex = await api().post('/auth/oauth/exchange', { ticket: new URL(r3.loc.replace('mioflow://', 'https://x/')).searchParams.get('ticket') });
     expect(ex.status).toBe(200);
     expect(ex.body.data.accessToken).toBeTruthy();
 
-    // 4. Включён вход с кодом — Яндекс/VK его не обходят
+    // 4. Включён вход с кодом — Яндекс ID его не обходит
     await system.user.update({ where: { email }, data: { twoFactorEnabled: true } });
     const prevSmtp = env.SMTP_URL; env.SMTP_URL = 'smtp://test';
-    const r4 = await flow('vk');
+    const r4 = await flow('yandex');
     env.SMTP_URL = prevSmtp;
     expect(r4.loc).toContain('/login?tf=');
     expect(r4.cookies?.some((c) => c.startsWith('access_token='))).toBeFalsy();

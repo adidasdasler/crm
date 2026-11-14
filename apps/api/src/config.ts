@@ -67,10 +67,9 @@ const schema = z.object({
   /** Адрес поддержки — в сообщениях о блокировке и письмах владельцам */
   SUPPORT_EMAIL: z.string().default('help@mioflow.ru'),
 
-  // ── Вход клиентов через Яндекс ID (oauth.yandex.ru) и VK ID (id.vk.com) ──
+  // ── Вход клиентов и сотрудников через Яндекс ID (oauth.yandex.ru) ──
   YANDEX_CLIENT_ID: z.string().optional(),
   YANDEX_CLIENT_SECRET: z.string().optional(),
-  VKID_CLIENT_ID: z.string().optional(),
   /** Версия образа — показывается в админ-панели */
   APP_VERSION: z.string().default('dev'),
 });

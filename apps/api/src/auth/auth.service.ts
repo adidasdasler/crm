@@ -86,16 +86,16 @@ export class AuthService {
       ?? await this.prisma.system.plan.findFirst({ where: { code: 'START' } });
     if (!plan) throw new AppError('NO_PLANS', 'Тарифы не настроены (запустите seed)', 500);
 
-    // Регистрация после входа через Яндекс ID / VK ID: пароль не нужен (его можно задать потом через «Забыли пароль?»)
+    // Регистрация после входа через Яндекс ID: пароль не нужен (его можно задать потом через «Забыли пароль?»)
     let link: Record<string, string> = {};
     if (dto.oauthTicket) {
       const tk = await this.prisma.system.oAuthTicket.findUnique({ where: { hash: sha256(dto.oauthTicket) } });
       if (!tk || tk.kind !== 'register' || tk.expiresAt < new Date()) throw new AppError('OAUTH_TICKET', 'Вход через Яндекс или VK устарел — нажмите кнопку ещё раз', 400);
       await this.prisma.system.oAuthTicket.delete({ where: { hash: tk.hash } });
-      const pr = tk.payload as { provider: 'yandex' | 'vk'; id: string; email: string | null };
+      const pr = tk.payload as { provider: 'yandex'; id: string; email: string | null };
       // Email подтверждён Яндексом/VK — подменить его на чужой нельзя
       if (pr.email) dto.email = pr.email;
-      link = { [pr.provider === 'yandex' ? 'yandexId' : 'vkId']: pr.id };
+      link = { yandexId: pr.id };
     }
     const passwordHash = await argon2.hash(dto.password ?? randomToken(32), { type: argon2.argon2id });
     try {
@@ -173,7 +173,7 @@ export class AuthService {
   }
 
   /**
-   * Пароль (или Яндекс ID / VK ID) подтверждён — дальше одинаково: есть ли салон, не заблокирован ли он,
+   * Пароль (или Яндекс ID) подтверждён — дальше одинаково: есть ли салон, не заблокирован ли он,
    * нужен ли код входа; затем токены.
    */
   async completeLogin(user: User, meta: Meta, tenantId?: string) {

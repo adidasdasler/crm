@@ -80,18 +80,18 @@ describe('кабинет клиента', () => {
     expect(await system.booking.count({ where: { tenantId: a.tenantId } })).toBe(1);
   });
 
-  it('привязка записей с устройства и вход через Яндекс ID / VK ID', async () => {
+  it('привязка записей с устройства и вход через Яндекс ID', async () => {
     const s = await createSalon('Салон В');
     const pub = api();
     const slot = (await pub.get(`/public/${s.slug}/slots?date=${tomorrowDate(2)}&serviceIds=${s.serviceId}`)).body.data[0].slots[0];
     const bk = await pub.post(`/public/${s.slug}/book`, { serviceIds: [s.serviceId], resourceId: null, startsAt: slot, name: 'Оля', phone: '+79995550099', consent: true });
 
     // Вход через Яндекс: подменяем обмен кода на профиль
-    env.YANDEX_CLIENT_ID = 'yid'; env.YANDEX_CLIENT_SECRET = 'ysecret'; env.VKID_CLIENT_ID = 'vkid';
-    oauth.profile = async (p) => (p === 'yandex'
-      ? { id: 'y-1', email: 'olya@yandex.ru', name: 'Ольга', phone: '+79995550099' }
-      : { id: 'vk-1', email: 'olya@yandex.ru', name: 'Ольга VK', phone: null });
-    expect((await request(srv).get('/v1/client/config')).body.data.providers).toEqual(['yandex', 'vk']);
+    env.YANDEX_CLIENT_ID = 'yid'; env.YANDEX_CLIENT_SECRET = 'ysecret';
+    oauth.profile = async () => ({ id: 'y-1', email: 'olya@yandex.ru', name: 'Ольга', phone: '+79995550099' });
+    expect((await request(srv).get('/v1/client/config')).body.data.providers).toEqual(['yandex']);
+    // VK ID убран — такой адрес больше не работает
+    expect((await request(srv).get('/v1/client/oauth/vk/start')).status).toBe(404);
 
     const c = request.agent(srv);
     const start = await c.get('/v1/client/oauth/yandex/start?consent=1');
@@ -108,12 +108,7 @@ describe('кабинет клиента', () => {
     const mine = (await c.get('/v1/client/bookings')).body.data;
     expect(mine.map((x: any) => x.salon.name)).toEqual(['Салон В']);
 
-    // Вход через VK с тем же email — тот же аккаунт
-    const v = request.agent(srv);
-    const vs = await v.get('/v1/client/oauth/vk/start?consent=1');
-    expect(new URL(vs.headers.location).host).toBe('id.vk.com');
-    await v.get(`/v1/client/oauth/vk/callback?code=c&state=${new URL(vs.headers.location).searchParams.get('state')}&device_id=d1`);
-    expect((await v.get('/v1/client/me')).body.data).toMatchObject({ email: 'olya@yandex.ru', yandex: true, vk: true });
+    expect((await c.get('/v1/client/me')).body.data).toMatchObject({ email: 'olya@yandex.ru', yandex: true });
     expect(await system.clientUser.count({ where: { email: 'olya@yandex.ru' } })).toBe(1);
 
     // Новый человек без согласия — аккаунт не создаётся

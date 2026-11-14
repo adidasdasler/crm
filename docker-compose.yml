@@ -79,7 +79,6 @@ services:
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help@mioflow.ru}
       YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
       YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
-      VKID_CLIENT_ID: ${VKID_CLIENT_ID:-}
       APP_VERSION: ${IMAGE_TAG:-latest}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
@@ -118,6 +117,7 @@ services:
     environment:
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
       APP_URL: ${APP_URL}
+      YANDEX_METRIKA_ID: ${YANDEX_METRIKA_ID:-}
     ports:
       - "${NGINX_BIND:-127.0.0.1}:${SITE_PORT:-8080}:80"
       - "${NGINX_BIND:-127.0.0.1}:${APP_PORT:-8081}:81"

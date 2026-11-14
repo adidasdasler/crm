@@ -23,7 +23,7 @@ export default function Register() {
   const { status, register, loginTicket } = useAuth();
   // Ссылка с сайта может сразу выбрать вариант: /register?kind=solo
   const params = useLocalSearchParams<{ kind?: string; oauth?: string; name?: string; email?: string; phone?: string; provider?: string }>();
-  // Пришли после «Войти с Яндекс ID / VK ID»: имя и email уже известны, пароль не нужен
+  // Пришли после «Войти с Яндекс ID»: имя и email уже известны, пароль не нужен
   const oauth = params.oauth;
   const [kind, setKind] = useState<Kind | null>(params.kind === 'solo' || params.kind === 'salon' ? params.kind : null);
   const [f, setF] = useState({ salonName: '', name: params.name ?? '', phone: params.phone ?? '', email: params.email ?? '', password: '', slug: '' });
@@ -118,7 +118,7 @@ export default function Register() {
         }} />
       )}
       {oauth ? (
-        <Muted>Вход — через Яндекс ID или VK ID, пароль не нужен. Задать пароль можно потом: «Забыли пароль?» на экране входа.</Muted>
+        <Muted>Вход — через Яндекс ID, пароль не нужен. Задать пароль можно потом: «Забыли пароль?» на экране входа.</Muted>
       ) : (
         <Field label="Пароль (минимум 8 символов)" value={f.password} onChangeText={set('password')} secureTextEntry />
       )}

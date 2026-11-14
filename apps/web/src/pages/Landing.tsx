@@ -312,7 +312,7 @@ export function Landing() {
         {!OPERATOR.fullName.startsWith('[') && (
           <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-ink-muted sm:px-6">
             Исполнитель: {OPERATOR.fullName}, плательщик налога на профессиональный доход, ИНН {OPERATOR.inn}. Обращения: {OPERATOR.email}.
-            Сайт использует только технически необходимые cookie (<a href="/cookies" className="underline">подробнее</a>).
+            <a href="/cookies" className="underline">Cookie и настройки</a>.
           </p>
         )}
       </footer>

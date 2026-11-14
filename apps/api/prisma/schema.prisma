@@ -123,9 +123,8 @@ model User {
   passwordResetHash    String?   @unique
   passwordResetExpires DateTime? @db.Timestamptz(3)
   /// Вход с кодом: после пароля нужен 6-значный код (email или Telegram)
-  /// Вход через Яндекс ID и VK ID (0022_staff_oauth)
+  /// Вход через Яндекс ID (0022_staff_oauth)
   yandexId            String?   @unique
-  vkId                String?   @unique
   twoFactorEnabled    Boolean   @default(false)
   loginChallengeHash  String?   @unique
   loginCodeHash       String?
@@ -812,7 +811,6 @@ model ClientUser {
   phone           String?
   phoneVerifiedAt DateTime? @db.Timestamptz(3)
   yandexId        String?   @unique
-  vkId            String?   @unique
   sessionVersion  Int       @default(0)
   verifyHash      String?   @unique
   resetHash       String?   @unique

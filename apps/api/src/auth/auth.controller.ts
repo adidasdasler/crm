@@ -20,7 +20,7 @@ const slug = z
 
 const registerSchema = z.object({
   email,
-  /** Не нужен при регистрации через Яндекс ID / VK ID (oauthTicket) */
+  /** Не нужен при регистрации через Яндекс ID (oauthTicket) */
   password: password.optional(),
   oauthTicket: z.string().min(20).max(100).optional(),
   name: z.string().trim().min(2).max(100),

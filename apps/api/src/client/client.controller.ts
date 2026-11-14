@@ -24,7 +24,7 @@ const MAX_FAILED = 5;
 /**
  * Кабинет клиента на mioflow.ru: свои записи во всех салонах MioFlow на любом устройстве.
  * Записи находятся по аккаунту (записался из кабинета или привязал ссылку), по подтверждённому email
- * и по телефону, подтверждённому Яндекс ID или VK ID.
+ * и по телефону, подтверждённому Яндекс ID.
  */
 @Public()
 @Controller('client')
@@ -35,10 +35,10 @@ export class ClientController {
     return this.prisma.system;
   }
 
-  private view(u: { id: string; name: string; email: string | null; emailVerifiedAt: Date | null; phone: string | null; phoneVerifiedAt: Date | null; passwordHash: string | null; yandexId: string | null; vkId: string | null }) {
+  private view(u: { id: string; name: string; email: string | null; emailVerifiedAt: Date | null; phone: string | null; phoneVerifiedAt: Date | null; passwordHash: string | null; yandexId: string | null }) {
     return {
       id: u.id, name: u.name, email: u.email, emailVerified: !!u.emailVerifiedAt, phone: u.phone, phoneVerified: !!u.phoneVerifiedAt,
-      hasPassword: !!u.passwordHash, yandex: !!u.yandexId, vk: !!u.vkId,
+      hasPassword: !!u.passwordHash, yandex: !!u.yandexId,
     };
   }
 
@@ -81,7 +81,7 @@ export class ClientController {
     if (!u?.passwordHash) {
       await argon2.hash(dto.password).catch(() => null);
       // Аккаунт создан через Яндекс или VK — подскажем, как войти
-      if (u && !u.passwordHash) throw new AppError('USE_OAUTH', 'Вы входили через Яндекс ID или VK ID — войдите той же кнопкой или задайте пароль через «Забыли пароль?»', 401);
+      if (u && !u.passwordHash) throw new AppError('USE_OAUTH', 'Вы входили через Яндекс ID — войдите той же кнопкой или задайте пароль через «Забыли пароль?»', 401);
       throw invalid;
     }
     if (u.lockedUntil && u.lockedUntil > new Date()) throw new AppError('ACCOUNT_LOCKED', 'Слишком много попыток. Попробуйте через 15 минут или восстановите пароль', 423);
@@ -237,7 +237,7 @@ export class ClientController {
     return { ok: true };
   }
 
-  // ─── Вход через Яндекс ID и VK ID ───
+  // ─── Вход через Яндекс ID ───
 
   @Get('oauth/:provider/start')
   async start(@Param('provider') p: string, @Query('consent') consent: string | undefined, @Res() res: Response) {
@@ -258,23 +258,22 @@ export class ClientController {
     if (!st || st.provider !== p || !q.code || q.state !== st.state) return back('Вход не завершён — попробуйте ещё раз');
     let prof;
     try {
-      prof = await oauth.profile(p as Provider, { code: q.code, verifier: st.verifier, state: q.state, deviceId: q.device_id });
+      prof = await oauth.profile(p as Provider, { code: q.code, verifier: st.verifier });
     } catch {
-      return back(`Не удалось войти через ${p === 'yandex' ? 'Яндекс ID' : 'VK ID'}. Попробуйте ещё раз`);
+      return back('Не удалось войти через Яндекс ID. Попробуйте ещё раз');
     }
-    const idField = p === 'yandex' ? 'yandexId' : 'vkId';
-    let u = await this.db.clientUser.findUnique({ where: p === 'yandex' ? { yandexId: prof.id } : { vkId: prof.id } });
-    // Тот же человек уже регистрировался по email — привязываем (email подтверждён Яндексом/VK)
+    let u = await this.db.clientUser.findUnique({ where: { yandexId: prof.id } });
+    // Тот же человек уже регистрировался по email — привязываем (email подтверждён Яндексом)
     if (!u && prof.email) u = await this.db.clientUser.findUnique({ where: { email: prof.email } });
     const verified = { ...(prof.email ? { emailVerifiedAt: new Date() } : {}), ...(prof.phone ? { phone: prof.phone, phoneVerifiedAt: new Date() } : {}) };
     if (u) {
       // Аккаунт с этим email мог завести кто-то другой, не подтвердив почту: тогда снимаем его пароль и сессии,
-      // чтобы владелец настоящего Яндекс/VK-аккаунта не делил кабинет с посторонним
-      const takeover = !!prof.email && u.email === prof.email && !u.emailVerifiedAt && !(u as Record<string, unknown>)[idField];
+      // чтобы владелец настоящего Яндекс-аккаунта не делил кабинет с посторонним
+      const takeover = !!prof.email && u.email === prof.email && !u.emailVerifiedAt && !u.yandexId;
       u = await this.db.clientUser.update({
         where: { id: u.id },
         data: {
-          [idField]: prof.id, lastLoginAt: new Date(),
+          yandexId: prof.id, lastLoginAt: new Date(),
           ...(prof.email && u.email === prof.email ? verified : prof.phone ? { phone: prof.phone, phoneVerifiedAt: new Date() } : {}),
           ...(takeover ? { passwordHash: null, sessionVersion: { increment: 1 } } : {}),
         },
@@ -283,7 +282,7 @@ export class ClientController {
       // Новый аккаунт — только с согласием, отмеченным на странице входа
       if (!st.consent) return back('Отметьте согласие на обработку персональных данных и нажмите кнопку ещё раз');
       u = await this.db.clientUser.create({
-        data: { name: prof.name, email: prof.email, [idField]: prof.id, consentVersion: CLIENT_CONSENT_VERSION, lastLoginAt: new Date(), ...verified },
+        data: { name: prof.name, email: prof.email, yandexId: prof.id, consentVersion: CLIENT_CONSENT_VERSION, lastLoginAt: new Date(), ...verified },
       });
     }
     await setClientSession(res, u);

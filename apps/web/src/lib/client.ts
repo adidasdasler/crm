@@ -8,4 +8,4 @@ export type ClientBooking = {
 };
 
 export const clientMe = () => api<ClientMe>('/client/me').catch(() => null);
-export const oauthUrl = (p: 'yandex' | 'vk', consent: boolean) => `/v1/client/oauth/${p}/start${consent ? '?consent=1' : ''}`;
+export const oauthUrl = (p: 'yandex', consent: boolean) => `/v1/client/oauth/${p}/start${consent ? '?consent=1' : ''}`;
