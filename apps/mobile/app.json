@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "MioFlow",
+    "slug": "mioflow",
+    "scheme": "mioflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ru.mioflow.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ru.mioflow.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#2F3BFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "MioFlow — для салонов",
+      "themeColor": "#2F3BFF",
+      "shortName": "MioFlow",
+      "backgroundColor": "#F7F7FC"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#2F3BFF",
+          "icon": "./assets/android-icon-monochrome.png"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MioFlow открывает фото, чтобы вы могли добавить снимки своих работ в библиотеку дизайнов салона.",
+          "cameraPermission": "MioFlow использует камеру, чтобы вы могли сфотографировать работу и добавить её в библиотеку дизайнов.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "imageWidth": 140,
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    }
+  }
+}

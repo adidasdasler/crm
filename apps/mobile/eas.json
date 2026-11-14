@@ -1,0 +1,20 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_URL": "https://mioflow.ru/v1", "EXPO_PUBLIC_WEB_URL": "https://mioflow.ru", "EXPO_PUBLIC_APP_URL": "https://app.mioflow.ru" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_API_URL": "https://mioflow.ru/v1", "EXPO_PUBLIC_WEB_URL": "https://mioflow.ru", "EXPO_PUBLIC_APP_URL": "https://app.mioflow.ru" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": { "EXPO_PUBLIC_API_URL": "https://mioflow.ru/v1", "EXPO_PUBLIC_WEB_URL": "https://mioflow.ru", "EXPO_PUBLIC_APP_URL": "https://app.mioflow.ru" }
+    }
+  },
+  "submit": { "production": {} }
+}

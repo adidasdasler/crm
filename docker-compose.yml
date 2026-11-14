@@ -1,0 +1,142 @@
+# Production-стек MioFlow. Всё работает в Docker и изолировано от остального сервера:
+#  - отдельная сеть; база данных во внутренней сети без выхода в интернет;
+#  - наружу открыт только Nginx: 127.0.0.1:8080/8081 (за хостовым Nginx с доменом)
+#    или 0.0.0.0:8080/8081 в режиме «по IP» (NGINX_BIND=0.0.0.0, deploy/install.sh);
+#  - у каждого контейнера лимит памяти, ротация логов и запрет повышения привилегий —
+#    чтобы MioFlow не мог помешать другим программам на сервере (например, ботам).
+name: mioflow
+
+x-common: &common
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    <<: *common
+    image: postgres:16-alpine
+    mem_limit: 768m
+    environment:
+      # Суперпользователь — только для бэкапов и обслуживания (приложение его не использует)
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mioflow}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD:?задайте OWNER_DB_PASSWORD в .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?задайте APP_DB_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    networks: [db]
+
+  api:
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-api:${IMAGE_TAG:-latest}
+    build: { context: ., dockerfile: deploy/api.Dockerfile }
+    mem_limit: 512m
+    cap_drop: [ALL]
+    depends_on:
+      postgres: { condition: service_healthy }
+    # Фото дизайнов (попадают в зашифрованный бэкап вместе с базой)
+    volumes:
+      - uploads:/data/uploads
+      # Корневой сертификат Минцифры (MAX API и другие российские сервисы) — см. docs/RUNBOOK.md, «Бот MAX»
+      - ./certs:/certs:ro
+    environment: &api-env
+      NODE_ENV: production
+      # Дополнительные доверенные сертификаты; файла нет — Node просто пишет предупреждение и работает дальше
+      NODE_EXTRA_CA_CERTS: /certs/russian_trusted_root_ca.pem
+      PORT: 4000
+      # Приложение: роль без обхода RLS — видит только данные «своего» салона
+      DATABASE_URL: postgresql://salon_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-mioflow}
+      # Миграции и системные запросы: владелец схемы, НЕ суперпользователь
+      SYSTEM_DATABASE_URL: postgresql://salon_owner:${OWNER_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-mioflow}
+      JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET (64+ символа)}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?задайте PUBLIC_WEB_URL}
+      UPLOADS_DIR: /data/uploads
+      APP_URL: ${APP_URL:?задайте APP_URL}
+      API_PUBLIC_URL: ${PUBLIC_WEB_URL}/v1
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
+      MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-}
+      MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-}
+      MAX_MINIAPP: ${MAX_MINIAPP:-false}
+      MAX_API_BASE: ${MAX_API_BASE:-https://platform-api2.max.ru}
+      VK_GROUP_TOKEN: ${VK_GROUP_TOKEN:-}
+      VK_GROUP_SCREEN_NAME: ${VK_GROUP_SCREEN_NAME:-}
+      VK_CONFIRMATION_CODE: ${VK_CONFIRMATION_CODE:-}
+      VK_SECRET: ${VK_SECRET:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-yookassa}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      SECRETS_KEY: ${SECRETS_KEY:-}
+      ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help@mioflow.ru}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      APP_VERSION: ${IMAGE_TAG:-latest}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      retries: 5
+      start_period: 40s
+    networks: [db, web]
+
+  # Фоновый воркер: напоминания (Telegram/MAX/VK/email), проверка подписок, очистка удалённых салонов.
+  worker:
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-api:${IMAGE_TAG:-latest}
+    mem_limit: 256m
+    cap_drop: [ALL]
+    depends_on:
+      api: { condition: service_healthy }
+    # Нужен воркеру, чтобы удалять фото салонов, удалённых больше 30 дней назад
+    volumes:
+      - uploads:/data/uploads
+      - ./certs:/certs:ro
+    command: ["node", "dist/worker.js"]
+    environment: *api-env
+    networks: [db, web]
+
+  # Nginx: сайт и онлайн-запись (порт 80 → 8080), приложение (порт 81 → 8081), /v1 → api.
+  # Адреса подставляются при запуске контейнера (deploy/nginx/40-mioflow-config.sh) —
+  # один и тот же образ работает и по IP, и на домене.
+  nginx:
+    <<: *common
+    image: ${IMAGE_PREFIX:-ghcr.io/adidasdasler/mioflow}-web:${IMAGE_TAG:-latest}
+    build: { context: ., dockerfile: deploy/web.Dockerfile }
+    mem_limit: 128m
+    depends_on: [api]
+    environment:
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
+      APP_URL: ${APP_URL}
+      YANDEX_METRIKA_ID: ${YANDEX_METRIKA_ID:-}
+    ports:
+      - "${NGINX_BIND:-127.0.0.1}:${SITE_PORT:-8080}:80"
+      - "${NGINX_BIND:-127.0.0.1}:${APP_PORT:-8081}:81"
+    networks: [web]
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  # База данных — во внутренней сети без доступа в интернет
+  db:
+    internal: true
+  # Сеть для API (нужен выход в интернет: Telegram, MAX, VK, почта, ЮKassa) и Nginx
+  web:

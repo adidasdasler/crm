@@ -1,0 +1,109 @@
+name: Docker images
+
+# Собирает образы MioFlow и публикует их в GitHub Container Registry (ghcr.io).
+# Сервер только скачивает готовые образы — тяжёлая сборка не нагружает VPS с другими программами.
+# После сборки дымовой тест поднимает весь стек как на сервере и проверяет его.
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths-ignore: ['docs/**', '**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PREFIX: ghcr.io/${{ github.repository_owner }}/mioflow
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/${{ matrix.image }}.Dockerfile
+          push: true
+          tags: |
+            ${{ env.PREFIX }}-${{ matrix.image }}:latest
+            ${{ env.PREFIX }}-${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure (like deploy/install.sh, IP mode)
+        run: |
+          s() { openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-40; }
+          cat > .env <<EOF
+          POSTGRES_DB=mioflow
+          POSTGRES_PASSWORD=$(s)
+          OWNER_DB_PASSWORD=$(s)
+          APP_DB_PASSWORD=$(s)
+          JWT_SECRET=$(s)$(s)
+          BACKUP_PASSPHRASE=$(s)
+          IMAGE_PREFIX=${PREFIX}
+          IMAGE_TAG=${GITHUB_SHA}
+          PUBLIC_WEB_URL=http://127.0.0.1:8080
+          APP_URL=http://127.0.0.1:8081
+          NGINX_BIND=127.0.0.1
+          COOKIE_SECURE=false
+          SEED_DEMO=true
+          MAIL_FROM="MioFlow <no-reply@mioflow.ru>"
+          EOF
+          sed -i 's/^ *//' .env
+      - name: Start stack
+        run: |
+          docker compose pull
+          docker compose up -d --no-build
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/v1/health && break; sleep 3; done
+      - name: Smoke checks
+        run: |
+          set -e
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'MioFlow'
+          curl -fsS http://127.0.0.1:8081/ | grep -q '/config.js'
+          curl -fsS http://127.0.0.1:8081/config.js | grep -q '127.0.0.1:8081'
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi 'content-security-policy'
+          curl -fsS http://127.0.0.1:8080/v1/public/demo | grep -q 'success":true'
+          # Мини-сайт: робот Яндекса получает HTML с разметкой schema.org, человек — приложение записи
+          curl -fsS -A 'Mozilla/5.0 (compatible; YandexBot/3.0)' http://127.0.0.1:8080/b/demo | grep -q 'application/ld+json'
+          curl -fsS http://127.0.0.1:8080/b/demo | grep -q '/assets/'
+          curl -fsS http://127.0.0.1:8080/v1/public/demo/qr.svg | grep -q '<svg'
+          # Фото дизайнов: папка в томе доступна приложению на запись (не root)
+          docker compose exec -T api sh -c 'touch /data/uploads/.probe && rm /data/uploads/.probe'
+          curl -fsS -X POST http://127.0.0.1:8081/v1/auth/login -H 'Content-Type: application/json' -H 'X-Client: mobile' \
+            -d '{"email":"demo@salon.local","password":"demo12345"}' | grep -q accessToken
+          # Роли БД: приложение без обхода RLS, владелец — не суперпользователь
+          docker compose exec -T postgres psql -U postgres -d mioflow -tAc \
+            "select string_agg(rolname||':'||rolsuper||':'||rolbypassrls, ',') from pg_roles where rolname in ('salon_app','salon_owner')" \
+            | tee /dev/stderr | grep -q 'salon_app:false:false'
+          # База недоступна из интернета: порт 5432 не опубликован
+          if (echo > /dev/tcp/127.0.0.1/5432) 2>/dev/null; then echo "Порт 5432 открыт наружу!"; exit 1; fi
+          echo "Smoke OK"
+      - name: Backup and restore
+        run: |
+          sudo apt-get install -y -qq gnupg
+          bash deploy/scripts/backup.sh
+          bash deploy/scripts/test-restore.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=200

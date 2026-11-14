@@ -1,0 +1,403 @@
+import { DEMO_EMAIL } from '../demo/demo';
+import { createTemplateServices, industry } from '../common/industries';
+import { readSettings } from '../common/tenant-settings';
+import { PERM_KEYS } from '../common/permissions';
+import { Injectable } from '@nestjs/common';
+import type { Role, User } from '@prisma/client';
+import * as argon2 from 'argon2';
+import { randomInt, randomUUID } from 'node:crypto';
+import { mailer } from '../notify/mailer';
+import { telegram } from '../notify/telegram';
+import { max, vk } from '../notify/channels';
+import { env, isProd } from '../config';
+import { AuthCtx, signAccessToken } from '../common/auth';
+import { randomToken, sha256 } from '../common/crypto';
+import { AppError, conflict, isUniqueError } from '../common/errors';
+import { PrismaService } from '../common/prisma.service';
+import { DEFAULT_SCHEDULE } from '../common/schemas';
+import { CONSENT_VERSION } from '../common/legal';
+
+const MAX_FAILED = 5;
+
+/** Все салоны пользователя заблокированы владельцем сервиса — не пускаем, объясняем почему */
+async function assertNotBlocked(db: PrismaService['system'], tenantIds: string[]) {
+  const open = await db.tenant.count({ where: { id: { in: tenantIds }, blockedAt: null } });
+  if (!open) throw new AppError('TENANT_BLOCKED', `Салон заблокирован. Напишите в поддержку MioFlow: ${env.SUPPORT_EMAIL}`, 403);
+}
+const CODE_TTL_MIN = 10;
+
+type CodeUser = { email: string; name: string; telegramChatId: string | null; maxUserId?: string | null; vkUserId?: string | null };
+/** Куда можно отправить код входа: MAX и Telegram (если привязаны и боты включены) и почта (если настроена) */
+export const codeChannels = (u: CodeUser) => [
+  ...(u.maxUserId && max.enabled ? ['max'] : []), ...(u.telegramChatId && telegram.enabled ? ['telegram'] : []),
+  ...(u.vkUserId && vk.enabled ? ['vk'] : []), ...(env.SMTP_URL ? ['email'] : []),
+];
+
+async function sendLoginCode(u: CodeUser, code: string): Promise<string | null> {
+  const text = `Код входа в MioFlow: ${code}\nДействует ${CODE_TTL_MIN} минут. Если вы не входили — смените пароль.`;
+  if (u.maxUserId && max.enabled && (await max.send(u.maxUserId, text)).ok) return 'MAX';
+  if (u.telegramChatId && telegram.enabled && (await telegram.send(u.telegramChatId, text)).ok) return 'Telegram';
+  if (u.vkUserId && vk.enabled && (await vk.send(u.vkUserId, text)).ok) return 'ВКонтакте';
+  if (await mailer.send({ to: u.email, subject: `Код входа: ${code}`, text })) return u.email.replace(/^(.).*(@.*)$/, '$1***$2');
+  // Разработка без почты: код уже напечатан в лог сервера письмом-заглушкой
+  if (!isProd) return 'лог сервера (режим разработки)';
+  return null;
+}
+const LOCK_MIN = 15;
+
+export type Meta = { ip?: string; userAgent?: string };
+export type Tokens = { accessToken: string; refreshToken: string; refreshExpiresAt: Date };
+
+const RESERVED_SLUGS = new Set([
+  'app', 'api', 'www', 'admin', 'mail', 'static', 'cdn', 'help', 'support', 'blog', 'b', 'demo',
+]);
+
+@Injectable()
+export class AuthService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async isSlugAvailable(slug: string) {
+    if (RESERVED_SLUGS.has(slug)) return false;
+    return !(await this.prisma.system.tenant.findUnique({ where: { slug } }));
+  }
+
+  /** Свободный адрес страницы из названия: «Анна Иванова» → anna-ivanova, занят — anna-ivanova-2 … */
+  private async freeSlug(name: string) {
+    const map: Record<string, string> = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+    let base = name.toLowerCase().split('').map((c) => map[c] ?? c).join('').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 26);
+    if (base.length < 3) base = `master-${base}`.replace(/-+$/, '');
+    for (let i = 1; i < 50; i++) {
+      const candidate = i === 1 ? base : `${base}-${i}`;
+      if (await this.isSlugAvailable(candidate)) return candidate;
+    }
+    return `${base}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  /** Регистрация владельца: пользователь + салон + подписка TRIAL + первый мастер. */
+  async register(
+    dto: { email: string; password?: string; oauthTicket?: string; name: string; phone?: string; kind?: 'solo' | 'salon'; salonName?: string; slug?: string; timezone: string; industry?: string },
+    meta: Meta,
+  ) {
+    const solo = dto.kind === 'solo';
+    const salonName = dto.salonName?.trim() || dto.name;
+    let slugValue = dto.slug;
+    if (slugValue && !(await this.isSlugAvailable(slugValue))) {
+      // Частному мастеру не мешаем: подберём свободный адрес сами
+      if (!solo) throw conflict('SLUG_TAKEN', 'Этот адрес уже занят');
+      slugValue = undefined;
+    }
+    slugValue ??= await this.freeSlug(salonName);
+    // Пробный период — на тарифе под размер бизнеса: частному мастеру «Соло», салону «Старт»
+    const plan = await this.prisma.system.plan.findFirst({ where: { code: solo ? 'SOLO' : 'START' } })
+      ?? await this.prisma.system.plan.findFirst({ where: { code: 'START' } });
+    if (!plan) throw new AppError('NO_PLANS', 'Тарифы не настроены (запустите seed)', 500);
+
+    // Регистрация после входа через Яндекс ID: пароль не нужен (его можно задать потом через «Забыли пароль?»)
+    let link: Record<string, string> = {};
+    if (dto.oauthTicket) {
+      const tk = await this.prisma.system.oAuthTicket.findUnique({ where: { hash: sha256(dto.oauthTicket) } });
+      if (!tk || tk.kind !== 'register' || tk.expiresAt < new Date()) throw new AppError('OAUTH_TICKET', 'Вход через Яндекс или VK устарел — нажмите кнопку ещё раз', 400);
+      await this.prisma.system.oAuthTicket.delete({ where: { hash: tk.hash } });
+      const pr = tk.payload as { provider: 'yandex'; id: string; email: string | null };
+      // Email подтверждён Яндексом/VK — подменить его на чужой нельзя
+      if (pr.email) dto.email = pr.email;
+      link = { yandexId: pr.id };
+    }
+    const passwordHash = await argon2.hash(dto.password ?? randomToken(32), { type: argon2.argon2id });
+    try {
+      const { user, tenant, membership } = await this.prisma.system.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { email: dto.email, passwordHash, name: dto.name, phone: dto.phone, ...link },
+        });
+        const tenant = await tx.tenant.create({
+          data: { name: salonName, slug: slugValue, timezone: dto.timezone, phone: dto.phone, settings: { ...(dto.industry ? { industry: dto.industry } : {}), ...(solo ? { solo: true } : {}) } },
+        });
+        const resource = await tx.resource.create({
+          data: { tenantId: tenant.id, name: dto.name, phone: dto.phone, schedule: DEFAULT_SCHEDULE, color: '#2F3BFF' },
+        });
+        // Стартовый набор услуг по отрасли — салон сразу может принимать записи и правит цены под себя
+        if (dto.industry) await createTemplateServices(tx, tenant.id, industry(dto.industry).templates, [resource.id]);
+        const membership = await tx.membership.create({
+          data: { tenantId: tenant.id, userId: user.id, role: 'OWNER', resourceId: resource.id },
+        });
+        await tx.subscription.create({
+          data: {
+            tenantId: tenant.id,
+            planId: plan.id,
+            status: 'TRIAL',
+            trialEndsAt: new Date(Date.now() + env.TRIAL_DAYS * 86400_000),
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            tenantId: tenant.id, userId: user.id, action: 'tenant.register', entityType: 'Tenant', entityId: tenant.id,
+            // Доказательство принятия оферты и согласия на обработку ПДн
+            after: { offer: CONSENT_VERSION, privacyConsent: CONSENT_VERSION, userAgent: meta.userAgent?.slice(0, 200) }, ip: meta.ip,
+          },
+        });
+        return { user, tenant, membership };
+      });
+      const tokens = await this.issue(
+        { userId: user.id, tenantId: tenant.id, role: membership.role, resourceId: membership.resourceId },
+        meta,
+      );
+      return { tokens, user: { id: user.id, email: user.email, name: user.name }, tenant };
+    } catch (e) {
+      if (isUniqueError(e)) throw conflict('EMAIL_TAKEN', 'Пользователь с таким email уже существует');
+      throw e;
+    }
+  }
+
+  async login(dto: { email: string; password: string; tenantId?: string }, meta: Meta) {
+    const db = this.prisma.system;
+    const user = await db.user.findUnique({ where: { email: dto.email } });
+    const invalid = new AppError('INVALID_CREDENTIALS', 'Неверный email или пароль', 401);
+    if (!user || user.deletedAt) {
+      // Выравниваем время ответа, чтобы не раскрывать существование email.
+      await argon2.hash(dto.password).catch(() => null);
+      throw invalid;
+    }
+    // Общий демо-вход не блокируем: иначе любой может запереть его неверными паролями
+    const demo = user.email === DEMO_EMAIL;
+    if (!demo && user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new AppError('ACCOUNT_LOCKED', 'Слишком много попыток. Попробуйте через 15 минут', 423);
+    }
+    if (!(await argon2.verify(user.passwordHash, dto.password))) {
+      if (demo) throw invalid;
+      const attempts = user.failedLoginAttempts + 1;
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: attempts >= MAX_FAILED ? 0 : attempts,
+          lockedUntil: attempts >= MAX_FAILED ? new Date(Date.now() + LOCK_MIN * 60_000) : null,
+        },
+      });
+      throw invalid;
+    }
+
+    return this.completeLogin(user, meta, dto.tenantId);
+  }
+
+  /**
+   * Пароль (или Яндекс ID) подтверждён — дальше одинаково: есть ли салон, не заблокирован ли он,
+   * нужен ли код входа; затем токены.
+   */
+  async completeLogin(user: User, meta: Meta, tenantId?: string) {
+    const db = this.prisma.system;
+    const demo = user.email === DEMO_EMAIL;
+    const memberships = await db.membership.findMany({
+      where: { userId: user.id, deletedAt: null, tenant: { deletedAt: null } },
+      include: { tenant: { select: { id: true, name: true, slug: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
+    await assertNotBlocked(db, memberships.map((m) => m.tenantId));
+    const m = (tenantId && memberships.find((x) => x.tenantId === tenantId)) || memberships[0];
+
+    // Вход с кодом: пароль верный, но токены выдаём только после кода из письма или Telegram
+    if (user.twoFactorEnabled && !demo) {
+      const challenge = randomToken(24);
+      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0, lockedUntil: null,
+          loginChallengeHash: sha256(challenge), loginCodeHash: sha256(`${user.id}:${code}`),
+          loginCodeExpires: new Date(Date.now() + CODE_TTL_MIN * 60_000), loginCodeAttempts: 0,
+        },
+      });
+      const sentTo = await sendLoginCode(user, code);
+      if (!sentTo) throw new AppError('CODE_NOT_SENT', 'Не удалось отправить код входа. Напишите в поддержку', 503);
+      return { twoFactor: { challenge, sentTo } } as const;
+    }
+
+    await db.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
+    const tokens = await this.issue(
+      { userId: user.id, tenantId: m.tenantId, role: m.role, resourceId: m.resourceId },
+      meta,
+    );
+    return {
+      tokens,
+      user: { id: user.id, email: user.email, name: user.name },
+      tenants: memberships.map((x) => ({ ...x.tenant, role: x.role })),
+    };
+  }
+
+  /** Второй шаг входа: код из письма или Telegram. 5 попыток, 10 минут. */
+  async loginCode(dto: { challenge: string; code: string }, meta: Meta) {
+    const db = this.prisma.system;
+    const user = await db.user.findUnique({ where: { loginChallengeHash: sha256(dto.challenge) } });
+    const invalid = new AppError('CODE_INVALID', 'Код неверный или устарел. Войдите заново', 401);
+    if (!user || user.deletedAt || !user.loginCodeHash || !user.loginCodeExpires || user.loginCodeExpires < new Date()) throw invalid;
+    if (sha256(`${user.id}:${dto.code.replace(/\D/g, '')}`) !== user.loginCodeHash) {
+      const attempts = user.loginCodeAttempts + 1;
+      await db.user.update({
+        where: { id: user.id },
+        // После 5 ошибок код сгорает — нужно войти заново (новый код)
+        data: attempts >= 5 ? { loginChallengeHash: null, loginCodeHash: null, loginCodeExpires: null, loginCodeAttempts: 0 } : { loginCodeAttempts: attempts },
+      });
+      throw new AppError('CODE_INVALID', attempts >= 5 ? 'Слишком много ошибок. Войдите заново — придёт новый код' : 'Неверный код', 401);
+    }
+    const memberships = await db.membership.findMany({
+      where: { userId: user.id, deletedAt: null, tenant: { deletedAt: null } },
+      include: { tenant: { select: { id: true, name: true, slug: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!memberships.length) throw new AppError('NO_ACCESS', 'Вы не состоите ни в одном салоне', 403);
+    await assertNotBlocked(db, memberships.map((m) => m.tenantId));
+    await db.user.update({
+      where: { id: user.id },
+      data: { loginChallengeHash: null, loginCodeHash: null, loginCodeExpires: null, loginCodeAttempts: 0, lastLoginAt: new Date() },
+    });
+    const m = memberships[0];
+    const tokens = await this.issue({ userId: user.id, tenantId: m.tenantId, role: m.role, resourceId: m.resourceId }, meta);
+    return { tokens, user: { id: user.id, email: user.email, name: user.name }, tenants: memberships.map((x) => ({ ...x.tenant, role: x.role })) };
+  }
+
+  /** Включить/выключить вход с кодом. Нужен пароль и рабочий канал доставки кода. */
+  async setTwoFactor(auth: AuthCtx, enabled: boolean, password: string) {
+    const db = this.prisma.system;
+    const user = await db.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    if (!(await argon2.verify(user.passwordHash, password))) throw new AppError('INVALID_CREDENTIALS', 'Неверный пароль', 400);
+    if (enabled && !codeChannels(user).length) {
+      throw new AppError('NO_CODE_CHANNEL', 'Некуда отправлять код: на сервере не настроена почта, а мессенджеры не привязаны. Привяжите MAX, ВКонтакте или Telegram в разделе «Ещё»', 422);
+    }
+    await db.user.update({ where: { id: user.id }, data: { twoFactorEnabled: enabled } });
+    await db.auditLog.create({ data: { tenantId: auth.tenantId, userId: user.id, action: enabled ? 'user.2fa_on' : 'user.2fa_off', entityType: 'User', entityId: user.id } });
+    return { twoFactorEnabled: enabled, channels: codeChannels(user) };
+  }
+
+  /** Ротация refresh-токена. Повторное использование старого токена отзывает всю цепочку. */
+  async refresh(refreshToken: string, meta: Meta) {
+    const db = this.prisma.system;
+    const row = await db.refreshToken.findUnique({ where: { tokenHash: sha256(refreshToken) } });
+    const invalid = new AppError('INVALID_REFRESH', 'Сессия недействительна, войдите снова', 401);
+    if (!row) throw invalid;
+    if (row.revokedAt) {
+      // Кто-то использует уже заменённый токен → вероятна кража. Отзываем всё семейство.
+      await db.refreshToken.updateMany({
+        where: { family: row.family, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw invalid;
+    }
+    if (row.expiresAt < new Date()) throw invalid;
+
+    const m = await db.membership.findFirst({
+      where: { userId: row.userId, tenantId: row.tenantId, deletedAt: null },
+    });
+    if (!m) throw invalid;
+    return this.issue(
+      { userId: row.userId, tenantId: m.tenantId, role: m.role, resourceId: m.resourceId },
+      meta,
+      { family: row.family, previousId: row.id },
+    );
+  }
+
+  async logout(refreshToken: string | undefined) {
+    if (!refreshToken) return;
+    const row = await this.prisma.system.refreshToken.findUnique({ where: { tokenHash: sha256(refreshToken) } });
+    if (row) {
+      await this.prisma.system.refreshToken.updateMany({
+        where: { family: row.family, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+  }
+
+  async revokeAllSessions(userId: string) {
+    await this.prisma.system.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async switchTenant(auth: AuthCtx, tenantId: string, meta: Meta) {
+    const m = await this.prisma.system.membership.findFirst({
+      where: { userId: auth.userId, tenantId, deletedAt: null },
+    });
+    if (!m) throw new AppError('FORBIDDEN', 'Нет доступа к салону', 403);
+    return this.issue({ userId: auth.userId, tenantId, role: m.role, resourceId: m.resourceId }, meta);
+  }
+
+  async me(auth: AuthCtx) {
+    const db = this.prisma.system;
+    const [user, memberships] = await Promise.all([
+      db.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { id: true, email: true, name: true, phone: true, telegramChatId: true, maxUserId: true, vkUserId: true, twoFactorEnabled: true } }),
+      db.membership.findMany({
+        where: { userId: auth.userId, deletedAt: null },
+        include: { tenant: { select: { id: true, name: true, slug: true, timezone: true, settings: true } } },
+      }),
+    ]);
+    const current = memberships.find((m) => m.tenantId === auth.tenantId);
+    const { telegramChatId, maxUserId, vkUserId, twoFactorEnabled, ...u } = user;
+    return {
+      user: u,
+      twoFactor: { enabled: twoFactorEnabled, channels: codeChannels({ ...u, telegramChatId, maxUserId, vkUserId }) },
+      telegramLinked: !!telegramChatId,
+      maxLinked: !!maxUserId,
+      vkLinked: !!vkUserId,
+      /** Боты подключены на сервере — показывать ли пункты «Уведомления в …» */
+      bots: { telegram: telegram.enabled, max: max.enabled, vk: vk.enabled && !!env.VK_GROUP_SCREEN_NAME },
+      role: auth.role,
+      resourceId: auth.resourceId,
+      // Права текущей роли — приложение показывает только доступные разделы
+      permissions: auth.role === 'OWNER' ? PERM_KEYS : [...(auth.perms ?? [])],
+      tenant: current && { id: current.tenant.id, name: current.tenant.name, slug: current.tenant.slug, timezone: current.tenant.timezone },
+      // Слова интерфейса по сфере бизнеса: «мастер» / «тренер» / «преподаватель»
+      industry: current && (({ code, label, terms }) => ({ code, label, terms }))(industry(readSettings(current.tenant.settings).industry)),
+      solo: current ? readSettings(current.tenant.settings).solo : false,
+      tenants: memberships.map(({ tenant: { settings: _s, ...t }, role }) => ({ ...t, role })),
+    };
+  }
+
+  async changePassword(auth: AuthCtx, current: string, next: string) {
+    const user = await this.prisma.system.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    if (!(await argon2.verify(user.passwordHash, current))) {
+      throw new AppError('INVALID_CREDENTIALS', 'Текущий пароль неверен', 400);
+    }
+    await this.prisma.system.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await argon2.hash(next, { type: argon2.argon2id }) },
+    });
+    await this.revokeAllSessions(user.id);
+  }
+
+  private async issue(
+    ctx: AuthCtx,
+    meta: Meta,
+    rotate?: { family: string; previousId: string },
+  ): Promise<Tokens> {
+    const refreshToken = randomToken(48);
+    const refreshExpiresAt = new Date(Date.now() + env.JWT_REFRESH_TTL_DAYS * 86400_000);
+    const id = randomUUID();
+    await this.prisma.system.$transaction(async (tx) => {
+      if (rotate) {
+        // Условное обновление: если два запроса пришли одновременно, второй получит count=0.
+        const r = await tx.refreshToken.updateMany({
+          where: { id: rotate.previousId, revokedAt: null },
+          data: { revokedAt: new Date(), replacedBy: id },
+        });
+        if (r.count === 0) throw new AppError('INVALID_REFRESH', 'Сессия недействительна, войдите снова', 401);
+      }
+      await tx.refreshToken.create({
+        data: {
+          id,
+          userId: ctx.userId,
+          tenantId: ctx.tenantId,
+          tokenHash: sha256(refreshToken),
+          family: rotate?.family ?? randomUUID(),
+          expiresAt: refreshExpiresAt,
+          ip: meta.ip,
+          userAgent: meta.userAgent?.slice(0, 300),
+        },
+      });
+    });
+    return { accessToken: await signAccessToken(ctx), refreshToken, refreshExpiresAt };
+  }
+}
+
+export type { Role };

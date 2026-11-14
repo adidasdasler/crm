@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - argon2
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - esbuild
+  - "@nestjs/core"
+  - "@swc/core"
+# Принудительно безопасные версии транзитивных зависимостей (pnpm audit)
+overrides:
+  multer: ^2.5.0
+  deepmerge-ts: ^8.0.0

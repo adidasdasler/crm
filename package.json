@@ -1,0 +1,14 @@
+{
+  "name": "salon",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev:api": "pnpm --filter @salon/api dev",
+    "dev:web": "pnpm --filter @salon/web dev",
+    "dev:mobile": "pnpm --filter @salon/mobile start",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
